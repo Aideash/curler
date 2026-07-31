@@ -1,0 +1,49 @@
+{
+  "name": "curler",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:debug": "CURLER_DEBUG=1 node scripts/dev.mjs",
+    "dev:web": "vite",
+    "dev:api": "node --env-file-if-exists=.env --watch-path=./server server/index.mjs",
+    "build": "vue-tsc -b && vite build",
+    "type-check": "vue-tsc -b",
+    "preview": "vite preview",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-curl.mjs && node scripts/check-vars.mjs && node scripts/check-terminal-flags.mjs && node scripts/check-engine.mjs && node scripts/check-storage.mjs && node scripts/check-theme.mjs",
+    "check:verbose": "CURLER_VERBOSE=1 npm run check --silent",
+    "check:config": "node scripts/check-config.mjs",
+    "check:curl": "node scripts/check-curl.mjs",
+    "check:vars": "node scripts/check-vars.mjs",
+    "check:flags": "node scripts/check-terminal-flags.mjs",
+    "check:engine": "node scripts/check-engine.mjs",
+    "check:storage": "node scripts/check-storage.mjs",
+    "check:theme": "node scripts/check-theme.mjs"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.7",
+    "@lezer/highlight": "^1.2.3",
+    "codemirror": "^6.0.2",
+    "material-icons": "^1.13.14",
+    "shell-quote": "^1.10.0",
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/shell-quote": "^1.7.5",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/tsconfig": "^0.9.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vue-tsc": "^3.3.8"
+  }
+}

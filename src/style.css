@@ -1,0 +1,233 @@
+@import 'material-icons/iconfont/filled.css';
+
+/*
+ * Colour tokens are written onto <html> by src/themes/manager.ts. The values
+ * here only cover the moment before that runs, so they stay deliberately
+ * short: enough to paint the page shell in roughly the right shade.
+ */
+:root {
+  --bg: #0f1115;
+  --bg-raised: #161920;
+  --text: #e5e9f0;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --bg-raised: #f6f8fa;
+    --text: #1c2128;
+    color-scheme: light;
+  }
+}
+
+:root {
+  --radius: 6px;
+  /** Subtle wash that works over both light and dark surfaces. */
+  --overlay-soft: color-mix(in srgb, var(--text) 5%, transparent);
+
+  font-family: var(--font-family, system-ui, sans-serif);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+::selection {
+  background: var(--selection);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-dim);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+  padding: 4px 8px;
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: transparent;
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  outline: none;
+  min-width: 0;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-dim);
+}
+
+input::placeholder {
+  color: var(--text-faint);
+}
+
+select {
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.muted {
+  color: var(--text-dim);
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+/* Icons ------------------------------------------------------------------ */
+
+.material-icons {
+  font-size: 18px;
+  line-height: 1;
+  /* Optical alignment next to text labels. */
+  vertical-align: -4px;
+  user-select: none;
+}
+
+.material-icons.sm {
+  font-size: 15px;
+  vertical-align: -3px;
+}
+
+.material-icons.lg {
+  font-size: 20px;
+  vertical-align: -5px;
+}
+
+/* CodeMirror ------------------------------------------------------------- */
+
+.cm-editor {
+  height: 100%;
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-scroller {
+  font-family: var(--mono) !important;
+  line-height: 1.6;
+}
+
+.cm-gutters {
+  background: var(--bg-input) !important;
+  border-right: 1px solid var(--border) !important;
+  color: var(--text-faint) !important;
+}
+
+.cm-activeLine {
+  background: var(--overlay-soft) !important;
+}
+
+.cm-activeLineGutter {
+  background: var(--overlay-soft) !important;
+}
+
+.cm-lintRange-error {
+  background: none !important;
+  text-decoration: underline wavy var(--red) !important;
+  text-underline-offset: 3px;
+}
+
+.cm-tooltip {
+  background: var(--bg-raised) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.cm-diagnostic-error {
+  border-left-color: var(--red) !important;
+}
