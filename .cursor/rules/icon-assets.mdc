@@ -1,0 +1,16 @@
+---
+description: How curler's favicon and app icons are laid out, and the toolkit to use when regenerating them
+alwaysApply: false
+---
+
+Raster icon/favicon work: a toolkit lives at ~/Projects/Personal/image-tools. Prefer it
+over throwaway image scripts, and extend it rather than duplicating it. Run:
+  cd ~/Projects/Personal/image-tools && .venv/bin/python -m imagetool --help
+Subcommands: probe (diagnose transparency), fit, unmatte (rebuild corner alpha on an
+icon flattened onto a background), iconset (full favicon set + verification), preview
+(composite over light/dark/saturated to expose fringing). Create .venv from
+requirements.txt if missing. Read its NOTES.md before alpha or downscaling work; two
+traps it documents: never map background colour to transparent (interior highlights are
+often the same colour, so it punches holes in artwork), and never let premultiplied
+values touch 8-bit storage (precision collapses at low alpha and dark edge pixels turn
+white).

@@ -73,7 +73,14 @@ function confirmDeleteCollection(id: string, name: string) {
   <aside class="sidebar" :class="{ railed }">
     <!-- Icon rail, shown when collapsed. -->
     <div class="rail">
-      <img class="rail-mark" src="/favicon.svg" alt="curler" width="22" height="21" />
+      <!-- Sourced from the 192px icon rather than favicon-32x32 so it stays sharp on HiDPI. -->
+      <img
+        class="rail-mark"
+        src="/android-chrome-192x192.png"
+        alt="curler"
+        width="22"
+        height="22"
+      />
       <button class="ghost" title="New request" @click="newScratchRequest()">
         <span class="material-icons">add</span>
       </button>
