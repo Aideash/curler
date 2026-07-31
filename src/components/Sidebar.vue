@@ -18,6 +18,8 @@ const emit = defineEmits<{ manageVariables: [scope?: EditableScope] }>()
 const collapsed = ref(new Set<string>())
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
+/** The control that opened the rename field, to hand focus back to. */
+let renameOrigin: HTMLElement | null = null
 
 const RAIL_KEY = 'curler.sidebar-collapsed'
 const railed = ref(readRailed())
@@ -48,6 +50,19 @@ function toggle(id: string) {
 function startRename(id: string, current: string) {
   renamingId.value = id
   renameValue.value = current
+  const origin = document.activeElement
+  renameOrigin = origin instanceof HTMLElement && origin !== document.body ? origin : null
+}
+
+/**
+ * Vue calls element ref functions on every patch, so this has to check before
+ * taking focus -- reselecting the text on each keystroke would be unusable.
+ */
+function focusRename(el: unknown) {
+  if (el instanceof HTMLInputElement && document.activeElement !== el) {
+    el.focus()
+    el.select()
+  }
 }
 
 function commitRename(kind: 'collection' | 'request') {
@@ -55,6 +70,26 @@ function commitRename(kind: 'collection' | 'request') {
   if (kind === 'collection') renameCollection(renamingId.value, renameValue.value)
   else renameRequest(renamingId.value, renameValue.value)
   renamingId.value = null
+}
+
+/**
+ * Enter and Escape unmount the field while focus is still inside it, which
+ * would drop focus to the body. Blur needs no such help, since focus has
+ * already gone wherever the user sent it.
+ */
+function submitRename(kind: 'collection' | 'request') {
+  commitRename(kind)
+  restoreFocus()
+}
+
+function cancelRename() {
+  renamingId.value = null
+  restoreFocus()
+}
+
+function restoreFocus() {
+  renameOrigin?.focus()
+  renameOrigin = null
 }
 
 function promptCollection() {
@@ -108,7 +143,11 @@ function confirmDeleteCollection(id: string, name: string) {
     </header>
 
     <div class="env">
-      <select v-model="state.activeEnvironmentId" title="Active environment">
+      <select
+        id="active-environment"
+        v-model="state.activeEnvironmentId"
+        title="Active environment"
+      >
         <option v-for="environment in state.environments" :key="environment.id" :value="environment.id">
           {{ environment.name }}
         </option>
@@ -122,19 +161,26 @@ function confirmDeleteCollection(id: string, name: string) {
     <div class="tree">
       <div v-for="collection in state.collections" :key="collection.id" class="collection">
         <div class="collection-head">
-          <button class="ghost chevron" @click="toggle(collection.id)">
+          <button
+            class="ghost chevron"
+            :title="collapsed.has(collection.id) ? 'Expand collection' : 'Collapse collection'"
+            :aria-expanded="!collapsed.has(collection.id)"
+            @click="toggle(collection.id)"
+          >
             <span class="material-icons sm">
               {{ collapsed.has(collection.id) ? 'chevron_right' : 'expand_more' }}
             </span>
           </button>
           <input
             v-if="renamingId === collection.id"
+            id="collection-rename"
             v-model="renameValue"
+            :ref="focusRename"
             class="rename"
-            autofocus
+            aria-label="Collection name"
             @blur="commitRename('collection')"
-            @keydown.enter="commitRename('collection')"
-            @keydown.esc="renamingId = null"
+            @keydown.enter="submitRename('collection')"
+            @keydown.esc="cancelRename"
           />
           <span
             v-else
@@ -143,7 +189,13 @@ function confirmDeleteCollection(id: string, name: string) {
           >
             {{ collection.name }}
           </span>
-          <span class="count faint">{{ collection.requests.length }}</span>
+          <button
+            class="ghost tiny"
+            title="Rename collection"
+            @click="startRename(collection.id, collection.name)"
+          >
+            <span class="material-icons sm">edit</span>
+          </button>
           <button
             class="ghost danger tiny"
             title="Delete collection"
@@ -151,6 +203,7 @@ function confirmDeleteCollection(id: string, name: string) {
           >
             <span class="material-icons sm">delete_outline</span>
           </button>
+          <span class="count faint">{{ collection.requests.length }}</span>
         </div>
 
         <ul v-if="!collapsed.has(collection.id)" class="requests">
@@ -166,18 +219,33 @@ function confirmDeleteCollection(id: string, name: string) {
             </span>
             <input
               v-if="renamingId === request.id"
+              id="request-rename"
               v-model="renameValue"
+              :ref="focusRename"
               class="rename"
-              autofocus
+              aria-label="Request name"
               @click.stop
               @blur="commitRename('request')"
-              @keydown.enter="commitRename('request')"
-              @keydown.esc="renamingId = null"
+              @keydown.enter="submitRename('request')"
+              @keydown.esc="cancelRename"
             />
-            <span v-else class="request-name" @dblclick.stop="startRename(request.id, request.name)">
+            <!--
+              The whole row is a click target for the mouse, but selecting one
+              by keyboard needs a real control: this button carries no handler
+              of its own because activating it bubbles to the row's.
+            -->
+            <button
+              v-else
+              class="request-name"
+              :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
+              @dblclick.stop="startRename(request.id, request.name)"
+            >
               {{ request.name }}
-            </span>
+            </button>
             <span class="row-actions">
+              <button class="ghost tiny" title="Rename" @click.stop="startRename(request.id, request.name)">
+                <span class="material-icons sm">edit</span>
+              </button>
               <button class="ghost tiny" title="Duplicate" @click.stop="duplicateRequest(request.id)">
                 <span class="material-icons sm">content_copy</span>
               </button>
@@ -354,7 +422,7 @@ function confirmDeleteCollection(id: string, name: string) {
 .count {
   font-size: 11px;
   font-family: var(--mono);
-  padding-right: 2px;
+  padding-left: 5px;
 }
 
 .collection-head .tiny,
@@ -363,8 +431,16 @@ function confirmDeleteCollection(id: string, name: string) {
   padding: 2px 4px;
 }
 
+/*
+ * Opacity leaves these buttons in the tab order, so keyboard focus landing
+ * anywhere in the row has to reveal them; otherwise tabbing through the tree
+ * moves an invisible focus ring. Hover alone covers the pointer, and
+ * :focus-visible keeps a click on the row from pinning them open.
+ */
 .collection-head:hover .tiny,
-.request-item:hover .tiny {
+.collection-head:has(:focus-visible) .tiny,
+.request-item:hover .tiny,
+.request-item:has(:focus-visible) .tiny {
   opacity: 1;
 }
 
@@ -401,16 +477,35 @@ function confirmDeleteCollection(id: string, name: string) {
 .method.get { color: var(--green); }
 .method.post { color: var(--accent); }
 .method.put { color: var(--amber); }
-.method.patc { color: var(--purple); }
-.method.dele { color: var(--red); }
-.method.head, .method.opti { color: var(--text-dim); }
+.method.patch { color: var(--purple); }
+.method.delete { color: var(--red); }
+.method.head { color: var(--text-dim); }
+.method.options { color: var(--cyan); }
 
-.request-name {
+/* Reset to a bare row label: the button exists for focus and Enter, not looks. */
+.sidebar .request-name {
+  display: block;
   flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
   font-size: 13px;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar .request-name:hover {
+  background: none;
+}
+
+.sidebar .request-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .row-actions {

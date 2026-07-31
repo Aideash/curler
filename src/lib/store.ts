@@ -187,14 +187,9 @@ function findRequest(id: string): RequestModel | null {
 }
 
 /** The collection holding the request being edited, if it is a saved one. */
-export const activeCollection = computed<Collection | null>(() => {
-  if (!state.activeRequestId) return null
-  return (
-    state.collections.find((collection) =>
-      collection.requests.some((request) => request.id === state.activeRequestId),
-    ) ?? null
-  )
-})
+export const activeCollection = computed<Collection | null>(() =>
+  collectionOfRequest(state.activeRequestId),
+)
 
 /** The request the editor is bound to: a saved one, or the unsaved scratch. */
 export const currentRequest = computed<RequestModel>(() => {
@@ -207,24 +202,53 @@ export const currentRequest = computed<RequestModel>(() => {
 
 export const isScratch = computed(() => state.activeRequestId === null)
 
-/** Every scope folded into one table, narrowest definition winning. */
-export const variableSet = computed<VariableSet>(() =>
-  mergeScopes([
-    { scope: 'request', rows: currentRequest.value.variables },
-    { scope: 'collection', rows: activeCollection.value?.variables ?? [] },
-    { scope: 'environment', rows: activeEnvironment.value?.variables ?? [] },
+function builtinRows(): KeyValue[] {
+  return Object.entries(state.builtins).map(([name, value]) => ({
+    id: `builtin:${name}`,
+    name,
+    value,
+    enabled: true,
+  }))
+}
+
+/**
+ * Every scope folded into one table, narrowest definition winning. The
+ * environment is a parameter rather than the active one, because a comparison
+ * lane resolves against an environment of its own choosing without disturbing
+ * what the sidebar has selected.
+ */
+export function buildVariableSet(
+  request: RequestModel,
+  collection: Collection | null,
+  environment: Environment | null,
+): VariableSet {
+  return mergeScopes([
+    { scope: 'request', rows: request.variables },
+    { scope: 'collection', rows: collection?.variables ?? [] },
+    { scope: 'environment', rows: environment?.variables ?? [] },
     { scope: 'global', rows: state.globals },
-    {
-      scope: 'builtin',
-      rows: Object.entries(state.builtins).map(([name, value]) => ({
-        id: `builtin:${name}`,
-        name,
-        value,
-        enabled: true,
-      })),
-    },
-  ]),
+    { scope: 'builtin', rows: builtinRows() },
+  ])
+}
+
+export const variableSet = computed<VariableSet>(() =>
+  buildVariableSet(currentRequest.value, activeCollection.value, activeEnvironment.value),
 )
+
+/** The collection holding a given saved request, by id. */
+export function collectionOfRequest(id: string | null): Collection | null {
+  if (!id) return null
+  return (
+    state.collections.find((collection) =>
+      collection.requests.some((request) => request.id === id),
+    ) ?? null
+  )
+}
+
+export function environmentById(id: string | null): Environment | null {
+  if (!id) return null
+  return state.environments.find((item) => item.id === id) ?? null
+}
 
 export const variables = computed(() => variableSet.value.values)
 

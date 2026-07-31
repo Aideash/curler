@@ -191,6 +191,58 @@ out the way it went in.
 loads it; edits to a saved request persist automatically. The sidebar collapses
 to an icon rail when you want the room.
 
+**Compare responses.** The **Compare** button in the title bar opens a second
+view, at `#/compare`, for putting two responses next to each other: a lower
+environment against production, v1 of an endpoint against v2, or two unrelated
+sources that ought to agree.
+
+It opens with the request you were editing, saved or not, in both lanes. Change
+one lane's environment and send, and you are comparing the same request across
+two environments — which is the case it was built for. Two lanes to four.
+
+Each lane carries its method and URL inline, and an **Edit** button for
+everything else: the lane's environment, headers, body and options, in the full
+request editor. The environment sits at the top of that dialog with the URL it
+resolves to shown beside it, so you can see where the lane will actually go
+before sending it. Which environment a lane is on stays visible on the lane
+itself, and clicking it opens the same editor. The `⋮` menu loads a saved request
+into the lane, duplicates it, or removes it.
+
+Every lane sends **on its own**. A lane's Send button touches nothing but that
+lane, so re-running one side leaves the other side's response where it is; **Send
+all** is a convenience over the same thing and never lets one lane's failure
+disturb another. A lane you edit after sending is marked **stale** rather than
+having its response cleared, because losing a response you were still reading is
+a poor reward for fixing a typo.
+
+Lanes are *copies*. Editing one never writes back to the saved request it came
+from, and nothing about a comparison is persisted — closing it costs you nothing
+but the responses. Each lane still resolves variables through its own scopes, so
+a collection-scoped API key keeps working on a lane loaded from that collection.
+
+**Diff.** Off by default, because two genuinely different payloads are easier to
+read side by side than as a diff. Switched on it aligns the two bodies into one
+scrolling grid, tinting added, removed and modified lines, with **Changes only**
+to collapse the matching parts and **Copy diff** for a unified-style patch to
+paste into a ticket. Past three lanes an `A vs B` selector picks the pair.
+
+**Normalise JSON** sorts object keys at every depth before comparing, and it is
+on by default: two servers that agree completely can still order their fields
+differently, and without this the diff reports every line as changed and tells
+you nothing. Array order is left alone, since reordering an array does change
+meaning. Text that is not JSON is compared as it arrived.
+
+The **Headers** and **Meta** tabs compare status, timing, size, redirects, final
+URL and every response header across all lanes at once, with rows that differ
+highlighted and a **Differences only** filter. Header names are matched
+case-insensitively, and a header only one side sent is shown as *absent* rather
+than as a difference in value. Timing is reported but never flagged: two hosts
+always take different amounts of time, and marking that every time would train
+you to ignore the marker where it counts.
+
+Very large or wholly dissimilar bodies are not aligned — the diff says so and
+suggests reading them side by side instead, rather than hanging while it tries.
+
 **Themes.** The gear in the top right switches between six themes — Dark, Light,
 Cute, Minimalist, BTerminal and Aquatic — or follows your OS light/dark setting,
 which is the default and updates live when the OS flips.
@@ -199,6 +251,12 @@ Themes are plain token maps in `src/themes/definitions.ts`. Applying one writes
 every token as a CSS custom property on `<html>`, so nothing in the interface
 carries a hard-coded colour, the JSON editor included. Adding a theme means
 adding one entry to that file; the picker lists it automatically.
+
+The typeface is a token too, so a theme can change it: Cute is set in `cursive`
+and BTerminal in `monospace`, both left as the bare generic families for the
+browser to fill in from whatever is installed. It lands on `<html>` and reaches
+the page by inheritance, which means anything naming its own font is unaffected —
+the JSON editor and every monospace run stay monospace under Cute.
 
 Your choice is kept in `localStorage` rather than the workspace file, since it
 belongs to the browser you are looking at rather than to your requests.
@@ -247,9 +305,12 @@ disconnected; it just will not persist. Reload once the server is back.
 
 | Shortcut | Action |
 | --- | --- |
-| `Cmd`/`Ctrl` + `Enter` | Send the current request |
+| `Cmd`/`Ctrl` + `Enter` | Send the current request, or every lane when comparing |
 | `Cmd`/`Ctrl` + `S` | Save an unsaved request |
 | `Esc` | Close the open dialog |
+
+Inside a lane's editor, `Cmd`/`Ctrl` + `Enter` sends that lane alone, since it is
+the request on screen.
 
 ## Layout
 
@@ -263,7 +324,12 @@ src/
   lib/curl.ts    curl parser and serialiser
   lib/vars.ts    Scope merging, ${VAR} and :id resolution, request build trace
   lib/store.ts   Reactive workspace state with debounced persistence
+  lib/send.ts    One send, start to finish, shared by the builder and every lane
+  lib/response.ts  Status colours, sizes, content type and JSON formatting
+  lib/diff.ts    JSON normalisation, line alignment, header and meta comparison
+  lib/compare.ts Comparison lanes: copies, per-lane environments, per-lane sends
   lib/terminalFlags.ts  The terminal-only flag catalogue and its conflict rules
+  composables/useRoute.ts  Hash routing between the builder and the comparison
   themes/        Theme token maps, and the code that applies and persists them
   components/    Vue 3 single-file components
 scripts/
@@ -271,23 +337,31 @@ scripts/
   harness.mjs    Shared check runner: quiet on success, loud on failure
   check-config.mjs  Port parsing, bad values, and CURLER_HOME resolution
   check-curl.mjs Parser cases and import/export round-trip checks
-  check-vars.mjs Variable resolution, warnings and build trace
+  check-vars.mjs Variable resolution, warnings, build trace, per-lane scopes
   check-terminal-flags.mjs  Flag catalogue, conflicts, and curl round-trip
+  check-diff.mjs JSON normalisation, alignment, budgets, header and meta rows
+  check-compare.mjs  Lanes over loopback: copies, independence, staleness
   check-engine.mjs  The real engine over loopback: diagnostics, TLS, size cap
   check-storage.mjs Backup rotation and the never-overwrite-what-you-cannot-read rule
   check-theme.mjs Every theme is complete, and every colour is legible on it
 ```
 
+The builder and the comparison are two views over the same workspace, switched on
+the URL hash. Two views is not enough to justify a router, and the hash keeps the
+back button and a reloaded tab working without any history bookkeeping.
+
 ## Checks and logging
 
-`npm run check` runs all seven check scripts. They print one summary line each
+`npm run check` runs all nine check scripts. They print one summary line each
 when everything passes, and only the failing assertions when it does not:
 
 ```
 config: 27 checks passed
 curl round-trip: 8 checks passed
-variables: 56 checks passed
+variables: 65 checks passed
 terminal flags: 44 checks passed
+diff: 51 checks passed
+compare: 50 checks passed
 engine: 44 checks passed
 storage: 17 checks passed
 themes: 102 checks passed
@@ -297,12 +371,19 @@ themes: 102 checks passed
 check itself is behaving oddly. `CURLER_VERBOSE=1` does the same for a single
 script.
 
-Two of them are worth calling out. The theme check computes WCAG contrast ratios
-for every token against the surface it is drawn on, so a new theme cannot ship a
-colour that disappears into its own background. The engine check runs real
+Three of them are worth calling out. The theme check computes WCAG contrast
+ratios for every token against the surface it is drawn on, so a new theme cannot
+ship a colour that disappears into its own background. The engine check runs real
 requests over loopback — including an HTTPS server under a certificate minted at
 run time — because truncation, timings and TLS reporting are exactly the things
 that look right in isolation and fail against a socket.
+
+The compare check does the same for lanes, sending two of them at a loopback
+server that serves a `v1` and a `v2` of one endpoint. It asserts the properties
+that are easy to break and hard to notice: that a lane holds a copy and cannot
+write back to a saved request, that two lanes resolve two different environments,
+that one lane failing leaves another's response intact, and that normalising the
+key order reduces that `v1`/`v2` pair to the single field that actually differs.
 
 `npm run dev` is likewise quiet, filtering the restart chatter that `node
 --watch` emits on every save. `npm run dev:debug` renders the same diagnostics

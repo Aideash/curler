@@ -82,14 +82,32 @@ async function backup(incoming) {
 
   if (!losingRequests && (await newestBackupAge()) < BACKUP_INTERVAL_MS) return
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const suffix = losingRequests ? '-shrunk' : ''
   await fs.mkdir(BACKUP_DIR, { recursive: true })
-  await fs.writeFile(
-    path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`),
-    current,
-    'utf8',
-  )
+
+  /*
+   * The name carries a millisecond-resolution timestamp, so two snapshots taken
+   * inside one millisecond would resolve to the same path and the second would
+   * overwrite the first. Only shrinking saves can arrive that fast, since they
+   * bypass the interval -- which makes the lost one exactly the snapshot worth
+   * keeping. `wx` refuses to clobber, and waiting for the clock to move keeps
+   * the names both unique and sortable, which is what prune() orders by.
+   */
+  for (;;) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    try {
+      await fs.writeFile(
+        path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`),
+        current,
+        { encoding: 'utf8', flag: 'wx' },
+      )
+      break
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+  }
+
   await prune()
 }
 

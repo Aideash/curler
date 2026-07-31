@@ -122,7 +122,12 @@ const flagPreview = computed(() =>
 <template>
   <section class="request">
     <div class="url-bar">
-      <select v-model="request.method" class="method" :class="request.method.toLowerCase()">
+      <select
+        id="request-method"
+        v-model="request.method"
+        class="method"
+        :class="request.method.toLowerCase()"
+      >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">
           {{ method }}
         </option>
@@ -130,6 +135,7 @@ const flagPreview = computed(() =>
 
       <div class="url-field">
         <input
+          id="request-url"
           v-model="request.url"
           class="mono"
           placeholder="https://api.example.com/v1/things  or  ${BASE_URL}/things/:id"
@@ -237,6 +243,7 @@ const flagPreview = computed(() =>
           :name-options="HEADER_NAMES"
           :variables="variables"
           list-id="header-names"
+          id-prefix="header"
           name-placeholder="Header"
         />
       </div>
@@ -280,12 +287,14 @@ const flagPreview = computed(() =>
             :rows="request.body.form"
             :variables="variables"
             list-id="form-names"
+            id-prefix="form-field"
             name-placeholder="Field"
           />
         </div>
 
         <div v-else class="editor-wrap">
           <CodeEditor
+            id="request-body"
             ref="bodyEditor"
             v-model="request.body.text"
             :language="request.body.mode === 'json' ? 'json' : 'text'"
@@ -312,22 +321,27 @@ const flagPreview = computed(() =>
         <KeyValueEditor
           :rows="request.variables"
           list-id="request-variable-names"
+          id-prefix="request-var"
           name-placeholder="Variable name"
           value-placeholder="Value"
         />
       </div>
 
       <!-- Options ------------------------------------------------------- -->
-      <div v-show="tab === 'options'" class="pane options">
+      <div v-show="tab === 'options'" class="pane option-list">
         <label class="option">
-          <input v-model="request.options.followRedirects" type="checkbox" />
+          <input
+            id="option-follow-redirects"
+            v-model="request.options.followRedirects"
+            type="checkbox"
+          />
           <span>
             <strong>Follow redirects</strong>
             <em class="faint">Equivalent to curl -L, up to 10 hops</em>
           </span>
         </label>
         <label class="option">
-          <input v-model="request.options.insecure" type="checkbox" />
+          <input id="option-insecure" v-model="request.options.insecure" type="checkbox" />
           <span>
             <strong>Skip TLS verification</strong>
             <em class="faint">Equivalent to curl -k, for self-signed certificates</em>
@@ -335,6 +349,7 @@ const flagPreview = computed(() =>
         </label>
         <label class="option">
           <input
+            id="option-timeout"
             v-model.number="request.options.timeoutSecs"
             type="number"
             min="1"
@@ -348,6 +363,7 @@ const flagPreview = computed(() =>
         </label>
         <label class="option">
           <input
+            id="option-max-response-mb"
             v-model.number="request.options.maxResponseMb"
             type="number"
             min="1"
@@ -386,6 +402,7 @@ const flagPreview = computed(() =>
               <label class="flag-main">
                 <input
                   v-if="flag.kind === 'boolean'"
+                  :id="`flag-${flag.id}`"
                   type="checkbox"
                   :checked="isActive(request.terminalFlags, flag.id)"
                   :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
@@ -393,6 +410,7 @@ const flagPreview = computed(() =>
                 />
                 <input
                   v-else
+                  :id="`flag-${flag.id}`"
                   class="mono flag-value"
                   :value="typeof request.terminalFlags[flag.id] === 'string' ? request.terminalFlags[flag.id] : ''"
                   :placeholder="flag.placeholder"
@@ -455,6 +473,7 @@ const flagPreview = computed(() =>
 .method.put { color: var(--amber); }
 .method.patch { color: var(--purple); }
 .method.delete { color: var(--red); }
+.method.options { color: var(--cyan); }
 
 .url-field {
   position: relative;
@@ -667,7 +686,11 @@ const flagPreview = computed(() =>
   text-align: center;
 }
 
-.options {
+/*
+ * Not ".options": the method select carries its method as a lowercased class, so
+ * anything named after an HTTP method lands on it whenever that method is picked.
+ */
+.option-list {
   display: flex;
   flex-direction: column;
   gap: 14px;

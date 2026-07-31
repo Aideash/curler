@@ -3,6 +3,7 @@ import { createHarness, loadModules } from './harness.mjs'
 const { modules, close } = await loadModules([
   '/src/lib/vars.ts',
   '/src/lib/curl.ts',
+  '/src/lib/store.ts',
   '/src/types.ts',
 ])
 
@@ -16,6 +17,8 @@ const {
   toCurl,
   newRequest,
   uid,
+  buildVariableSet,
+  state,
 } = modules
 const { group, expect, detail, summary } = createHarness('variables')
 
@@ -331,6 +334,67 @@ group('build trace')
 
   expect('a valueless header is reported as dropped', trace.droppedHeaders, ['X-Nothing'])
   expect('nothing spurious is dropped', trace.droppedFields, [])
+}
+
+// -- Scoped resolution against a chosen environment -------------------------
+
+// This is what a comparison lane relies on: the same request resolved against
+// an environment other than the active one, without the sidebar's selection
+// getting a say.
+group('buildVariableSet')
+
+{
+  state.globals = rows([['SHARED', 'from-globals'], ['BASE_URL', 'http://global']])
+  state.builtins = { USER: 'someone' }
+
+  const lower = env([['BASE_URL', 'http://lower.test']])
+  const prod = { id: 'e2', name: 'Prod', variables: rows([['BASE_URL', 'https://prod.test']]) }
+  const collection = {
+    id: 'c1',
+    name: 'Service',
+    requests: [],
+    variables: rows([['API_KEY', 'collection-key']]),
+  }
+  const model = newRequest({ url: '${BASE_URL}/things' })
+
+  const lowerSet = buildVariableSet(model, collection, lower)
+  const prodSet = buildVariableSet(model, collection, prod)
+
+  expect('the chosen environment answers', lowerSet.values.BASE_URL, 'http://lower.test')
+  expect('a different one answers differently', prodSet.values.BASE_URL, 'https://prod.test')
+  expect('and the environment beats globals', prodSet.origins.BASE_URL, 'environment')
+
+  expect('collection scope still applies', prodSet.values.API_KEY, 'collection-key')
+  expect('globals still apply', prodSet.values.SHARED, 'from-globals')
+  expect('built-ins still apply', prodSet.values.USER, 'someone')
+
+  expect(
+    'the same request resolves to two different URLs',
+    [
+      resolveRequest(model, lowerSet.values).url,
+      resolveRequest(model, prodSet.values).url,
+    ],
+    ['http://lower.test/things', 'https://prod.test/things'],
+  )
+
+  // A lane seeded from an unsaved request has no collection behind it, and must
+  // not inherit one by accident.
+  const orphan = buildVariableSet(model, null, prod)
+  expect('no collection means no collection-scoped values', 'API_KEY' in orphan.values, false)
+
+  // Request scope is still narrowest, whichever environment is in play.
+  const overridden = newRequest({
+    url: '${BASE_URL}/things',
+    variables: rows([['BASE_URL', 'http://request']]),
+  })
+  expect(
+    'a request-level value overrides the chosen environment',
+    buildVariableSet(overridden, collection, prod).values.BASE_URL,
+    'http://request',
+  )
+
+  state.globals = []
+  state.builtins = {}
 }
 
 const failures = summary()

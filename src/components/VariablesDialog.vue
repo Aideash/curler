@@ -141,13 +141,14 @@ function confirmDeleteEnvironment() {
     </nav>
 
     <div v-if="scope === 'environment'" class="env-bar">
-      <select v-model="state.activeEnvironmentId">
+      <select id="variables-environment" v-model="state.activeEnvironmentId">
         <option v-for="item in state.environments" :key="item.id" :value="item.id">
           {{ item.name }}
         </option>
       </select>
       <input
         v-if="environment"
+        id="variables-environment-name"
         v-model="environment.name"
         class="rename"
         placeholder="Environment name"
@@ -175,6 +176,7 @@ function confirmDeleteEnvironment() {
       :key="scope"
       :rows="current.rows"
       list-id="variable-names"
+      :id-prefix="`variable-${scope}`"
       name-placeholder="Variable name"
       value-placeholder="Value"
       :default-name="defaultName"

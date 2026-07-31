@@ -41,6 +41,7 @@ const RULES = [
   ['amber', 'bg', 3],
   ['red', 'bg', 3],
   ['purple', 'bg', 3],
+  ['cyan', 'bg', 3],
   ['on-accent', 'accent', 4],
   ['syntax-key', 'bg-input', 4],
   ['syntax-string', 'bg-input', 4],

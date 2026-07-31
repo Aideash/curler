@@ -11,6 +11,12 @@ const props = withDefaults(
     valuePlaceholder?: string
     variables?: Record<string, string>
     listId?: string
+    /**
+     * Stem for the row element ids, which are completed with the row index and
+     * the field. Has to be unique per editor on screen: several are mounted at
+     * once behind the request tabs.
+     */
+    idPrefix?: string
     /** Pre-fills the name of each new row, as a real value rather than a hint. */
     defaultName?: string
   }>(),
@@ -20,6 +26,7 @@ const props = withDefaults(
     valuePlaceholder: 'Value',
     variables: () => ({}),
     listId: 'kv-names',
+    idPrefix: 'kv',
     defaultName: '',
   },
 )
@@ -97,6 +104,7 @@ ensureTrailingRow()
       :class="{ blank: isBlank(row), partial: isPartial(row) }"
     >
       <input
+        :id="`${idPrefix}-${index}-enabled`"
         v-model="row.enabled"
         type="checkbox"
         class="kv-toggle"
@@ -114,6 +122,7 @@ ensureTrailingRow()
         "
       />
       <input
+        :id="`${idPrefix}-${index}-name`"
         v-model="row.name"
         class="mono"
         :list="listId"
@@ -125,6 +134,7 @@ ensureTrailingRow()
       />
       <div class="kv-value">
         <input
+          :id="`${idPrefix}-${index}-value`"
           v-model="row.value"
           class="mono"
           :placeholder="valuePlaceholder"

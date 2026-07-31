@@ -16,6 +16,18 @@ const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, s
 const MONO = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace'
 
 /**
+ * The generic families, left for the browser to fill in. A theme whose whole
+ * character is its typeface wants whatever the reader has installed rather than
+ * a stack picked here, which is why these are the bare keywords.
+ *
+ * `font-family` lands on <html> and reaches the page by inheritance, so it
+ * governs body text and form controls without touching anything that names its
+ * own font -- the JSON editor and every `.mono` run stay monospace.
+ */
+const CURSIVE = 'cursive'
+const MONOSPACE = 'monospace'
+
+/**
  * Every theme defines this whole token set. Syntax colours are part of it so
  * the JSON editor tracks the theme instead of staying dark on a light page.
  */
@@ -44,6 +56,8 @@ const dark: ThemeTokens = {
   amber: '#fbbf24',
   red: '#f87171',
   purple: '#c084fc',
+  /** OPTIONS, which has no conventional colour and was otherwise indistinguishable from HEAD. */
+  cyan: '#22d3ee',
 
   'green-border': '#245c39',
   'amber-border': '#6b5a1f',
@@ -91,6 +105,7 @@ const light: ThemeTokens = {
   amber: '#b45309',
   red: '#b91c1c',
   purple: '#7c3aed',
+  cyan: '#0e7490',
 
   'green-border': '#a7d8ba',
   'amber-border': '#e6c493',
@@ -133,10 +148,11 @@ export const themes: Record<string, Theme> = {
   cute: {
     id: 'cute',
     name: 'Cute',
-    description: 'Soft pinks on cream',
+    description: 'Soft pinks on cream, handwritten',
     colorScheme: 'light',
     tokens: {
       ...light,
+      'font-family': CURSIVE,
       bg: '#fff5fa',
       'bg-raised': '#ffeaf4',
       'bg-input': '#fffafc',
@@ -152,6 +168,9 @@ export const themes: Record<string, Theme> = {
       'on-accent': '#ffffff',
       green: '#0f766e',
       purple: '#9333ea',
+      // Pushed towards blue: this theme's green is itself a teal, and a plain
+      // cyan would leave GET and OPTIONS looking like the same colour.
+      cyan: '#0284c7',
       'green-border': '#9fd3ce',
       'amber-border': '#eccb9f',
       'red-border': '#f1b2b2',
@@ -195,6 +214,8 @@ export const themes: Record<string, Theme> = {
       amber: '#854d0e',
       red: '#991b1b',
       purple: '#5b21b6',
+      // Held back to match the theme's deliberately muted palette.
+      cyan: '#155e75',
       'green-border': '#c3d3a8',
       'amber-border': '#ddc79c',
       'red-border': '#e0b4b4',
@@ -221,7 +242,7 @@ export const themes: Record<string, Theme> = {
     colorScheme: 'dark',
     tokens: {
       ...dark,
-      'font-family': MONO,
+      'font-family': MONOSPACE,
       bg: '#000000',
       'bg-raised': '#0a0a0a',
       'bg-input': '#101010',
@@ -239,6 +260,8 @@ export const themes: Record<string, Theme> = {
       amber: '#ffcc33',
       red: '#ff6b5e',
       purple: '#d8a2ff',
+      // Cyan is an original ANSI terminal colour, so it earns full brightness here.
+      cyan: '#00e5ff',
       'green-border': '#2e5c33',
       'amber-border': '#6b5518',
       'red-border': '#6e3029',
@@ -282,6 +305,9 @@ export const themes: Record<string, Theme> = {
       amber: '#fcd34d',
       red: '#fb7185',
       purple: '#a5b4fc',
+      // Bluer than the inherited cyan, which sat a few degrees of hue from this
+      // theme's teal accent and read as the same colour on a method label.
+      cyan: '#38bdf8',
       'green-border': '#12564f',
       'amber-border': '#6b5a1f',
       'red-border': '#6e2f3f',

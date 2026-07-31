@@ -3,6 +3,12 @@ import { computed, ref, watch } from 'vue'
 import CodeEditor from './CodeEditor.vue'
 import DiagnosticsView from './DiagnosticsView.vue'
 import { copyText } from '../lib/clipboard'
+import {
+  formatBytes,
+  isJsonResponse,
+  prettyBody,
+  statusClass as statusClassFor,
+} from '../lib/response'
 import type { BuildTrace } from '../lib/vars'
 import type { HttpResponse } from '../types'
 
@@ -23,39 +29,15 @@ type Tab = 'body' | 'headers' | 'diagnostics'
 const tab = ref<Tab>('body')
 const pretty = ref(true)
 
-const contentType = computed(() => {
-  const header = props.response?.headers.find(
-    ([name]) => name.toLowerCase() === 'content-type',
-  )
-  return header?.[1] ?? ''
-})
-
-const isJson = computed(() => /\bjson\b/i.test(contentType.value))
+const isJson = computed(() => isJsonResponse(props.response))
 
 const displayBody = computed(() => {
   const body = props.response?.body ?? ''
   if (!pretty.value || !isJson.value) return body
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2)
-  } catch {
-    return body
-  }
+  return prettyBody(body)
 })
 
-const statusClass = computed(() => {
-  const status = props.response?.status ?? 0
-  if (status >= 500) return 'red'
-  if (status >= 400) return 'amber'
-  if (status >= 300) return 'purple'
-  if (status >= 200) return 'green'
-  return 'dim'
-})
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
-}
+const statusClass = computed(() => statusClassFor(props.response?.status))
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -127,7 +109,7 @@ watch(
           </button>
         </div>
         <label v-if="isJson && tab === 'body'" class="pretty">
-          <input v-model="pretty" type="checkbox" />
+          <input id="response-pretty" v-model="pretty" type="checkbox" />
           Pretty
         </label>
         <button v-if="tab === 'body'" class="ghost copy" @click="copyBody">

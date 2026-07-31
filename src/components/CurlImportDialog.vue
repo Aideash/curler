@@ -29,6 +29,7 @@ function confirm() {
 <template>
   <ModalShell title="Import a curl command" width="700px" @close="emit('close')">
     <textarea
+      id="curl-import"
       v-model="text"
       class="mono input"
       rows="8"
