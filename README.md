@@ -243,9 +243,9 @@ you to ignore the marker where it counts.
 Very large or wholly dissimilar bodies are not aligned — the diff says so and
 suggests reading them side by side instead, rather than hanging while it tries.
 
-**Themes.** The gear in the top right switches between six themes — Dark, Light,
-Cute, Minimalist, BTerminal and Aquatic — or follows your OS light/dark setting,
-which is the default and updates live when the OS flips.
+**Themes.** The gear in the top right switches between seven themes — Dark,
+Light, Cute, Minimalist, BTerminal, Aquatic and Forest — or follows your OS
+light/dark setting, which is the default and updates live when the OS flips.
 
 Themes are plain token maps in `src/themes/definitions.ts`. Applying one writes
 every token as a CSS custom property on `<html>`, so nothing in the interface
@@ -364,7 +364,7 @@ diff: 51 checks passed
 compare: 50 checks passed
 engine: 44 checks passed
 storage: 17 checks passed
-themes: 102 checks passed
+themes: 126 checks passed
 ```
 
 `npm run check:verbose` prints every assertion, which is what you want when a

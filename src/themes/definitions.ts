@@ -326,6 +326,55 @@ export const themes: Record<string, Theme> = {
       'syntax-comment': '#5b93a6',
     },
   },
+
+  forest: {
+    id: 'forest',
+    name: 'Forest',
+    description: 'Deep pine, warm earth accents',
+    colorScheme: 'dark',
+    tokens: {
+      ...dark,
+      bg: '#0a1410',
+      'bg-raised': '#101d16',
+      'bg-input': '#13241a',
+      'bg-hover': '#1a3122',
+      border: '#1e3626',
+      'border-strong': '#2d5036',
+      text: '#e4eee3',
+      'text-dim': '#a3b8a5',
+      'text-faint': '#76907d',
+      accent: '#e07a45',
+      'accent-hover': '#f0975f',
+      'accent-dim': '#5e3418',
+      'on-accent': '#1a1005',
+      green: '#7fd18a',
+      amber: '#e6b455',
+      // The warm half of this palette has to carry three method labels that sit
+      // in one column, so red is kept lighter and pinker than the copper accent
+      // and the wheat amber rather than the brick red the theme would suggest.
+      red: '#f4736f',
+      purple: '#b79ae0',
+      // Pulled towards blue, well clear of the greens that make up most of the
+      // theme, since OPTIONS otherwise read as another shade of GET.
+      cyan: '#5fb8d4',
+      'green-border': '#2f5c39',
+      'amber-border': '#6a5423',
+      'red-border': '#6e3230',
+      'purple-border': '#4d3f6b',
+      scrollbar: '#24402c',
+      'scrollbar-hover': '#345a3e',
+      selection: '#5e3418',
+      backdrop: 'rgba(5, 12, 8, 0.7)',
+      shadow: 'rgba(0, 8, 4, 0.55)',
+      'shadow-strong': 'rgba(0, 8, 4, 0.68)',
+      'syntax-key': '#e5c76b',
+      'syntax-string': '#8fd07a',
+      'syntax-number': '#ea8b58',
+      'syntax-literal': '#6a98ff',
+      'syntax-punctuation': '#8ba58f',
+      'syntax-comment': '#6f8b76',
+    },
+  },
 }
 
 export function getThemeById(id: string): Theme | undefined {
