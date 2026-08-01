@@ -501,6 +501,7 @@ const flagPreview = computed(() =>
 .method.patch { color: var(--purple); }
 .method.delete { color: var(--red); }
 .method.options { color: var(--cyan); }
+.method.trace { color: var(--pink); }
 
 .url-field {
   position: relative;

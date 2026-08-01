@@ -58,6 +58,8 @@ const dark: ThemeTokens = {
   purple: '#c084fc',
   /** OPTIONS, which has no conventional colour and was otherwise indistinguishable from HEAD. */
   cyan: '#22d3ee',
+  /** TRACE, kept magenta rather than rose so it reads apart from red and purple. */
+  pink: '#f472d6',
 
   'green-border': '#245c39',
   'amber-border': '#6b5a1f',
@@ -106,6 +108,7 @@ const light: ThemeTokens = {
   red: '#b91c1c',
   purple: '#7c3aed',
   cyan: '#0e7490',
+  pink: '#bf1b90',
 
   'green-border': '#a7d8ba',
   'amber-border': '#e6c493',
@@ -171,6 +174,9 @@ export const themes: Record<string, Theme> = {
       // Pushed towards blue: this theme's green is itself a teal, and a plain
       // cyan would leave GET and OPTIONS looking like the same colour.
       cyan: '#0284c7',
+      // Deepened into plum: the theme spends its pink on the accent, which POST
+      // already wears, so TRACE has to sit well below it.
+      pink: '#8c1a74',
       'green-border': '#9fd3ce',
       'amber-border': '#eccb9f',
       'red-border': '#f1b2b2',
@@ -216,6 +222,7 @@ export const themes: Record<string, Theme> = {
       purple: '#5b21b6',
       // Held back to match the theme's deliberately muted palette.
       cyan: '#155e75',
+      pink: '#7e2166',
       'green-border': '#c3d3a8',
       'amber-border': '#ddc79c',
       'red-border': '#e0b4b4',
@@ -262,6 +269,8 @@ export const themes: Record<string, Theme> = {
       purple: '#d8a2ff',
       // Cyan is an original ANSI terminal colour, so it earns full brightness here.
       cyan: '#00e5ff',
+      // Magenta likewise, so TRACE gets the bright ANSI shade rather than a tint.
+      pink: '#ff5fff',
       'green-border': '#2e5c33',
       'amber-border': '#6b5518',
       'red-border': '#6e3029',
@@ -308,6 +317,9 @@ export const themes: Record<string, Theme> = {
       // Bluer than the inherited cyan, which sat a few degrees of hue from this
       // theme's teal accent and read as the same colour on a method label.
       cyan: '#38bdf8',
+      // Orchid rather than the base magenta, which sat too near this theme's
+      // rose red.
+      pink: '#e879f9',
       'green-border': '#12564f',
       'amber-border': '#6b5a1f',
       'red-border': '#6e2f3f',
@@ -357,6 +369,9 @@ export const themes: Record<string, Theme> = {
       // Pulled towards blue, well clear of the greens that make up most of the
       // theme, since OPTIONS otherwise read as another shade of GET.
       cyan: '#5fb8d4',
+      // Softened to the theme's lower saturation, and kept dustier than the
+      // salmon red it shares the warm half of the palette with.
+      pink: '#e07ab8',
       'green-border': '#2f5c39',
       'amber-border': '#6a5423',
       'red-border': '#6e3230',

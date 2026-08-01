@@ -585,6 +585,7 @@ function confirmDeleteCollection(id: string, name: string) {
 .method.delete { color: var(--red); }
 .method.head { color: var(--text-dim); }
 .method.options { color: var(--cyan); }
+.method.trace { color: var(--pink); }
 
 /* Reset to a bare row label: the button exists for focus and Enter, not looks. */
 .sidebar .request-name {

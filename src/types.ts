@@ -6,6 +6,7 @@ export type HttpMethod =
   | 'DELETE'
   | 'HEAD'
   | 'OPTIONS'
+  | 'TRACE'
 
 export const HTTP_METHODS: HttpMethod[] = [
   'GET',
@@ -15,6 +16,7 @@ export const HTTP_METHODS: HttpMethod[] = [
   'DELETE',
   'HEAD',
   'OPTIONS',
+  'TRACE',
 ]
 
 export type BodyMode = 'none' | 'json' | 'text' | 'form'
