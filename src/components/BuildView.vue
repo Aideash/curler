@@ -257,7 +257,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
+/* Positioned so the narrow-layout sidebar overlays this shell rather than the
+   viewport, which it would otherwise fall back to. */
 .app {
+  position: relative;
   display: flex;
   height: 100%;
   min-height: 0;
@@ -269,6 +272,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+/* Where the sidebar leaves the flow and becomes an overlay, so only the rail
+   it collapses to is worth reserving. Kept in step with Sidebar's own query. */
+@media screen and (max-width: 750px) {
+  .main {
+    margin-left: var(--rail-width);
+  }
 }
 
 .title-bar {

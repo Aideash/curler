@@ -460,6 +460,25 @@ const flagPreview = computed(() =>
   padding: 12px 16px;
 }
 
+/*
+ * The method and Send both hold a fixed width, so past this point they leave
+ * the URL too little to read and it takes a line of its own. That puts it ahead
+ * of the method in reading order but not in the tab order, which is a fair
+ * trade for the field the row exists to serve.
+ */
+@media screen and (max-width: 560px) {
+  .url-bar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  /* A minimum rather than a basis, which the shorthand further down resets. */
+  .url-field {
+    order: -1;
+    min-width: 100%;
+  }
+}
+
 .method {
   font-family: var(--mono);
   font-weight: 700;
@@ -523,12 +542,14 @@ const flagPreview = computed(() =>
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
 }
 
@@ -556,6 +577,7 @@ const flagPreview = computed(() =>
 
 .toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 

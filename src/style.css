@@ -23,6 +23,8 @@
 
 :root {
   --radius: 6px;
+  /** Width of the collapsed sidebar, which the content beside it makes room for. */
+  --rail-width: 56px;
   /** Subtle wash that works over both light and dark surfaces. */
   --overlay-soft: color-mix(in srgb, var(--text) 5%, transparent);
 

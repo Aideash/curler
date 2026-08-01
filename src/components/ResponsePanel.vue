@@ -167,13 +167,27 @@ watch(
   min-height: 0;
 }
 
+/*
+ * Wrapping at every width rather than under a breakpoint, because what this row
+ * has to fit into is the viewport less the sidebar, and the sidebar is worth
+ * 212px depending on whether it is railed.
+ */
 .status-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   min-height: 44px;
+}
+
+/* The metrics carry their own units, so the icons are what can go once the
+   window is narrow enough for the row to be breaking up anyway. */
+@media screen and (max-width: 950px) {
+  .metric .material-icons {
+    display: none;
+  }
 }
 
 .chip {
@@ -192,10 +206,13 @@ watch(
 .chip.purple { color: var(--purple); border-color: var(--purple-border); }
 .chip.dim { color: var(--text-dim); }
 
+/* Short enough to be worth keeping whole: given the chance these break between
+   the number and its unit. */
 .metric {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);

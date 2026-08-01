@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: ports.ui,
       strictPort: true,
+      // Reached through the local Caddy reverse proxy, which forwards the
+      // original Host header. Vite rejects unrecognised hosts with a 403.
+      allowedHosts: ['curler.aidan'],
       proxy: {
         // The API server performs the actual HTTP calls, so nothing the app sends
         // is subject to the browser's CORS or cookie rules.

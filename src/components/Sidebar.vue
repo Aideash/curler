@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   addCollection,
   deleteCollection,
@@ -23,6 +23,9 @@ let renameOrigin: HTMLElement | null = null
 
 const RAIL_KEY = 'curler.sidebar-collapsed'
 const railed = ref(readRailed())
+const root = ref<HTMLElement | null>(null)
+/** Keep in sync with the overlay breakpoint in this component's styles. */
+const overlaying = window.matchMedia('(max-width: 750px)')
 
 function readRailed(): boolean {
   try {
@@ -32,14 +35,75 @@ function readRailed(): boolean {
   }
 }
 
-function toggleRail() {
-  railed.value = !railed.value
+function setRailed(value: boolean) {
+  railed.value = value
   try {
-    localStorage.setItem(RAIL_KEY, railed.value ? '1' : '0')
+    localStorage.setItem(RAIL_KEY, value ? '1' : '0')
   } catch {
     // A sidebar that forgets its width is survivable.
   }
 }
+
+function toggleRail() {
+  setRailed(!railed.value)
+}
+
+/**
+ * Dialogs and menus teleport to the body, outside the layout shell, and dismiss
+ * themselves. Anything they receive is theirs to act on, so an open sidebar
+ * behind one is left alone rather than collapsing out of sight.
+ */
+function fromOverlay(target: EventTarget | null): boolean {
+  const shell = root.value?.parentElement
+  return target instanceof Node && target !== document.body && !shell?.contains(target)
+}
+
+/**
+ * Only the narrow layout puts the expanded panel over the content beside it,
+ * and only then is there anything to dismiss.
+ */
+function overlaid(): boolean {
+  return !railed.value && overlaying.matches
+}
+
+/** Anything reaching the covered content puts the panel away. */
+function dismissFrom(target: EventTarget | null) {
+  if (!overlaid() || fromOverlay(target)) return
+  if (target instanceof Node && root.value?.contains(target)) return
+  setRailed(true)
+}
+
+function onPointerDown(event: PointerEvent) {
+  dismissFrom(event.target)
+}
+
+/**
+ * The scrim stops presses reaching what the panel covers, but Tab still walks
+ * straight into it. Leaving on the keyboard means the same thing as leaving on
+ * the pointer, so it closes the same way -- and focus keeps going where the
+ * user sent it rather than being penned in.
+ */
+function onFocusIn(event: FocusEvent) {
+  dismissFrom(event.target)
+}
+
+function onKeydown(event: KeyboardEvent) {
+  // Escape belongs to the rename field for as long as one is open.
+  if (event.key !== 'Escape' || renamingId.value) return
+  if (overlaid() && !fromOverlay(event.target)) setRailed(true)
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onPointerDown)
+  document.addEventListener('focusin', onFocusIn)
+  document.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onPointerDown)
+  document.removeEventListener('focusin', onFocusIn)
+  document.removeEventListener('keydown', onKeydown)
+})
 
 function toggle(id: string) {
   if (collapsed.value.has(id)) collapsed.value.delete(id)
@@ -105,7 +169,7 @@ function confirmDeleteCollection(id: string, name: string) {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ railed }">
+  <aside ref="root" class="sidebar" :class="{ railed }">
     <!-- Icon rail, shown when collapsed. -->
     <div class="rail">
       <!-- Sourced from the 192px icon rather than favicon-32x32 so it stays sharp on HiDPI. -->
@@ -269,6 +333,9 @@ function confirmDeleteCollection(id: string, name: string) {
     </footer>
     </div>
   </aside>
+
+  <!-- Dims the covered content and catches the press that closes the panel. -->
+  <div class="scrim" :class="{ show: !railed }" aria-hidden="true" />
 </template>
 
 <style scoped>
@@ -288,8 +355,44 @@ function confirmDeleteCollection(id: string, name: string) {
   transition: width 0.22s ease;
 }
 
+/* The wide layout has nothing to dim: the panel sits beside the content. */
+.scrim {
+  display: none;
+}
+
+/* Below this the panel is an overlay rather than a column; the content beside
+   it only reserves room for the rail. Kept in step with BuildView's .main. */
+@media screen and (max-width: 750px) {
+  .sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+  }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    /* Below the sidebar, above everything the sidebar covers. */
+    z-index: 9;
+    background: var(--backdrop);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.22s ease, visibility 0.22s;
+  }
+
+  .scrim.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
 .sidebar.railed {
-  width: 56px;
+  width: var(--rail-width);
 }
 
 .panel,
@@ -311,7 +414,7 @@ function confirmDeleteCollection(id: string, name: string) {
 }
 
 .rail {
-  width: 56px;
+  width: var(--rail-width);
   align-items: center;
   gap: 4px;
   padding-top: 12px;
@@ -340,7 +443,8 @@ function confirmDeleteCollection(id: string, name: string) {
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .panel,
-  .rail {
+  .rail,
+  .scrim {
     transition: none;
   }
 }
