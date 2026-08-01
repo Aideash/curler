@@ -70,8 +70,173 @@ export interface ParsedCurl {
   warnings: string[]
 }
 
+/** The escapes bash resolves inside `$'...'` that stand for a single character. */
+const ANSI_C_ESCAPES: Record<string, string> = {
+  a: '\x07',
+  b: '\b',
+  e: '\x1b',
+  E: '\x1b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+  '?': '?',
+}
+
+/** `\x41`, `\u00e9`, `\U0001f600` and octal `\101`, matched where we stand. */
+const ANSI_C_NUMERIC =
+  /\\(?:x([0-9A-Fa-f]{1,2})|u([0-9A-Fa-f]{1,4})|U([0-9A-Fa-f]{1,8})|([0-7]{1,3}))/y
+
+/**
+ * Decodes the body of a `$'...'` string, starting at the first character after
+ * the opening quote, and reports where the closing quote left off. A string
+ * that is never closed is read to the end rather than rejected, since a
+ * half-copied command is still worth importing.
+ */
+function decodeAnsiC(input: string, start: number): { value: string; end: number } {
+  let value = ''
+  let cursor = start
+
+  while (cursor < input.length) {
+    const char = input[cursor]
+    if (char === "'") return { value, end: cursor + 1 }
+    if (char !== '\\') {
+      value += char
+      cursor += 1
+      continue
+    }
+
+    const next = input[cursor + 1]
+    if (next === undefined) {
+      value += '\\'
+      break
+    }
+
+    const simple = ANSI_C_ESCAPES[next]
+    if (simple !== undefined) {
+      value += simple
+      cursor += 2
+      continue
+    }
+
+    // `\cA` is Ctrl-A: the letter with its 0x40 bit cleared.
+    if (next === 'c' && input[cursor + 2] !== undefined) {
+      value += String.fromCharCode(input[cursor + 2].toUpperCase().charCodeAt(0) ^ 0x40)
+      cursor += 3
+      continue
+    }
+
+    ANSI_C_NUMERIC.lastIndex = cursor
+    const numeric = ANSI_C_NUMERIC.exec(input)
+    if (numeric) {
+      const [hex2, hex4, hex8, octal] = numeric.slice(1)
+      const code =
+        octal !== undefined ? parseInt(octal, 8) : parseInt(hex2 ?? hex4 ?? hex8, 16)
+      // A `\U` escape can name a code point that does not exist; drop those
+      // instead of throwing partway through the command.
+      if (code <= 0x10ffff) value += String.fromCodePoint(code)
+      cursor = ANSI_C_NUMERIC.lastIndex
+      continue
+    }
+
+    // Bash passes an escape it does not recognise through exactly as written.
+    value += `\\${next}`
+    cursor += 2
+  }
+
+  return { value, end: cursor }
+}
+
+/**
+ * Hides every `$'...'` string behind a placeholder word, so shell-quote — which
+ * does not know the syntax — cannot get at it, and returns the decoder that
+ * puts the real text back once the command has been split into tokens.
+ *
+ * Browsers reach for ANSI-C quoting as soon as a payload holds a `!`, a single
+ * quote or a control character, and double the payload's backslashes to suit. A
+ * GraphQL body qualifies nearly every time, its newlines arriving as JSON `\n`
+ * escapes, so left alone shell-quote reads the `$` as a variable and hands back
+ * a body with every backslash still doubled.
+ *
+ * `$"..."` is reduced to a plain double-quoted string in the same pass: the
+ * translation it asks for is not ours to do, and the bare `$` would likewise be
+ * mistaken for a variable.
+ */
+function hideAnsiCStrings(input: string): {
+  command: string
+  restore: (token: string) => string
+} {
+  if (!input.includes("$'") && !input.includes('$"')) {
+    return { command: input, restore: (token) => token }
+  }
+
+  // A placeholder has to survive shell-quote untouched, so it is a bare word,
+  // and it must not be something the command could contain on its own.
+  let marker = 'curlerAnsiC'
+  while (input.includes(marker)) marker += 'x'
+
+  const values = new Map<string, string>()
+  let command = ''
+  let cursor = 0
+
+  while (cursor < input.length) {
+    const char = input[cursor]
+
+    // Ordinary quoting is copied across verbatim: a `$'` inside it is text.
+    if (char === "'") {
+      const end = input.indexOf("'", cursor + 1)
+      command += end === -1 ? input.slice(cursor) : input.slice(cursor, end + 1)
+      cursor = end === -1 ? input.length : end + 1
+      continue
+    }
+
+    if (char === '"') {
+      let end = cursor + 1
+      while (end < input.length && input[end] !== '"') end += input[end] === '\\' ? 2 : 1
+      command += input.slice(cursor, end + 1)
+      cursor = end + 1
+      continue
+    }
+
+    if (char === '\\') {
+      command += input.slice(cursor, cursor + 2)
+      cursor += 2
+      continue
+    }
+
+    if (char === '$' && input[cursor + 1] === "'") {
+      const { value, end } = decodeAnsiC(input, cursor + 2)
+      const placeholder = `${marker}${values.size}${marker}`
+      values.set(placeholder, value)
+      command += placeholder
+      cursor = end
+      continue
+    }
+
+    if (char === '$' && input[cursor + 1] === '"') {
+      cursor += 1
+      continue
+    }
+
+    command += char
+    cursor += 1
+  }
+
+  const placeholderPattern = new RegExp(`${marker}\\d+${marker}`, 'g')
+  return {
+    command,
+    restore: (token) =>
+      token.replace(placeholderPattern, (match) => values.get(match) ?? match),
+  }
+}
+
 function tokenize(input: string): string[] {
-  const normalized = input
+  const { command, restore } = hideAnsiCStrings(input)
+  const normalized = command
     .replace(/\\\r?\n/g, ' ')
     .replace(/\^\r?\n/g, ' ')
     .replace(/`\r?\n/g, ' ')
@@ -85,9 +250,9 @@ function tokenize(input: string): string[] {
   const tokens: string[] = []
   for (const entry of parsed) {
     if (typeof entry === 'string') {
-      tokens.push(entry)
+      tokens.push(restore(entry))
     } else if (entry && typeof entry === 'object' && 'pattern' in entry) {
-      tokens.push((entry as { pattern: string }).pattern)
+      tokens.push(restore((entry as { pattern: string }).pattern))
     }
     // Operators (|, >, &&, ...) terminate the curl invocation.
     else if (entry && typeof entry === 'object' && 'op' in entry) {
@@ -408,7 +573,8 @@ function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-const VARIABLE_REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g
+/** Curler's own reference syntax, which is the braced form and nothing else. */
+const VARIABLE_REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g
 
 function escapeInsideDoubleQuotes(text: string): string {
   return text.replace(/([\\"`$])/g, '\\$1')
@@ -417,7 +583,9 @@ function escapeInsideDoubleQuotes(text: string): string {
 /**
  * Double quotes, with variable references left intact so the receiving shell
  * expands them from its own environment. Everything around them is escaped,
- * including any `$` that is not part of a reference.
+ * including any `$` that is not part of a reference — which is how a GraphQL
+ * `$id` in the payload reaches the far end as itself rather than as whatever
+ * the reader's shell happens to have in `id`.
  *
  * A reference is written bare as `$NAME` unless the next character could be
  * read as part of the name, in which case it needs the braces back.
@@ -429,7 +597,7 @@ function shellEscapeExpanding(value: string): string {
 
   for (let match = pattern.exec(value); match; match = pattern.exec(value)) {
     out += escapeInsideDoubleQuotes(value.slice(cursor, match.index))
-    const name = match[1] ?? match[2]
+    const name = match[1]
     const following = value[match.index + match[0].length]
     out += following && /[A-Za-z0-9_]/.test(following) ? `\${${name}}` : `$${name}`
     cursor = match.index + match[0].length

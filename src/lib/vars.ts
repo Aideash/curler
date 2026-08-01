@@ -1,7 +1,16 @@
 import type { KeyValue, RequestModel, Scope } from '../types'
 
-/** Matches `${NAME}` and bare `$NAME` references. */
-const REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g
+/**
+ * Matches `${NAME}`, and only that. A bare `$NAME` is literal text, because a
+ * GraphQL query carries its own `$id` variables and a shell would not have
+ * expanded those either: they reach us from inside single or `$'...'` quotes,
+ * where nothing is expanded. Anything the shell *would* have expanded arrives
+ * braced already, courtesy of the importer.
+ */
+const REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g
+
+/** A bare `$NAME`, which is only ever a suggestion to write `${NAME}`. */
+const BARE_REFERENCE = /\$([A-Za-z_][A-Za-z0-9_]*)/g
 
 /**
  * Path parameters, as in `/api/things/:id`. Only meaningful in a URL, and only
@@ -17,7 +26,12 @@ export interface Resolution {
   empty: string[]
 }
 
-export type VariableIssue = { name: string; kind: 'missing' | 'empty' }
+/**
+ * `bare` is a suggestion rather than a fault: the text is valid as it stands,
+ * it just does not reference anything. Only `inspect` reports it, so it can
+ * never reach `variableProblem` and hold up a send.
+ */
+export type VariableIssue = { name: string; kind: 'missing' | 'empty' | 'bare' }
 
 /** A resolved set of variables, with the scope each name came from. */
 export interface VariableSet {
@@ -88,9 +102,7 @@ function substitute(
     return variables[name]
   }
 
-  let value = input.replace(REFERENCE, (match, braced, bare) =>
-    take(braced ?? bare, match),
-  )
+  let value = input.replace(REFERENCE, (match, name) => take(name, match))
 
   if (includePathParams) {
     value = value.replace(PATH_PARAM, (_match, lead, colon, name) => {
@@ -111,11 +123,33 @@ export function resolveUrl(input: string, variables: Record<string, string>): Re
   return substitute(input, variables, true)
 }
 
+/**
+ * Names written bare, which resolve to nothing. A `${NAME}` alongside is left
+ * out: the `{` stops the bare pattern from matching, so the two never overlap.
+ */
+export function bareReferencedNames(input: string): string[] {
+  const names: string[] = []
+  for (const match of input.matchAll(BARE_REFERENCE)) {
+    if (!names.includes(match[1])) names.push(match[1])
+  }
+  return names
+}
+
+/**
+ * Rewrites bare `$NAME` as `${NAME}`, either throughout or for one name. Used
+ * both to bring an older workspace forward and to apply the suggestion offered
+ * beside a field, so the two can never disagree about what the fix is.
+ */
+export function braceBareReferences(input: string, name?: string): string {
+  return input.replace(BARE_REFERENCE, (match, found) =>
+    name === undefined || found === name ? `\${${found}}` : match,
+  )
+}
+
 export function referencedNames(input: string, includePathParams = false): string[] {
   const names: string[] = []
   for (const match of input.matchAll(REFERENCE)) {
-    const name = match[1] ?? match[2]
-    if (!names.includes(name)) names.push(name)
+    if (!names.includes(match[1])) names.push(match[1])
   }
   if (includePathParams) {
     for (const match of input.matchAll(PATH_PARAM)) {
@@ -129,27 +163,35 @@ export function referencedNames(input: string, includePathParams = false): strin
  * A reference that resolves to an empty string is worth flagging as loudly as
  * one that is undefined: it silently produces a header like `x-api-key:` with
  * nothing after it, which reads as an authentication failure at the far end.
+ *
+ * A bare `$NAME` is reported too, since typing one and expecting a value is an
+ * easy habit to carry over from the shell. Pass `bareReferences: false` where a
+ * bare `$` is ordinary text, as it is in a request body.
  */
 export function inspect(
   input: string,
   variables: Record<string, string>,
   includePathParams = false,
+  bareReferences = true,
 ): VariableIssue[] {
   const issues: VariableIssue[] = []
   for (const name of referencedNames(input, includePathParams)) {
     if (!(name in variables)) issues.push({ name, kind: 'missing' })
     else if (variables[name].trim() === '') issues.push({ name, kind: 'empty' })
   }
+  if (bareReferences) {
+    for (const name of bareReferencedNames(input)) issues.push({ name, kind: 'bare' })
+  }
   return issues
 }
 
 export function describeIssues(issues: VariableIssue[]): string {
   return issues
-    .map((issue) =>
-      issue.kind === 'missing'
-        ? `$${issue.name} is not defined in any scope`
-        : `$${issue.name} is defined but empty`,
-    )
+    .map((issue) => {
+      if (issue.kind === 'missing') return `$${issue.name} is not defined in any scope`
+      if (issue.kind === 'empty') return `$${issue.name} is defined but empty`
+      return `$${issue.name} is literal text. Write \${${issue.name}} to reference the variable.`
+    })
     .join('\n')
 }
 

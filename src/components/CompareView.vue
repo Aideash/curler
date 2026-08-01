@@ -56,7 +56,9 @@ const editingVariables = computed(() =>
 const editingUrl = computed(() => {
   const lane = editing.value
   if (!lane) return { value: '', issues: [], title: '' }
-  const issues = inspect(lane.request.url, editingVariables.value, true)
+  // Resolution problems only. A bare `$name` here is literal text that
+  // resolves to itself, so flagging the preview as unresolved would be a lie.
+  const issues = inspect(lane.request.url, editingVariables.value, true, false)
   return {
     value: resolveUrl(lane.request.url.trim(), editingVariables.value).value,
     issues,

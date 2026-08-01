@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import CodeEditor from './CodeEditor.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import PopMenu from './PopMenu.vue'
+import VariableIssues from './VariableIssues.vue'
 import { HEADER_BUNDLES, HEADER_NAMES, HEADER_PRESETS } from '../lib/presets'
 import {
   TERMINAL_FLAGS,
@@ -14,7 +15,7 @@ import {
   terminalFlagArgs,
   type TerminalGroup,
 } from '../lib/terminalFlags'
-import { describeIssues, inspect } from '../lib/vars'
+import { braceBareReferences, inspect } from '../lib/vars'
 import { HTTP_METHODS, uid, type BodyMode, type RequestModel } from '../types'
 
 const props = defineProps<{
@@ -49,6 +50,10 @@ const enabledHeaderCount = computed(
 // Path parameters only mean anything in a URL, so only the URL is checked
 // for them.
 const urlIssues = computed(() => inspect(props.request.url, props.variables, true))
+
+function braceUrlReference(name: string) {
+  props.request.url = braceBareReferences(props.request.url, name)
+}
 
 const requestVarCount = computed(
   () => props.request.variables.filter((v) => v.enabled && v.name.trim() && v.value.trim()).length,
@@ -142,9 +147,11 @@ const flagPreview = computed(() =>
           spellcheck="false"
           @keydown.enter="canSend && emit('send')"
         />
-        <span v-if="urlIssues.length" class="url-warn" :title="describeIssues(urlIssues)">
-          {{ urlIssues.map((issue) => (issue.kind === 'empty' ? `$${issue.name} empty` : `$${issue.name}`)).join(' ') }}
-        </span>
+        <VariableIssues
+          class="url-warn"
+          :issues="urlIssues"
+          @fix="braceUrlReference"
+        />
       </div>
 
       <button class="primary send" :disabled="!canSend" @click="emit('send')">
@@ -324,6 +331,7 @@ const flagPreview = computed(() =>
           id-prefix="request-var"
           name-placeholder="Variable name"
           value-placeholder="Value"
+          :resolves="false"
         />
       </div>
 

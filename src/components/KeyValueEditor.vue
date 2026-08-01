@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue } from '../types'
-import { describeIssues, inspect } from '../lib/vars'
+import { braceBareReferences, inspect } from '../lib/vars'
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +20,12 @@ const props = withDefaults(
     idPrefix?: string
     /** Pre-fills the name of each new row, as a real value rather than a hint. */
     defaultName?: string
+    /**
+     * Whether these values have variables substituted into them. False for the
+     * lists that *define* variables: a definition's value is replacement text,
+     * so a `$` in it means nothing and no reference warning belongs on it.
+     */
+    resolves?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -28,6 +35,7 @@ const props = withDefaults(
     listId: 'kv-names',
     idPrefix: 'kv',
     defaultName: '',
+    resolves: true,
   },
 )
 
@@ -81,12 +89,17 @@ function selectDefaultName(row: KeyValue, event: FocusEvent) {
 
 const issues = computed(() => {
   const byRow = new Map<string, ReturnType<typeof inspect>>()
+  if (!props.resolves) return byRow
   for (const row of props.rows) {
     const found = inspect(row.value, props.variables)
     if (found.length) byRow.set(row.id, found)
   }
   return byRow
 })
+
+function braceRowReference(row: KeyValue, name: string) {
+  row.value = braceBareReferences(row.value, name)
+}
 
 ensureTrailingRow()
 </script>
@@ -142,13 +155,11 @@ ensureTrailingRow()
           :class="{ warn: issues.has(row.id) || (isPartial(row) && row.value.trim() === '') }"
           @input="ensureTrailingRow"
         />
-        <span
-          v-if="issues.has(row.id)"
+        <VariableIssues
           class="kv-warn"
-          :title="describeIssues(issues.get(row.id) ?? [])"
-        >
-          {{ issues.get(row.id)?.map((issue) => (issue.kind === 'empty' ? `$${issue.name} empty` : `$${issue.name}`)).join(' ') }}
-        </span>
+          :issues="issues.get(row.id) ?? []"
+          @fix="(name) => braceRowReference(row, name)"
+        />
       </div>
       <button
         class="ghost kv-remove"

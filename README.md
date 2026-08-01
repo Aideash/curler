@@ -81,8 +81,16 @@ request you can edit: methods, headers, `-d` payloads, `-u` basic auth, `-L`,
 `-k`, `-m`, clustered short flags like `-sSL`, attached values like `-XPOST`,
 and backslash line continuations.
 
-Shell variables survive the trip. A pasted `-H "x-api-key: $API_KEY"` becomes a
-curler variable reference rather than being expanded at import time.
+Shell variables survive the trip, and the import follows the shell's own rules
+about which ones are real. A pasted `-H "x-api-key: $API_KEY"` becomes the
+curler reference `${API_KEY}`, because a shell would have expanded it. A `$id`
+inside single quotes or `$'...'` stays literal text, because a shell would not
+have — which is what lets a GraphQL body keep the variables its query declares.
+
+Bodies copied from a browser arrive in bash's `$'...'` form whenever they
+contain a `!`, a quote or a control character, with every backslash doubled to
+survive it. Those escapes are decoded on the way in, so a GraphQL query's `\n`
+lands as the JSON escape it started out as rather than a stray `\\n`.
 
 "Copy as curl" goes the other way, and offers two forms.
 
@@ -93,13 +101,28 @@ real credentials on your clipboard.
 **Shareable** keeps the references and double-quotes them, so the command reads
 as `-H "x-api-key: $API_KEY"` and picks the value up from the environment of
 whoever runs it. Braces are only kept where the shell would otherwise read the
-following character as part of the name, as in `"${BASE_URL}v1"`.
+following character as part of the name, as in `"${BASE_URL}v1"`. A `$` that is
+*not* a reference is escaped instead, so a GraphQL `$id` in the payload arrives
+as itself rather than as whatever the reader happens to have in `id`.
 
 `:id` path parameters are expanded in *both* forms, since a shell has no idea
 what they mean and would otherwise request the wrong path.
 
-**Variables.** Reference a variable as `${NAME}` or `$NAME` anywhere in a
-request — in the URL, in header values, and inside the body.
+**Variables.** Reference a variable as `${NAME}` anywhere in a request — in the
+URL, in header values, and inside the body. The braces are required. A bare
+`$NAME` is literal text and is sent exactly as written.
+
+That is stricter than a shell, on purpose. A GraphQL query declares its own
+variables as `$id` and means them literally, and there is no shell in the path
+to tell curler which reading you had in mind. Requiring the braces means a
+pasted query keeps working, and a request that never referenced a variable can
+never be blocked for one it does not have.
+
+Because the habit is easy to carry over, a bare name typed into the URL or a
+header value is flagged in amber with a one-click fix that adds the braces. The
+body is left unflagged, since that is where a literal `$` is usually deliberate.
+Requests saved before this rule are converted when the workspace loads — again,
+everywhere except the body.
 
 In a URL you can also write `:name`, the way you would in a route: `${BASE_URL}/things/:id`. This form is confined to the URL, because a JSON
 body is full of colons that mean something else entirely. It is ignored where a

@@ -180,6 +180,7 @@ function confirmDeleteEnvironment() {
       name-placeholder="Variable name"
       value-placeholder="Value"
       :default-name="defaultName"
+      :resolves="false"
     />
 
     <p v-if="shadowed.length" class="notice">

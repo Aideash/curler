@@ -13,6 +13,9 @@ const {
   environmentMap,
   mergeScopes,
   inspect,
+  bareReferencedNames,
+  braceBareReferences,
+  braceRequestReferences,
   traceRequest,
   toCurl,
   newRequest,
@@ -54,9 +57,107 @@ group('resolution')
   expect('braced reference', resolveRequest(request('${API_KEY}'), map).headers, [
     ['x-api-key', 'secret-abc'],
   ])
-  expect('bare reference', resolveRequest(request('$API_KEY'), map).headers, [
-    ['x-api-key', 'secret-abc'],
+  // Only the braced form is a reference. A bare `$NAME` is literal text, which
+  // is what lets a GraphQL query keep its own `$id` variables.
+  expect('bare reference is literal', resolveRequest(request('$API_KEY'), map).headers, [
+    ['x-api-key', '$API_KEY'],
   ])
+  expect(
+    'a bare name is never reported as missing',
+    resolveRequest(request('$API_KEY'), map).missing,
+    [],
+  )
+}
+
+group('literal $ in a body')
+{
+  const map = environmentMap(env([['id', 'nope']]))
+  const query =
+    '{"query":"query Hero($id: ID!) {\\n  hero(id: $id) {\\n    name\\n  }\\n}","variables":{"id":"1"}}'
+  const graphql = newRequest({
+    method: 'POST',
+    url: 'https://api.example.com/graphql',
+    body: { mode: 'json', text: query, form: [] },
+  })
+
+  const resolved = resolveRequest(graphql, map)
+  // A variable happening to be named `id` must not reach into the query text.
+  expect('the query is sent untouched', resolved.body, query)
+  expect('nothing is reported as unresolved', [resolved.missing, resolved.empty], [[], []])
+
+  const shareable = toCurl(graphql)
+  expect(
+    'the shareable form single-quotes it, so no shell expands $id',
+    shareable.includes(`-d '${query}'`),
+    true,
+  )
+  expect('the ready-to-run form keeps it too', toCurl(graphql, map).includes(query), true)
+
+  const mixed = newRequest({
+    method: 'POST',
+    url: 'https://api.example.com/graphql',
+    body: { mode: 'json', text: '{"token":"${API_KEY}","q":"$id"}', form: [] },
+  })
+  // A real reference alongside forces double quotes, where the literal `$`
+  // has to be escaped or the reader's shell would eat it.
+  expect(
+    'a literal $ is escaped when a real reference forces double quotes',
+    toCurl(mixed).includes('\\"q\\":\\"\\$id\\"'),
+    true,
+  )
+  expect('the real reference stays expandable', toCurl(mixed).includes('$API_KEY'), true)
+}
+
+group('bare references are offered as a suggestion')
+{
+  const map = environmentMap(env([['API_KEY', 'secret-abc']]))
+  expect('inspect flags a bare name', inspect('$API_KEY', map), [
+    { name: 'API_KEY', kind: 'bare' },
+  ])
+  expect('a braced name alongside is not double-counted', inspect('${API_KEY}', map), [])
+  expect(
+    'both are reported when both appear',
+    inspect('${MISSING} and $API_KEY', map),
+    [
+      { name: 'MISSING', kind: 'missing' },
+      { name: 'API_KEY', kind: 'bare' },
+    ],
+  )
+  expect('suggestions can be turned off', inspect('$API_KEY', map, false, false), [])
+
+  expect('the fix braces one name', braceBareReferences('$a/$b', 'a'), '${a}/$b')
+  expect('or every name', braceBareReferences('$a/$b'), '${a}/${b}')
+  expect('and leaves a braced name alone', braceBareReferences('${a}/$b'), '${a}/${b}')
+  expect('bare names are listed', bareReferencedNames('$a/${b}/$c'), ['a', 'c'])
+}
+
+group('bringing an older workspace forward')
+{
+  const older = newRequest({
+    url: '$BASE_URL/things/$id',
+    headers: [row('x-$part', '$API_KEY'), row('x-braced', '${API_KEY}')],
+    variables: [row('API_KEY', 'literal-$dollar')],
+    body: { mode: 'json', text: '{"q":"query Hero($id: ID!)"}', form: [] },
+  })
+  braceRequestReferences(older)
+
+  expect('the URL is braced', older.url, '${BASE_URL}/things/${id}')
+  expect(
+    'header names and values are both braced',
+    older.headers.map((h) => [h.name, h.value]),
+    [
+      ['x-${part}', '${API_KEY}'],
+      ['x-braced', '${API_KEY}'],
+    ],
+  )
+  // The two places a bare `$` is likely to be meant literally.
+  expect('the body is left alone', older.body.text, '{"q":"query Hero($id: ID!)"}')
+  expect('and so is a variable definition', older.variables[0].value, 'literal-$dollar')
+
+  const twice = newRequest({ url: '$BASE_URL/me' })
+  braceRequestReferences(twice)
+  braceRequestReferences(twice)
+  expect('running it again changes nothing', twice.url, '${BASE_URL}/me')
 }
 
 group('warnings for values that would silently break the request')

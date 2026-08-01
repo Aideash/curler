@@ -9,7 +9,7 @@ import {
   type RequestModel,
 } from '../types'
 import { readBuiltins, readWorkspace, writeWorkspace } from './backend'
-import { mergeScopes, type VariableSet } from './vars'
+import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
 
 interface State {
   loaded: boolean
@@ -62,6 +62,35 @@ function defaultWorkspace() {
 }
 
 /**
+ * Brings a request forward to `${NAME}`-only references. A bare `$NAME` used to
+ * resolve and now does not, so a request saved before the change would quietly
+ * send the literal text; rewriting it on load is what keeps that from happening
+ * to a request nobody has opened in months.
+ *
+ * The body is left alone on purpose. It is the one place a bare `$` is likely
+ * to be deliberate — a GraphQL query declares `$id` and means it — and there is
+ * no way to tell that apart from an old reference, so the editor asks rather
+ * than guessing.
+ *
+ * Header and form rows have both halves rewritten, since `resolveRequest`
+ * substitutes names as well as values. Variable rows are left out entirely: a
+ * variable's value is replacement text, never resolved in its own right.
+ *
+ * Kept permanently rather than run once: it is idempotent, and a workspace can
+ * arrive from anywhere, including a hand edit or another machine.
+ */
+export function braceRequestReferences(request: RequestModel) {
+  request.url = braceBareReferences(request.url ?? '')
+
+  for (const rows of [request.headers, request.body?.form]) {
+    for (const row of rows ?? []) {
+      row.name = braceBareReferences(row.name)
+      row.value = braceBareReferences(row.value)
+    }
+  }
+}
+
+/**
  * Workspaces written before variable scopes existed have no `globals`, and no
  * variable list on collections or requests. Fill them in rather than letting
  * undefined reach the editor.
@@ -83,6 +112,7 @@ function migrate(parsed: Record<string, unknown>) {
         maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
       }
       request.options.maxResponseMb ??= DEFAULT_MAX_RESPONSE_MB
+      braceRequestReferences(request)
     }
   }
 
