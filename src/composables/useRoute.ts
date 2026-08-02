@@ -1,6 +1,6 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-export type RouteName = 'build' | 'compare' | 'graphql'
+export type RouteName = 'build' | 'compare' | 'graphql' | 'help'
 
 const ROUTES: Record<string, RouteName> = {
   '#/compare': 'compare',
@@ -8,7 +8,15 @@ const ROUTES: Record<string, RouteName> = {
 }
 
 function readRoute(): RouteName {
-  return ROUTES[window.location.hash] ?? 'build'
+  const hash = window.location.hash
+  if (hash === '#/help' || hash.startsWith('#/help/')) return 'help'
+  return ROUTES[hash] ?? 'build'
+}
+
+/** Section id from `#/help/overview`-style hashes, if any. */
+export function helpSectionFromHash(): string | null {
+  const match = window.location.hash.match(/^#\/help\/([^/?#]+)/)
+  return match?.[1] ?? null
 }
 
 const current = ref<RouteName>(readRoute())
@@ -17,8 +25,17 @@ function sync() {
   current.value = readRoute()
 }
 
-export function navigate(route: RouteName) {
-  const hash = route === 'build' ? '#/' : route === 'compare' ? '#/compare' : '#/graphql'
+export function navigate(route: RouteName, helpSection?: string) {
+  const hash =
+    route === 'build'
+      ? '#/'
+      : route === 'compare'
+        ? '#/compare'
+        : route === 'graphql'
+          ? '#/graphql'
+          : helpSection
+            ? `#/help/${helpSection}`
+            : '#/help'
   if (window.location.hash === hash) return
   window.location.hash = hash
 }

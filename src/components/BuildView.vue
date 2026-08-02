@@ -7,6 +7,8 @@ import CurlImportDialog from './CurlImportDialog.vue'
 import VariablesDialog from './VariablesDialog.vue'
 import ModalShell from './ModalShell.vue'
 import ThemePicker from './ThemePicker.vue'
+import TitleBar from './TitleBar.vue'
+import TitleBarButton from './TitleBarButton.vue'
 import {
   toCurl,
   variablesForCurlCopy,
@@ -193,7 +195,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <BuildSidebar @manage-variables="openVariables" />
 
     <main class="main">
-      <div class="title-bar">
+      <TitleBar>
         <input
           v-if="!isScratch"
           id="request-name"
@@ -223,23 +225,25 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           </span>
           {{ toast }}
         </span>
-        <button
+        <TitleBarButton
           v-if="currentRequest.body.mode === 'graphql'"
-          class="ghost"
+          icon="account_tree"
+          label="GraphQL"
           title="Open the GraphQL query builder"
           @click="openGraphqlBuilder"
-        >
-          <span class="material-icons sm">account_tree</span>
-          GraphQL
-        </button>
-        <button
-          class="ghost"
+        />
+        <TitleBarButton
+          icon="compare_arrows"
+          label="Compare"
           title="Compare this request against itself in another environment, or against another request"
           @click="openCompare"
-        >
-          <span class="material-icons sm">compare_arrows</span>
-          Compare
-        </button>
+        />
+        <TitleBarButton
+          icon="help_outline"
+          label="Help"
+          title="How to use curler"
+          @click="navigate('help')"
+        />
         <span
           v-if="!state.persistable && state.loaded"
           class="not-saving"
@@ -248,16 +252,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span class="material-icons sm">cloud_off</span>
           Not saving
         </span>
-        <button v-else-if="isScratch" class="ghost" @click="openSave">
-          <span class="material-icons sm">bookmark_add</span>
-          Save
-        </button>
+        <TitleBarButton v-else-if="isScratch" icon="bookmark_add" label="Save" @click="openSave" />
         <span v-else class="faint autosaved">
           <span class="material-icons sm">cloud_done</span>
           Saved
         </span>
         <ThemePicker />
-      </div>
+      </TitleBar>
 
       <RequestPanel
         :request="currentRequest"
@@ -343,15 +344,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   }
 }
 
-.title-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  min-height: 46px;
-}
-
 .title-input {
   background: transparent;
   border: 1px solid transparent;
@@ -379,10 +371,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 1px solid var(--amber-border);
   border-radius: 4px;
   padding: 2px 8px;
-}
-
-.spacer {
-  flex: 1;
 }
 
 .toast {
@@ -415,16 +403,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--red);
   border: 1px solid var(--red-border);
   cursor: help;
-}
-
-.title-bar .material-icons {
-  vertical-align: 0;
-}
-
-.title-bar button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
 }
 
 .field {

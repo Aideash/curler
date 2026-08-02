@@ -5,6 +5,8 @@ import CodeEditor from './CodeEditor.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import GraphqlSchemaExplorer from './GraphqlSchemaExplorer.vue'
 import ThemePicker from './ThemePicker.vue'
+import TitleBar from './TitleBar.vue'
+import TitleBarButton from './TitleBarButton.vue'
 import { navigate } from '../composables/useRoute'
 import { applyDraft, cancelDraft, graphqlBuilder, updateDraftGraphql } from '../lib/graphqlBuilder'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
@@ -115,24 +117,35 @@ function cancel() {
 
 <template>
   <div v-if="draft" class="graphql-builder">
-    <div class="title-bar">
-      <button class="ghost back" title="Discard and return" @click="cancel">
-        <span class="material-icons sm">arrow_back</span>
-        Cancel
-      </button>
+    <TitleBar>
+      <TitleBarButton
+        back
+        icon="arrow_back"
+        label="Cancel"
+        title="Discard and return"
+        @click="cancel"
+      />
       <span class="heading">GraphQL builder</span>
       <span class="faint hint">{{ draft.requestName }} — draft, not saved until you apply</span>
 
       <div class="spacer" />
 
-      <button class="ghost" :disabled="loading || !currentRequest.url.trim()" @click="loadSchema">
-        <span class="material-icons sm">{{ loading ? 'hourglass_top' : 'cloud_download' }}</span>
-        {{ loading ? 'Fetching…' : 'Fetch schema' }}
-      </button>
-      <button class="ghost" :disabled="!schema" @click="validateDraft">Validate</button>
-      <button class="primary" @click="done">Done</button>
+      <TitleBarButton
+        :icon="loading ? 'hourglass_top' : 'cloud_download'"
+        :label="loading ? 'Fetching…' : 'Fetch schema'"
+        :disabled="loading || !currentRequest.url.trim()"
+        @click="loadSchema"
+      />
+      <TitleBarButton icon="rule" label="Validate" :disabled="!schema" @click="validateDraft" />
+      <button class="primary" title="Done" @click="done">Done</button>
+      <TitleBarButton
+        icon="help_outline"
+        label="Help"
+        title="How to use curler"
+        @click="navigate('help')"
+      />
       <ThemePicker />
-    </div>
+    </TitleBar>
 
     <p v-if="graphqlBuilder.schemaError" class="banner error">
       {{ graphqlBuilder.schemaError }}
@@ -199,6 +212,7 @@ function cancel() {
         <p class="section-label">Variables</p>
         <KeyValueEditor
           v-model:rows="draftVariables"
+          class="variables-editor"
           :variables="variables"
           list-id="builder-graphql-vars"
           id-prefix="builder-gql-var"
@@ -220,27 +234,6 @@ function cancel() {
   color: var(--text);
 }
 
-.title-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.heading {
-  font-weight: 600;
-}
-
-.hint {
-  font-size: 12px;
-}
-
-.spacer {
-  flex: 1;
-}
-
 .banner {
   margin: 0;
   padding: 8px 12px;
@@ -257,11 +250,12 @@ function cancel() {
   flex: 1;
   min-height: 0;
   display: flex;
+  overflow-x: auto;
 }
 
 .explorer-pane {
   width: 40%;
-  min-width: 220px;
+  min-width: 225px;
   max-width: 480px;
   border-right: 1px solid var(--border);
   display: flex;
@@ -287,7 +281,7 @@ function cancel() {
 
 .editor-pane {
   flex: 1;
-  min-width: 0;
+  min-width: 425px;
   display: flex;
   flex-direction: column;
   padding: 12px;
@@ -319,6 +313,10 @@ function cancel() {
   color: var(--text-muted);
 }
 
+.variables-editor {
+  max-height: 40%;
+}
+
 .editor-wrap {
   flex: 1;
   min-height: 180px;
@@ -344,5 +342,15 @@ function cancel() {
   align-items: center;
   gap: 4px;
   color: var(--green);
+}
+
+@media screen and (max-width: 500px) {
+  .title-bar > .heading {
+    display: none;
+  }
+
+  button.primary {
+    padding: 2px 4px;
+  }
 }
 </style>

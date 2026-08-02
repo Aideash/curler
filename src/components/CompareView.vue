@@ -5,6 +5,8 @@ import DiffView from './DiffView.vue'
 import RequestPanel from './RequestPanel.vue'
 import ModalShell from './ModalShell.vue'
 import ThemePicker from './ThemePicker.vue'
+import TitleBar from './TitleBar.vue'
+import TitleBarButton from './TitleBarButton.vue'
 import VariablesDialog from './VariablesDialog.vue'
 import CurlImportDialog from './CurlImportDialog.vue'
 import { navigate } from '../composables/useRoute'
@@ -164,11 +166,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="compare">
-    <div class="title-bar">
-      <button class="ghost back" title="Back to the request builder" @click="navigate('build')">
-        <span class="material-icons sm">arrow_back</span>
-        Builder
-      </button>
+    <TitleBar>
+      <TitleBarButton
+        back
+        icon="arrow_back"
+        label="Builder"
+        title="Back to the request builder"
+        @click="navigate('build')"
+      />
       <span class="heading">Compare</span>
       <span class="faint hint"
         >Not saved. Lanes are copies, so editing one leaves your saved requests alone.</span
@@ -176,25 +181,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
       <div class="spacer" />
 
-      <button class="ghost" @click="showVariables = true">
-        <span class="material-icons sm">data_object</span>
-        Vars
-      </button>
-      <button
-        class="ghost"
+      <TitleBarButton icon="data_object" label="Vars" @click="showVariables = true" />
+      <TitleBarButton
+        icon="add"
+        label="Lane"
         :disabled="!canAdd"
         :title="canAdd ? 'Add a lane' : `The limit is ${MAX_LANES} lanes`"
         @click="addLane()"
-      >
-        <span class="material-icons sm">add</span>
-        Lane
-      </button>
-      <button class="primary" :disabled="anySending || !anySendable" @click="sendAll">
-        <span class="material-icons sm">{{ anySending ? 'hourglass_top' : 'send' }}</span>
-        {{ anySending ? 'Sending…' : 'Send all' }}
-      </button>
+      />
+      <TitleBarButton
+        variant="primary"
+        :icon="anySending ? 'hourglass_top' : 'send'"
+        :label="anySending ? 'Sending…' : 'Send all'"
+        :disabled="anySending || !anySendable"
+        @click="sendAll"
+      />
+      <TitleBarButton
+        icon="help_outline"
+        label="Help"
+        title="How to use curler"
+        @click="navigate('help')"
+      />
       <ThemePicker />
-    </div>
+    </TitleBar>
 
     <div class="toolbar">
       <div class="tabs">
@@ -391,42 +400,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-direction: column;
   height: 100%;
   min-height: 0;
-}
-
-.title-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  min-height: 46px;
-}
-
-.heading {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.hint {
-  font-size: 11.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.compare .material-icons {
-  vertical-align: 0;
-}
-
-.title-bar button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
 }
 
 .toolbar {

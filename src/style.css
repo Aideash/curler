@@ -152,6 +152,10 @@ select {
   background: transparent;
 }
 
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .mono {
   font-family: var(--mono);
   font-size: 12.5px;

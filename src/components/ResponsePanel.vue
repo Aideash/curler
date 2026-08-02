@@ -145,7 +145,7 @@ watch(
           </button>
         </div>
       </template>
-      <button class="ghost reset" @click="resetPane">
+      <button v-if="response || error" class="ghost reset" @click="resetPane">
         <span class="material-icons sm">refresh</span>
         <span class="action-button-text">Reset</span>
       </button>
