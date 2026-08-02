@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from '../composables/useTheme'
+import { editorTabIndentExtensions } from '../lib/editorTabIndent'
 import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state'
 import { EditorView, placeholder as placeholderExt } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
@@ -16,8 +17,10 @@ const props = withDefaults(
     language?: 'json' | 'graphql' | 'text'
     readonly?: boolean
     placeholder?: string
+    /** Tab indents; Esc then Tab leaves the editor. Off when readonly. */
+    indentWithTab?: boolean
   }>(),
-  { language: 'text', readonly: false, placeholder: '' },
+  { language: 'text', readonly: false, placeholder: '', indentWithTab: true },
 )
 
 const emit = defineEmits<{
@@ -30,8 +33,11 @@ let view: EditorView | undefined
 const languageCompartment = new Compartment()
 const readonlyCompartment = new Compartment()
 const themeCompartment = new Compartment()
+const tabIndentCompartment = new Compartment()
 
 const { isDark } = useTheme()
+
+const tabIndentEnabled = computed(() => !props.readonly && props.indentWithTab)
 
 function buildTheme(dark: boolean): Extension {
   return EditorView.theme(
@@ -78,6 +84,10 @@ function languageExtensions(): Extension {
   return []
 }
 
+function tabIndentExtensions(): Extension[] {
+  return tabIndentEnabled.value ? editorTabIndentExtensions() : []
+}
+
 /**
  * The gutter linter shows where the problem is; this reports whether the
  * document parses at all so the surrounding UI can react.
@@ -114,6 +124,7 @@ onMounted(() => {
         placeholderExt(props.placeholder),
         languageCompartment.of(languageExtensions()),
         readonlyCompartment.of(EditorState.readOnly.of(props.readonly)),
+        tabIndentCompartment.of(tabIndentExtensions()),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return
@@ -157,6 +168,10 @@ watch(
   },
 )
 
+watch(tabIndentEnabled, () => {
+  view?.dispatch({ effects: tabIndentCompartment.reconfigure(tabIndentExtensions()) })
+})
+
 watch(isDark, (dark) => {
   view?.dispatch({ effects: themeCompartment.reconfigure(buildTheme(dark)) })
 })
@@ -178,13 +193,32 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="host" class="editor-host" />
+  <div class="code-editor" :aria-keyshortcuts="tabIndentEnabled ? 'Escape Tab' : undefined">
+    <div ref="host" class="editor-host" />
+    <p v-if="tabIndentEnabled" class="tab-hint faint">Esc, then Tab to leave editor</p>
+  </div>
 </template>
 
 <style scoped>
-.editor-host {
+.code-editor {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background: var(--bg-input);
+}
+
+.tab-hint {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
 }
 </style>

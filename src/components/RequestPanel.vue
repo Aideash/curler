@@ -305,7 +305,11 @@ const flagPreview = computed(() =>
             </button>
           </div>
           <div class="pane-head-right">
-            <span v-if="request.body.mode === 'json' && !bodyValidity.valid" class="invalid">
+            <span
+              v-if="request.body.mode === 'json' && !bodyValidity.valid"
+              class="invalid"
+              :title="bodyValidity.message ?? 'Invalid'"
+            >
               <span class="material-icons sm">error_outline</span>
               {{ bodyValidity.message }}
             </span>
@@ -709,6 +713,7 @@ const flagPreview = computed(() =>
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 250px;
 }
 
 .pane-hint {
