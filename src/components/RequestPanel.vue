@@ -561,6 +561,10 @@ const flagPreview = computed(() =>
     order: -1;
     min-width: 100%;
   }
+
+  .pane-head {
+    flex-wrap: wrap;
+  }
 }
 
 .method {

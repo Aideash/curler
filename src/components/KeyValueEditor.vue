@@ -308,6 +308,7 @@ ensureTrailingRow()
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-x: auto;
 }
 
 .kv-rows {

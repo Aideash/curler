@@ -230,6 +230,7 @@ function confirmDeleteEnvironment() {
   gap: 2px;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 
 .scope-tab {

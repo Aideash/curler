@@ -68,6 +68,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   display: flex;
   flex-direction: column;
   max-height: 82vh;
+  min-width: 0;
 }
 
 header {
