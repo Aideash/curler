@@ -1,4 +1,4 @@
-import { uid, type KeyValue } from '../types'
+import { uid, type GraphqlBody, type KeyValue } from '../types'
 
 export interface ParsedGraphqlBody {
   query: string
@@ -93,4 +93,23 @@ export function buildGraphqlBody(
   if (Object.keys(variables).length > 0) payload.variables = variables
 
   return JSON.stringify(payload)
+}
+
+/**
+ * Serialises a GraphQL body to the JSON wire form. Pass `pretty` when the
+ * result is going into the JSON editor.
+ */
+export function serializeGraphqlBody(
+  graphql: GraphqlBody,
+  pretty = false,
+  apply: (input: string) => string = (value) => value,
+): string {
+  const raw = buildGraphqlBody(graphql.query, graphql.variables, apply)
+  if (!raw) return ''
+  if (!pretty) return raw
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
 }

@@ -517,8 +517,8 @@ export function parseCurl(input: string): ParsedCurl {
     const graphql = parseGraphqlBody(data)
     if (graphql) {
       request.body.mode = 'graphql'
-      request.body.text = graphql.query
-      request.body.graphqlVariables = graphql.variables
+      request.body.graphql = { query: graphql.query, variables: graphql.variables }
+      request.body.text = data
     } else {
       request.body.mode = looksLikeJson(data) ? 'json' : 'text'
       request.body.text = data
@@ -675,7 +675,11 @@ export function toCurl(
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     if (request.body.text) parts.push('-d', quote(apply(request.body.text)))
   } else if (request.body.mode === 'graphql') {
-    const payload = buildGraphqlBody(request.body.text, request.body.graphqlVariables ?? [], apply)
+    const payload = buildGraphqlBody(
+      request.body.graphql.query,
+      request.body.graphql.variables,
+      apply,
+    )
     if (payload) parts.push('-d', quote(payload))
   } else if (request.body.mode === 'form') {
     const encoded = request.body.form

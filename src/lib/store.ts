@@ -6,6 +6,7 @@ import {
   type Collection,
   type Environment,
   type KeyValue,
+  type RequestBody,
   type RequestModel,
 } from '../types'
 import {
@@ -118,7 +119,7 @@ function defaultWorkspace() {
 export function braceRequestReferences(request: RequestModel) {
   request.url = braceBareReferences(request.url ?? '')
 
-  for (const rows of [request.headers, request.body?.form]) {
+  for (const rows of [request.headers, request.body?.form, request.body?.graphql?.variables]) {
     for (const row of rows ?? []) {
       row.name = braceBareReferences(row.name)
       row.value = braceBareReferences(row.value)
@@ -148,7 +149,17 @@ function migrate(parsed: Record<string, unknown>) {
         maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
       }
       request.options.maxResponseMb ??= DEFAULT_MAX_RESPONSE_MB
-      request.body.graphqlVariables ??= []
+      request.body.graphql ??= { query: '', variables: [] }
+      request.body.graphql.variables ??= []
+      request.body.graphql.query ??= ''
+      const legacy = request.body as RequestBody & { graphqlVariables?: KeyValue[] }
+      if (legacy.graphqlVariables?.length && !request.body.graphql.variables.length) {
+        request.body.graphql.variables = legacy.graphqlVariables
+      }
+      if (request.body.mode === 'graphql' && request.body.text && !request.body.graphql.query) {
+        request.body.graphql.query = request.body.text
+      }
+      delete (request.body as unknown as Record<string, unknown>).graphqlVariables
       braceRequestReferences(request)
     }
   }

@@ -87,15 +87,18 @@ group('GraphQL body mode')
     url: 'https://api.example.com/graphql',
     body: {
       mode: 'graphql',
-      text: 'query Hero($id: ID!) { hero(id: $id) { name } }',
+      text: '',
       form: [],
-      graphqlVariables: [
-        row('role', '"admin"'),
-        row('count', '2'),
-        row('flag', 'true'),
-        row('token', '${API_KEY}'),
-        row('label', 'plain'),
-      ],
+      graphql: {
+        query: 'query Hero($id: ID!) { hero(id: $id) { name } }',
+        variables: [
+          row('role', '"admin"'),
+          row('count', '2'),
+          row('flag', 'true'),
+          row('token', '${API_KEY}'),
+          row('label', 'plain'),
+        ],
+      },
     },
   })
 
@@ -112,10 +115,11 @@ group('GraphQL body mode')
   const shareable = toCurl(gql)
   const roundTrip = parseCurl(shareable).request
   expect('curl import picks GraphQL mode', roundTrip.body.mode, 'graphql')
-  expect('the query round-trips', roundTrip.body.text, gql.body.text)
+  expect('the query round-trips', roundTrip.body.graphql.query, gql.body.graphql.query)
   const wire = (model) =>
     JSON.parse(
-      buildGraphqlBody(model.body.text, model.body.graphqlVariables, (value) => value) ?? '{}',
+      buildGraphqlBody(model.body.graphql.query, model.body.graphql.variables, (value) => value) ??
+        '{}',
     )
   expect('the payload round-trips on the wire', wire(roundTrip), wire(gql))
 
@@ -134,7 +138,7 @@ group('literal $ in a body')
   const graphql = newRequest({
     method: 'POST',
     url: 'https://api.example.com/graphql',
-    body: { mode: 'json', text: query, form: [] },
+    body: { mode: 'json', text: query, form: [], graphql: { query: '', variables: [] } },
   })
 
   const resolved = resolveRequest(graphql, map)
@@ -153,7 +157,7 @@ group('literal $ in a body')
   const mixed = newRequest({
     method: 'POST',
     url: 'https://api.example.com/graphql',
-    body: { mode: 'json', text: '{"token":"${API_KEY}","q":"$id"}', form: [] },
+    body: { mode: 'json', text: '{"token":"${API_KEY}","q":"$id"}', form: [], graphql: { query: '', variables: [] } },
   })
   // A real reference alongside forces double quotes, where the literal `$`
   // has to be escaped or the reader's shell would eat it.
@@ -188,7 +192,7 @@ group('bringing an older workspace forward')
     url: '$BASE_URL/things/$id',
     headers: [row('x-$part', '$API_KEY'), row('x-braced', '${API_KEY}')],
     variables: [row('API_KEY', 'literal-$dollar')],
-    body: { mode: 'json', text: '{"q":"query Hero($id: ID!)"}', form: [] },
+    body: { mode: 'json', text: '{"q":"query Hero($id: ID!)"}', form: [], graphql: { query: '', variables: [] } },
   })
   braceRequestReferences(older)
 

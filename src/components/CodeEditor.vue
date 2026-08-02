@@ -5,6 +5,7 @@ import { Compartment, EditorState, Prec, type Extension } from '@codemirror/stat
 import { EditorView, placeholder as placeholderExt } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
+import { graphqlLanguageSupport } from 'cm6-graphql'
 import { linter, lintGutter } from '@codemirror/lint'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
@@ -12,7 +13,7 @@ import { tags } from '@lezer/highlight'
 const props = withDefaults(
   defineProps<{
     modelValue: string
-    language?: 'json' | 'text'
+    language?: 'json' | 'graphql' | 'text'
     readonly?: boolean
     placeholder?: string
   }>(),
@@ -49,22 +50,32 @@ function buildTheme(dark: boolean): Extension {
 }
 
 /**
- * Colours come from the theme tokens rather than literals so the editor
+ * Colors come from the theme tokens rather than literals so the editor
  * repaints with the rest of the page.
  */
 const highlighting = HighlightStyle.define([
-  { tag: tags.propertyName, color: 'var(--syntax-key)' },
+  {
+    tag: [tags.propertyName, tags.attributeName, tags.variableName],
+    color: 'var(--syntax-key)',
+  },
   { tag: tags.string, color: 'var(--syntax-string)' },
-  { tag: tags.number, color: 'var(--syntax-number)' },
-  { tag: [tags.bool, tags.null, tags.atom], color: 'var(--syntax-literal)' },
-  { tag: tags.punctuation, color: 'var(--syntax-punctuation)' },
-  { tag: tags.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
+  { tag: [tags.number, tags.integer, tags.float], color: 'var(--syntax-number)' },
+  {
+    tag: [tags.bool, tags.null, tags.atom, tags.keyword, tags.definitionKeyword, tags.modifier],
+    color: 'var(--syntax-literal)',
+  },
+  {
+    tag: [tags.punctuation, tags.brace, tags.paren, tags.separator],
+    color: 'var(--syntax-punctuation)',
+  },
+  { tag: [tags.comment, tags.lineComment], color: 'var(--syntax-comment)', fontStyle: 'italic' },
   { tag: tags.invalid, color: 'var(--red)' },
 ])
 
 function languageExtensions(): Extension {
-  if (props.language !== 'json') return []
-  return [json(), linter(jsonParseLinter()), lintGutter()]
+  if (props.language === 'json') return [json(), linter(jsonParseLinter()), lintGutter()]
+  if (props.language === 'graphql') return [graphqlLanguageSupport()]
+  return []
 }
 
 /**

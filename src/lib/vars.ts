@@ -269,8 +269,8 @@ export function traceRequest(request: RequestModel, set: VariableSet): BuildTrac
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     noteUsage(request.body.text, 'body')
   } else if (request.body.mode === 'graphql') {
-    noteUsage(request.body.text, 'GraphQL query')
-    for (const row of request.body.graphqlVariables) {
+    noteUsage(request.body.graphql.query, 'GraphQL query')
+    for (const row of request.body.graphql.variables) {
       if (!row.enabled) continue
       if (!row.name.trim() || !row.value.trim()) {
         if (row.name.trim() || row.value.trim()) {
@@ -333,7 +333,7 @@ export function resolveRequest(
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     body = request.body.text ? apply(request.body.text) : null
   } else if (request.body.mode === 'graphql') {
-    body = buildGraphqlBody(request.body.text, request.body.graphqlVariables ?? [], apply)
+    body = buildGraphqlBody(request.body.graphql.query, request.body.graphql.variables, apply)
     if (body && !headers.some(([name]) => name.toLowerCase() === 'content-type')) {
       headers.push(['Content-Type', 'application/json'])
     }

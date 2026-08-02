@@ -22,14 +22,20 @@ export interface KeyValue {
   secret?: boolean
 }
 
+export interface GraphqlBody {
+  query: string
+  /** Rows for the JSON `variables` object sent with the query. */
+  variables: KeyValue[]
+}
+
 export interface RequestBody {
   mode: BodyMode
-  /** Raw text for the `json`, `text`, and `graphql` modes. */
+  /** Raw text for the `json` and `text` modes. */
   text: string
   /** Field list for the `form` mode (application/x-www-form-urlencoded). */
   form: KeyValue[]
-  /** Variable list for the `graphql` mode (the JSON `variables` object). */
-  graphqlVariables: KeyValue[]
+  /** Query and variables for the `graphql` mode. */
+  graphql: GraphqlBody
 }
 
 export interface RequestOptions {
@@ -204,7 +210,7 @@ export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
     method: 'GET',
     url: '',
     headers: [],
-    body: { mode: 'none', text: '', form: [], graphqlVariables: [] },
+    body: { mode: 'none', text: '', form: [], graphql: { query: '', variables: [] } },
     options: {
       followRedirects: true,
       insecure: false,

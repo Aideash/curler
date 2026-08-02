@@ -16,6 +16,7 @@ import {
   type TerminalGroup,
 } from '../lib/terminalFlags'
 import { braceBareReferences, inspect } from '../lib/vars'
+import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { resolvedRowValue } from '../lib/store'
 import { type CurlCopyMode } from '../lib/curl'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
@@ -102,7 +103,20 @@ function applyBundle(headers: { name: string; value: string }[]) {
 }
 
 function setBodyMode(mode: BodyMode) {
-  request.value.body.mode = mode
+  const body = request.value.body
+  const from = body.mode
+
+  if (from === 'graphql' && (mode === 'json' || mode === 'text')) {
+    body.text = serializeGraphqlBody(body.graphql, mode === 'json')
+  } else if ((from === 'json' || from === 'text') && mode === 'graphql') {
+    const parsed = parseGraphqlBody(body.text)
+    if (parsed) {
+      body.graphql.query = parsed.query
+      body.graphql.variables = parsed.variables
+    }
+  }
+
+  body.mode = mode
   if (mode === 'json' || mode === 'graphql') {
     applyHeader('Content-Type', 'application/json')
   }
@@ -328,14 +342,14 @@ const flagPreview = computed(() =>
           <div class="editor-wrap graphql-query">
             <CodeEditor
               id="request-graphql-query"
-              v-model="request.body.text"
-              language="text"
+              v-model="request.body.graphql.query"
+              language="graphql"
               placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
             />
           </div>
           <p class="section-label">Variables</p>
           <KeyValueEditor
-            v-model:rows="request.body.graphqlVariables"
+            v-model:rows="request.body.graphql.variables"
             :variables="variables"
             list-id="graphql-variable-names"
             id-prefix="graphql-variable"
