@@ -46,6 +46,7 @@ globalThis.fetch = async (path, init) => {
   const spec = JSON.parse(init.body)
   try {
     return { ok: true, json: async () => await performRequest(spec) }
+    // eslint-disable-next-line no-unreachable
   } catch (error) {
     return { ok: true, json: async () => ({ error: error.message }) }
   }
@@ -95,9 +96,7 @@ function resetWorkspace() {
       id: 'c1',
       name: 'Service',
       variables: [row('API_KEY', 'collection-key')],
-      requests: [
-        newRequest({ id: 'saved-1', name: 'List things', url: '${BASE_URL}/things' }),
-      ],
+      requests: [newRequest({ id: 'saved-1', name: 'List things', url: '${BASE_URL}/things' })],
     },
   ]
   state.activeRequestId = 'saved-1'
@@ -114,11 +113,16 @@ resetWorkspace()
 startComparison(saved(), 'saved-1')
 
 expect('a comparison opens with two lanes', compare.lanes.length, 2)
-expect('labelled A and B', compare.lanes.map((lane) => lane.label), ['A', 'B'])
-expect('both seeded from the same request', compare.lanes.map((lane) => lane.request.url), [
-  '${BASE_URL}/things',
-  '${BASE_URL}/things',
-])
+expect(
+  'labelled A and B',
+  compare.lanes.map((lane) => lane.label),
+  ['A', 'B'],
+)
+expect(
+  'both seeded from the same request',
+  compare.lanes.map((lane) => lane.request.url),
+  ['${BASE_URL}/things', '${BASE_URL}/things'],
+)
 expect(
   'each lane starts on the active environment',
   compare.lanes.every((lane) => lane.environmentId === lower.id),
@@ -150,10 +154,18 @@ addLane()
 expect('lanes can be added up to the limit', compare.lanes.length, MAX_LANES)
 addLane()
 expect('and no further', compare.lanes.length, MAX_LANES)
-expect('labels stay positional', compare.lanes.map((lane) => lane.label), ['A', 'B', 'C', 'D'])
+expect(
+  'labels stay positional',
+  compare.lanes.map((lane) => lane.label),
+  ['A', 'B', 'C', 'D'],
+)
 
 removeLane(compare.lanes[1].id)
-expect('removing a lane relabels the rest', compare.lanes.map((lane) => lane.label), ['A', 'B', 'C'])
+expect(
+  'removing a lane relabels the rest',
+  compare.lanes.map((lane) => lane.label),
+  ['A', 'B', 'C'],
+)
 
 group('seeding and duplicating')
 
@@ -198,7 +210,8 @@ expect(
 )
 expect(
   'the sidebar selection does not decide a lane environment',
-  laneVariables(compare.lanes[1]).values.BASE_URL !== laneVariables(compare.lanes[0]).values.BASE_URL,
+  laneVariables(compare.lanes[1]).values.BASE_URL !==
+    laneVariables(compare.lanes[0]).values.BASE_URL,
   true,
 )
 
@@ -225,11 +238,7 @@ detail('lane B body:', prodBody)
 
 expect('the second lane answers too', compare.lanes[1].outcome?.response?.status, 200)
 expect('the first keeps its own response', compare.lanes[0].outcome.response.body, lowerBody)
-expect(
-  'and the two environments really did produce different bodies',
-  lowerBody !== prodBody,
-  true,
-)
+expect('and the two environments really did produce different bodies', lowerBody !== prodBody, true)
 
 group('independence')
 
@@ -248,8 +257,16 @@ resetWorkspace()
 startComparison(saved(), 'saved-1')
 compare.lanes[1].request.url = 'http://127.0.0.1:1/nothing-listening'
 await sendAll()
-expect('one lane failing outright leaves the other intact', compare.lanes[0].outcome?.response?.status, 200)
-expect('and the failure is reported on its own lane', Boolean(compare.lanes[1].outcome?.error), true)
+expect(
+  'one lane failing outright leaves the other intact',
+  compare.lanes[0].outcome?.response?.status,
+  200,
+)
+expect(
+  'and the failure is reported on its own lane',
+  Boolean(compare.lanes[1].outcome?.error),
+  true,
+)
 detail('transport error:', compare.lanes[1].outcome?.error)
 
 group('refusing to send')

@@ -23,9 +23,7 @@ export function useTheme() {
     themes: getThemeList(),
     systemPreference: SYSTEM_PREFERENCE,
     isSystem: computed(() => preference.value === SYSTEM_PREFERENCE),
-    isDark: computed(
-      () => getThemeById(resolvedThemeId.value)?.colorScheme !== 'light',
-    ),
+    isDark: computed(() => getThemeById(resolvedThemeId.value)?.colorScheme !== 'light'),
     setPreference: setThemePreference,
   }
 }

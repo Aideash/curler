@@ -152,17 +152,29 @@ const marker: Record<string, string> = {
   border: 1px solid var(--border-strong);
 }
 
-.chip.green { color: var(--green); border-color: var(--green-border); }
-.chip.amber { color: var(--amber); border-color: var(--amber-border); }
+.chip.green {
+  color: var(--green);
+  border-color: var(--green-border);
+}
+.chip.amber {
+  color: var(--amber);
+  border-color: var(--amber-border);
+}
 
 .count {
   font-family: var(--mono);
   font-size: 12px;
 }
 
-.count.green { color: var(--green); }
-.count.amber { color: var(--amber); }
-.count.red { color: var(--red); }
+.count.green {
+  color: var(--green);
+}
+.count.amber {
+  color: var(--amber);
+}
+.count.red {
+  color: var(--red);
+}
 
 .spacer {
   flex: 1;
@@ -275,9 +287,15 @@ const marker: Record<string, string> = {
   color: var(--text-faint);
 }
 
-.row.added .mark { color: var(--green); }
-.row.removed .mark { color: var(--red); }
-.row.changed .mark { color: var(--amber); }
+.row.added .mark {
+  color: var(--green);
+}
+.row.removed .mark {
+  color: var(--red);
+}
+.row.changed .mark {
+  color: var(--amber);
+}
 
 .text {
   padding-right: 10px;

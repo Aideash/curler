@@ -351,19 +351,43 @@ export function compareMeta(responses: (HttpResponse | null)[]): ComparisonRow[]
     responses.map((response) => (response ? String(read(response)) : null))
 
   const row = (label: string, values: (string | null)[], compare = true): ComparisonRow =>
-    compare ? markDiffering([{ label, values, differs: false }])[0] : { label, values, differs: false }
+    compare
+      ? markDiffering([{ label, values, differs: false }])[0]
+      : { label, values, differs: false }
 
   return [
-    row('Status', pick((r) => `${r.status} ${r.statusText}`.trim())),
+    row(
+      'Status',
+      pick((r) => `${r.status} ${r.statusText}`.trim()),
+    ),
     // Reported but never flagged: two requests to two hosts always take
     // different amounts of time, and marking that on every comparison would
     // train you to ignore the marker where it means something.
-    row('Time', pick((r) => `${r.elapsedMs} ms`), false),
-    row('Content type', pick((r) => contentTypeOf(r))),
-    row('Size', pick((r) => formatBytes(r.bytes))),
-    row('Redirects', pick((r) => r.redirectChain.length)),
-    row('Truncated', pick((r) => (r.truncated ? 'yes' : 'no'))),
-    row('Final URL', pick((r) => r.finalUrl)),
+    row(
+      'Time',
+      pick((r) => `${r.elapsedMs} ms`),
+      false,
+    ),
+    row(
+      'Content type',
+      pick((r) => contentTypeOf(r)),
+    ),
+    row(
+      'Size',
+      pick((r) => formatBytes(r.bytes)),
+    ),
+    row(
+      'Redirects',
+      pick((r) => r.redirectChain.length),
+    ),
+    row(
+      'Truncated',
+      pick((r) => (r.truncated ? 'yes' : 'no')),
+    ),
+    row(
+      'Final URL',
+      pick((r) => r.finalUrl),
+    ),
   ]
 }
 

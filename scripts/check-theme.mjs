@@ -10,10 +10,7 @@ function channel(value) {
 }
 
 function luminance(hex) {
-  const full =
-    hex.length === 4
-      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
-      : hex
+  const full = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(full.slice(at, at + 2), 16))
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }

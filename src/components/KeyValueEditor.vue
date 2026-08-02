@@ -11,9 +11,10 @@ import {
 } from '../lib/store'
 import { braceBareReferences, inspect } from '../lib/vars'
 
+const rows = defineModel<KeyValue[]>('rows', { required: true })
+
 const props = withDefaults(
   defineProps<{
-    rows: KeyValue[]
     nameOptions?: string[]
     namePlaceholder?: string
     valuePlaceholder?: string
@@ -83,12 +84,12 @@ function newRow(): KeyValue {
 
 /** Keeps a blank row at the bottom so there is always somewhere to type. */
 function ensureTrailingRow() {
-  const last = props.rows[props.rows.length - 1]
-  if (!last || !isBlank(last)) props.rows.push(newRow())
+  const last = rows.value[rows.value.length - 1]
+  if (!last || !isBlank(last)) rows.value.push(newRow())
 }
 
 async function remove(index: number) {
-  const row = props.rows[index]
+  const row = rows.value[index]
   if (props.allowSecrets && row.secret && isUsable(row)) {
     const ok = window.confirm(
       'This secret is stored in your OS keychain and will be deleted. It cannot be recovered. Remove anyway?',
@@ -96,7 +97,7 @@ async function remove(index: number) {
     if (!ok) return
     await removeRowSecret(row.id)
   }
-  props.rows.splice(index, 1)
+  rows.value.splice(index, 1)
   ensureTrailingRow()
 }
 
@@ -109,11 +110,7 @@ function onValueInput(row: KeyValue, event: Event) {
 
 async function toggleSecret(row: KeyValue) {
   if (row.secret) {
-    if (
-      !window.confirm(
-        'This value will be stored in plaintext in workspace.json. Continue?',
-      )
-    ) {
+    if (!window.confirm('This value will be stored in plaintext in workspace.json. Continue?')) {
       return
     }
     try {
@@ -143,7 +140,7 @@ function selectDefaultName(row: KeyValue, event: FocusEvent) {
 const issues = computed(() => {
   const byRow = new Map<string, ReturnType<typeof inspect>>()
   if (!props.resolves) return byRow
-  for (const row of props.rows) {
+  for (const row of rows.value) {
     const found = inspect(row.value, props.variables)
     if (found.length) byRow.set(row.id, found)
   }

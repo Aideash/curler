@@ -8,12 +8,8 @@ import {
   type RequestModel,
 } from '../types'
 import { parseGraphqlBody, buildGraphqlBody } from './graphql'
-import { resolve, resolveUrl } from './vars'
-import {
-  TERMINAL_FLAGS,
-  terminalFlagArgs,
-  terminalFlagBySpelling,
-} from './terminalFlags'
+import { resolve, resolveUrl, type VariableSet } from './vars'
+import { TERMINAL_FLAGS, terminalFlagArgs, terminalFlagBySpelling } from './terminalFlags'
 
 /** Long flags that take an argument, for the line-wrapping pass in `toCurl`. */
 const VALUED_LONG_FLAGS = new Set(
@@ -69,6 +65,31 @@ const SHORT_BOOLEAN = new Set([
 export interface ParsedCurl {
   request: RequestModel
   warnings: string[]
+}
+
+/** How much of the variable table to substitute when copying as curl. */
+export type CurlCopyMode = 'ready' | 'shareable' | 'general'
+
+/** The variable map `toCurl` should use for a given copy mode. */
+export function variablesForCurlCopy(
+  set: VariableSet,
+  mode: CurlCopyMode,
+): Record<string, string> | undefined {
+  if (mode === 'general') return undefined
+  if (mode === 'ready') return set.values
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(set.values)) {
+    if (!set.secretNames.has(name)) out[name] = value
+  }
+  return out
+}
+
+/** Path-parameter map for `toCurl`. Withheld in the general form so nothing expands. */
+export function pathVariablesForCurlCopy(
+  set: VariableSet,
+  mode: CurlCopyMode,
+): Record<string, string> | undefined {
+  return mode === 'general' ? undefined : set.values
 }
 
 /** The escapes bash resolves inside `$'...'` that stand for a single character. */
@@ -135,8 +156,7 @@ function decodeAnsiC(input: string, start: number): { value: string; end: number
     const numeric = ANSI_C_NUMERIC.exec(input)
     if (numeric) {
       const [hex2, hex4, hex8, octal] = numeric.slice(1)
-      const code =
-        octal !== undefined ? parseInt(octal, 8) : parseInt(hex2 ?? hex4 ?? hex8, 16)
+      const code = octal !== undefined ? parseInt(octal, 8) : parseInt(hex2 ?? hex4 ?? hex8, 16)
       // A `\U` escape can name a code point that does not exist; drop those
       // instead of throwing partway through the command.
       if (code <= 0x10ffff) value += String.fromCodePoint(code)
@@ -230,8 +250,7 @@ function hideAnsiCStrings(input: string): {
   const placeholderPattern = new RegExp(`${marker}\\d+${marker}`, 'g')
   return {
     command,
-    restore: (token) =>
-      token.replace(placeholderPattern, (match) => values.get(match) ?? match),
+    restore: (token) => token.replace(placeholderPattern, (match) => values.get(match) ?? match),
   }
 }
 
@@ -286,9 +305,7 @@ export function parseCurl(input: string): ParsedCurl {
   const dataParts: string[] = []
 
   const setHeader = (name: string, value: string) => {
-    const existing = request.headers.find(
-      (h) => h.name.toLowerCase() === name.toLowerCase(),
-    )
+    const existing = request.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())
     if (existing) existing.value = value
     else request.headers.push({ id: uid(), name, value, enabled: true })
   }
@@ -512,9 +529,7 @@ export function parseCurl(input: string): ParsedCurl {
   else if (request.body.mode !== 'none') request.method = 'POST'
 
   if (request.body.mode === 'json' || request.body.mode === 'graphql') {
-    const hasContentType = request.headers.some(
-      (h) => h.name.toLowerCase() === 'content-type',
-    )
+    const hasContentType = request.headers.some((h) => h.name.toLowerCase() === 'content-type')
     if (!hasContentType) setHeader('Content-Type', 'application/json')
   }
 
@@ -558,7 +573,7 @@ function deriveName(url: string): string | null {
   const withoutScheme = url.replace(/^https?:\/\//i, '')
   const path = withoutScheme.split('?')[0]
   const segments = path.split('/').filter(Boolean)
-  return segments.length > 1 ? `/${segments.slice(1).join('/')}` : segments[0] ?? null
+  return segments.length > 1 ? `/${segments.slice(1).join('/')}` : (segments[0] ?? null)
 }
 
 function looksLikeJson(value: string): boolean {
@@ -630,17 +645,14 @@ export function toCurl(
   /** Used for `:id` path parameters when `variables` is withheld. */
   pathVariables: Record<string, string> | undefined = variables,
 ): string {
-  const apply = (input: string) =>
-    variables ? resolve(input, variables).value : input
+  const apply = (input: string) => (variables ? resolve(input, variables).value : input)
 
   /**
    * Resolved values are literal, so single quotes are both correct and safer.
    * Unresolved ones have to stay expandable, which needs double quotes.
    */
   const quote = (value: string) =>
-    !variables && hasVariableReference(value)
-      ? shellEscapeExpanding(value)
-      : shellEscape(value)
+    hasVariableReference(value) ? shellEscapeExpanding(value) : shellEscape(value)
 
   /**
    * `:id` is a curler idea with no shell equivalent, so it is expanded even in
@@ -663,11 +675,7 @@ export function toCurl(
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     if (request.body.text) parts.push('-d', quote(apply(request.body.text)))
   } else if (request.body.mode === 'graphql') {
-    const payload = buildGraphqlBody(
-      request.body.text,
-      request.body.graphqlVariables ?? [],
-      apply,
-    )
+    const payload = buildGraphqlBody(request.body.text, request.body.graphqlVariables ?? [], apply)
     if (payload) parts.push('-d', quote(payload))
   } else if (request.body.mode === 'form') {
     const encoded = request.body.form

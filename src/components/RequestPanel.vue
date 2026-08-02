@@ -17,6 +17,7 @@ import {
 } from '../lib/terminalFlags'
 import { braceBareReferences, inspect } from '../lib/vars'
 import { resolvedRowValue } from '../lib/store'
+import { type CurlCopyMode } from '../lib/curl'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
 
 const request = defineModel<RequestModel>('request', { required: true })
@@ -29,7 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   send: []
   importCurl: []
-  copyCurl: [resolved: boolean]
+  copyCurl: [mode: CurlCopyMode]
   manageVariables: []
 }>()
 
@@ -203,14 +204,30 @@ const flagPreview = computed(() =>
           <span class="material-icons sm">content_paste_go</span>
           Import curl
         </button>
-        <PopMenu icon="content_copy" label="Copy as curl" :width="330">
+        <PopMenu icon="content_copy" label="Copy as curl" :width="275">
           <template #default="{ close }">
-            <button class="preset-item" @click="(emit('copyCurl', true), close())">
+            <button
+              class="preset-item copy-type"
+              title="Ready to run - Variables replaced with their values"
+              @click="(emit('copyCurl', 'ready'), close())"
+            >
               <span class="preset-label">Ready to run</span>
               <span class="preset-desc">Variables replaced with their values</span>
             </button>
-            <button class="preset-item" @click="(emit('copyCurl', false), close())">
+            <button
+              class="preset-item copy-type"
+              title="Shareable - Public vars expanded, secrets left as placeholders"
+              @click="(emit('copyCurl', 'shareable'), close())"
+            >
               <span class="preset-label">Shareable</span>
+              <span class="preset-desc">Public vars expanded, secrets left as placeholders</span>
+            </button>
+            <button
+              class="preset-item copy-type"
+              title="General - Keeps ${VARIABLE} placeholders"
+              @click="(emit('copyCurl', 'general'), close())"
+            >
+              <span class="preset-label">General</span>
               <span class="preset-desc">Keeps ${VARIABLE} placeholders</span>
             </button>
           </template>
@@ -249,7 +266,7 @@ const flagPreview = computed(() =>
           </PopMenu>
         </div>
         <KeyValueEditor
-          :rows="request.headers"
+          v-model:rows="request.headers"
           :name-options="HEADER_NAMES"
           :variables="variables"
           list-id="header-names"
@@ -298,7 +315,7 @@ const flagPreview = computed(() =>
 
         <div v-else-if="request.body.mode === 'form'" class="form-body">
           <KeyValueEditor
-            :rows="request.body.form"
+            v-model:rows="request.body.form"
             :variables="variables"
             list-id="form-names"
             id-prefix="form-field"
@@ -318,7 +335,7 @@ const flagPreview = computed(() =>
           </div>
           <p class="section-label">Variables</p>
           <KeyValueEditor
-            :rows="request.body.graphqlVariables"
+            v-model:rows="request.body.graphqlVariables"
             :variables="variables"
             list-id="graphql-variable-names"
             id-prefix="graphql-variable"
@@ -358,7 +375,7 @@ const flagPreview = computed(() =>
           <code>:id</code> path parameter with a few candidates.
         </p>
         <KeyValueEditor
-          :rows="request.variables"
+          v-model:rows="request.variables"
           list-id="request-variable-names"
           id-prefix="request-var"
           name-placeholder="Variable name"
@@ -426,7 +443,7 @@ const flagPreview = computed(() =>
             Terminal-only flags
           </h3>
           <p class="faint terminal-hint">
-            Added to both <strong>Copy as curl</strong> forms and nothing else. They have no effect
+            Added to every <strong>Copy as curl</strong> form and nothing else. They have no effect
             on requests sent from here — there is no progress meter to quieten and no file to write.
             Flags that contradict each other cannot both be picked.
           </p>
@@ -626,6 +643,15 @@ const flagPreview = computed(() =>
 .tab.active {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+
+.preset-item.copy-type {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.copy-type .preset-desc {
+  font-size: 10px;
 }
 
 .badge {

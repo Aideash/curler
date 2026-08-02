@@ -48,16 +48,14 @@ for (const flag of TERMINAL_FLAGS) {
 h.group('conflicts')
 
 h.expect('silent blocks the progress bar', blockedBy({ silent: true }, 'progressBar'), ['silent'])
-h.expect('the progress bar blocks silent', blockedBy({ progressBar: true }, 'silent'), ['progressBar'])
+h.expect('the progress bar blocks silent', blockedBy({ progressBar: true }, 'silent'), [
+  'progressBar',
+])
 h.expect('silent is free when nothing else is on', blockedBy({}, 'silent'), [])
 h.expect('fail blocks fail-with-body', blockedBy({ fail: true }, 'failWithBody'), ['fail'])
 h.expect('ipv4 blocks ipv6', blockedBy({ ipv4: true }, 'ipv6'), ['ipv4'])
 h.expect('-o blocks -O', blockedBy({ output: 'out.json' }, 'remoteName'), ['output'])
-h.expect(
-  'a blank -o blocks nothing',
-  blockedBy({ output: '   ' }, 'remoteName'),
-  [],
-)
+h.expect('a blank -o blocks nothing', blockedBy({ output: '   ' }, 'remoteName'), [])
 
 h.expect('show-error alone is inert', ineffective({ showError: true }, 'showError'), ['silent'])
 h.expect(
@@ -77,11 +75,10 @@ h.expect('a valued flag needs text', isActive({ retry: '' }, 'retry'), false)
 h.expect('a valued flag with text is active', isActive({ retry: '3' }, 'retry'), true)
 h.expect('whitespace is not text', isActive({ retry: '  ' }, 'retry'), false)
 
-h.expect(
-  'args come out in catalogue order',
-  terminalFlagArgs({ retry: '3', silent: true }),
-  [{ flag: '--silent' }, { flag: '--retry', value: '3' }],
-)
+h.expect('args come out in catalogue order', terminalFlagArgs({ retry: '3', silent: true }), [
+  { flag: '--silent' },
+  { flag: '--retry', value: '3' },
+])
 
 // -- Round trip through curl ------------------------------------------------
 
@@ -93,7 +90,11 @@ request.terminalFlags = { silent: true, showError: true, writeOut: '%{http_code}
 const command = toCurl(request)
 h.expect('silent appears', command.includes('--silent'), true)
 h.expect('show-error appears', command.includes('--show-error'), true)
-h.expect('write-out keeps its format quoted', command.includes(`-w '%{http_code}'`) || command.includes(`--write-out '%{http_code}'`), true)
+h.expect(
+  'write-out keeps its format quoted',
+  command.includes(`-w '%{http_code}'`) || command.includes(`--write-out '%{http_code}'`),
+  true,
+)
 
 const bare = newRequest({ url: 'https://example.test/' })
 h.expect('no flags means no trimmings', toCurl(bare).includes('--silent'), false)

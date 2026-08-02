@@ -15,9 +15,8 @@ const h = createHarness('storage')
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'curler-home-'))
 process.env.CURLER_HOME = home
 
-const { readWorkspace, writeWorkspace, WORKSPACE_FILE, BACKUP_DIR } = await import(
-  '../server/storage.mjs'
-)
+const { readWorkspace, writeWorkspace, WORKSPACE_FILE, BACKUP_DIR } =
+  await import('../server/storage.mjs')
 
 const workspaceWith = (names) =>
   JSON.stringify({
@@ -52,7 +51,13 @@ await writeWorkspace(workspaceWith(['one', 'two']))
 h.expect('what was written comes back', await readWorkspace(), workspaceWith(['one', 'two']))
 h.expect('CURLER_HOME redirected the workspace', WORKSPACE_FILE.startsWith(home), true)
 
-h.expect('no temp file is left behind', await backups().then(() => fs.readdir(path.dirname(WORKSPACE_FILE))).then((names) => names.includes('workspace.json.tmp')), false)
+h.expect(
+  'no temp file is left behind',
+  await backups()
+    .then(() => fs.readdir(path.dirname(WORKSPACE_FILE)))
+    .then((names) => names.includes('workspace.json.tmp')),
+  false,
+)
 
 // -- Backups ----------------------------------------------------------------
 
@@ -71,8 +76,9 @@ const firstChange = await backups()
 h.expect('the first change is snapshotted', firstChange.length, 1)
 h.expect(
   'and it holds the state before that change',
-  JSON.parse(await fs.readFile(path.join(BACKUP_DIR, firstChange[0]), 'utf8')).collections[0]
-    .requests.map((request) => request.id),
+  JSON.parse(
+    await fs.readFile(path.join(BACKUP_DIR, firstChange[0]), 'utf8'),
+  ).collections[0].requests.map((request) => request.id),
   ['one', 'two'],
 )
 

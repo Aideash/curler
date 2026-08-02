@@ -60,7 +60,8 @@ const scopes = computed<ScopeInfo[]>(() => [
     icon: 'swap_horiz',
     rows: environment.value?.variables ?? null,
     blocked: '',
-    blurb: 'Swapped as a set from the sidebar. Put anything that differs between dev and prod here.',
+    blurb:
+      'Swapped as a set from the sidebar. Put anything that differs between dev and prod here.',
   },
   {
     id: 'global',
@@ -73,12 +74,18 @@ const scopes = computed<ScopeInfo[]>(() => [
 
 const current = computed(() => scopes.value.find((item) => item.id === scope.value)!)
 
+const editorRows = computed<KeyValue[]>({
+  get: () => current.value.rows ?? [],
+  set: (value) => {
+    const target = current.value.rows
+    if (target && target !== value) target.splice(0, target.length, ...value)
+  },
+})
+
 /** How many rows in a scope are actually usable, for the tab counts. */
 function usableCount(rows: KeyValue[] | null): number {
   if (!rows) return 0
-  return rows.filter(
-    (row) => row.enabled && row.name.trim() && resolvedRowValue(row).trim(),
-  ).length
+  return rows.filter((row) => row.enabled && row.name.trim() && resolvedRowValue(row).trim()).length
 }
 
 /**
@@ -103,9 +110,7 @@ const builtins = computed(() => Object.entries(state.builtins))
  * `API_KEY` is a sensible guess in the shared scopes, but a request-level
  * variable is far more likely to be something like an id.
  */
-const defaultName = computed(() =>
-  scope.value === 'request' ? '' : DEFAULT_VARIABLE_NAME,
-)
+const defaultName = computed(() => (scope.value === 'request' ? '' : DEFAULT_VARIABLE_NAME))
 
 function promptEnvironment() {
   const name = window.prompt('Environment name', 'Staging')
@@ -163,7 +168,11 @@ function confirmDeleteEnvironment() {
       <button
         class="danger"
         :disabled="state.environments.length <= 1"
-        :title="state.environments.length <= 1 ? 'The last environment cannot be deleted' : 'Delete this environment'"
+        :title="
+          state.environments.length <= 1
+            ? 'The last environment cannot be deleted'
+            : 'Delete this environment'
+        "
         @click="confirmDeleteEnvironment"
       >
         <span class="material-icons sm">delete_outline</span>
@@ -177,7 +186,7 @@ function confirmDeleteEnvironment() {
     <KeyValueEditor
       v-else-if="current.rows"
       :key="scope"
-      :rows="current.rows"
+      v-model:rows="editorRows"
       list-id="variable-names"
       :id-prefix="`variable-${scope}`"
       name-placeholder="Variable name"
@@ -199,11 +208,10 @@ function confirmDeleteEnvironment() {
         <span class="faint">({{ builtins.length }}, read-only)</span>
       </summary>
       <p class="faint">
-        Read from the environment of the server process, so <code>${USER}</code> works
-        without you defining it. Define a variable of the same name in any scope above to
-        override one.
+        Read from the environment of the server process, so <code>${USER}</code> works without you
+        defining it. Define a variable of the same name in any scope above to override one.
       </p>
-      <div v-for="([name, value]) in builtins" :key="name" class="builtin-row">
+      <div v-for="[name, value] in builtins" :key="name" class="builtin-row">
         <span class="mono">{{ name }}</span>
         <span class="mono faint">{{ value }}</span>
       </div>

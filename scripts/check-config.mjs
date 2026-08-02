@@ -31,11 +31,7 @@ h.expect('the defaults are the documented ones', [DEFAULT_API_PORT, DEFAULT_UI_P
 
 h.expect('API_PORT is honoured', resolvePorts({ API_PORT: '9000' }).api, 9000)
 h.expect('UI_PORT is honoured', resolvePorts({ UI_PORT: '9001' }).ui, 9001)
-h.expect(
-  'each port is independent',
-  resolvePorts({ API_PORT: '9000' }).ui,
-  DEFAULT_UI_PORT,
-)
+h.expect('each port is independent', resolvePorts({ API_PORT: '9000' }).ui, DEFAULT_UI_PORT)
 h.expect('surrounding whitespace is tolerated', resolvePorts({ API_PORT: ' 9000 ' }).api, 9000)
 h.expect('a blank value falls back', resolvePorts({ API_PORT: '   ' }).api, DEFAULT_API_PORT)
 

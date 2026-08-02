@@ -26,8 +26,14 @@ const cases = [
     'implicit POST from data, basic auth, insecure',
     `curl -k -u admin:hunter2 --data-raw 'hello=world' https://localhost:8443/login`,
   ],
-  ['--get promotes data to query string', `curl -G --data-urlencode 'q=hello world' https://api.example.com/search`],
-  ['braced variable and max-time', `curl -m 5 -H 'Authorization: Bearer \${TOKEN}' \${BASE_URL}/me`],
+  [
+    '--get promotes data to query string',
+    `curl -G --data-urlencode 'q=hello world' https://api.example.com/search`,
+  ],
+  [
+    'braced variable and max-time',
+    `curl -m 5 -H 'Authorization: Bearer \${TOKEN}' \${BASE_URL}/me`,
+  ],
   ['HEAD via -I with --compressed', `curl -I --compressed https://example.com`],
   ['form fields', `curl -F 'file=@x' -F 'name=bob' https://api.example.com/upload`],
   [
@@ -123,8 +129,7 @@ for (const [label, input, wanted] of cases) {
     }
     if (model.body.mode === 'graphql') {
       return (
-        buildGraphqlBody(model.body.text, model.body.graphqlVariables ?? [], (value) => value) ??
-        ''
+        buildGraphqlBody(model.body.text, model.body.graphqlVariables ?? [], (value) => value) ?? ''
       )
     }
     return model.body.text

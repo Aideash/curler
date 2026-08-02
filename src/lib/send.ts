@@ -1,5 +1,11 @@
 import { sendRequest } from './backend'
-import { resolveRequest, traceRequest, type BuildTrace, type ResolvedRequest, type VariableSet } from './vars'
+import {
+  resolveRequest,
+  traceRequest,
+  type BuildTrace,
+  type ResolvedRequest,
+  type VariableSet,
+} from './vars'
 import type { HttpResponse, RequestModel } from '../types'
 
 /**
@@ -20,10 +26,7 @@ export interface SendOutcome {
  * far end as a nonsense credential and comes back as a confusing 401 or 403.
  * Refuse, and say exactly what needs fixing.
  */
-export function variableProblem(
-  resolved: ResolvedRequest,
-  environmentName: string,
-): string | null {
+export function variableProblem(resolved: ResolvedRequest, environmentName: string): string | null {
   if (!resolved.missing.length && !resolved.empty.length) return null
 
   const lines: string[] = []
@@ -39,9 +42,7 @@ export function variableProblem(
   lines.push(
     `Open Vars to set them, at whichever scope fits. The active environment is "${environmentName}".`,
   )
-  lines.push(
-    'A variable needs a name in the left-hand field; a row with only a value is ignored.',
-  )
+  lines.push('A variable needs a name in the left-hand field; a row with only a value is ignored.')
 
   return lines.join('\n')
 }

@@ -40,6 +40,7 @@ const CHATTER = [
 ]
 
 function isChatter(line) {
+  // eslint-disable-next-line no-control-regex
   const bare = line.replace(/\u001b\[[0-9;]*m/g, '').trim()
   return CHATTER.some((pattern) => pattern.test(bare))
 }

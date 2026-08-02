@@ -19,6 +19,8 @@ const {
   braceRequestReferences,
   traceRequest,
   toCurl,
+  variablesForCurlCopy,
+  pathVariablesForCurlCopy,
   newRequest,
   uid,
   buildVariableSet,
@@ -74,7 +76,12 @@ group('resolution')
 
 group('GraphQL body mode')
 {
-  const map = environmentMap(env([['API_KEY', 'secret-abc'], ['id', 'nope']]))
+  const map = environmentMap(
+    env([
+      ['API_KEY', 'secret-abc'],
+      ['id', 'nope'],
+    ]),
+  )
   const gql = newRequest({
     method: 'POST',
     url: 'https://api.example.com/graphql',
@@ -161,18 +168,12 @@ group('literal $ in a body')
 group('bare references are offered as a suggestion')
 {
   const map = environmentMap(env([['API_KEY', 'secret-abc']]))
-  expect('inspect flags a bare name', inspect('$API_KEY', map), [
+  expect('inspect flags a bare name', inspect('$API_KEY', map), [{ name: 'API_KEY', kind: 'bare' }])
+  expect('a braced name alongside is not double-counted', inspect('${API_KEY}', map), [])
+  expect('both are reported when both appear', inspect('${MISSING} and $API_KEY', map), [
+    { name: 'MISSING', kind: 'missing' },
     { name: 'API_KEY', kind: 'bare' },
   ])
-  expect('a braced name alongside is not double-counted', inspect('${API_KEY}', map), [])
-  expect(
-    'both are reported when both appear',
-    inspect('${MISSING} and $API_KEY', map),
-    [
-      { name: 'MISSING', kind: 'missing' },
-      { name: 'API_KEY', kind: 'bare' },
-    ],
-  )
   expect('suggestions can be turned off', inspect('$API_KEY', map, false, false), [])
 
   expect('the fix braces one name', braceBareReferences('$a/$b', 'a'), '${a}/$b')
@@ -267,11 +268,7 @@ group('copy as curl')
   )
 
   const glued = newRequest({ url: '${BASE_URL}v1' })
-  expect(
-    'braces kept when the name would run on',
-    toCurl(glued).includes('"${BASE_URL}v1"'),
-    true,
-  )
+  expect('braces kept when the name would run on', toCurl(glued).includes('"${BASE_URL}v1"'), true)
 
   detail('runnable output:\n', runnable)
   detail('shareable output:\n', shareable)
@@ -288,11 +285,9 @@ group('the pre-filled trailing row must not shadow a real value')
     ]),
   )
   expect('valued row survives the trailing blank', shadowed, { API_KEY: 'secret-abc' })
-  expect(
-    'request still resolves',
-    resolveRequest(request('${API_KEY}'), shadowed).headers,
-    [['x-api-key', 'secret-abc']],
-  )
+  expect('request still resolves', resolveRequest(request('${API_KEY}'), shadowed).headers, [
+    ['x-api-key', 'secret-abc'],
+  ])
 
   const reversed = environmentMap(
     env([
@@ -340,16 +335,32 @@ group('scope precedence: narrowest wins')
 {
   const scoped = mergeScopes([
     { scope: 'request', rows: rows([['ID', '1']]) },
-    { scope: 'collection', rows: rows([['API_KEY', 'collection-key'], ['ID', '2']]) },
+    {
+      scope: 'collection',
+      rows: rows([
+        ['API_KEY', 'collection-key'],
+        ['ID', '2'],
+      ]),
+    },
     { scope: 'environment', rows: rows([['BASE_URL', 'https://dev.example.com']]) },
-    { scope: 'global', rows: rows([['USER', 'global-user'], ['API_KEY', 'global-key']]) },
+    {
+      scope: 'global',
+      rows: rows([
+        ['USER', 'global-user'],
+        ['API_KEY', 'global-key'],
+      ]),
+    },
     { scope: 'builtin', rows: rows([['USER', 'builtin-user']]) },
   ])
 
   expect('request beats collection', scoped.values.ID, '1')
   expect('collection beats global', scoped.values.API_KEY, 'collection-key')
   expect('global beats builtin', scoped.values.USER, 'global-user')
-  expect('a name only the environment defines still resolves', scoped.values.BASE_URL, 'https://dev.example.com')
+  expect(
+    'a name only the environment defines still resolves',
+    scoped.values.BASE_URL,
+    'https://dev.example.com',
+  )
 
   expect('origins name the winning scope', scoped.origins, {
     ID: 'request',
@@ -429,14 +440,39 @@ group('path parameters in the url')
 
 group('path parameters survive copy as curl')
 {
-  const map = { id: '42', API_KEY: 'secret-abc' }
+  const secretId = uid()
+  const set = mergeScopes(
+    [
+      {
+        scope: 'environment',
+        rows: [
+          { id: secretId, name: 'API_KEY', value: '', enabled: true, secret: true },
+          row('id', '42'),
+        ],
+      },
+    ],
+    { [secretId]: 'secret-abc' },
+  )
   const model = newRequest({
     url: 'https://example.com/things/:id',
     headers: [{ id: uid(), name: 'x-api-key', value: '${API_KEY}', enabled: true }],
   })
 
-  const runnable = toCurl(model, map)
-  const shareable = toCurl(model, undefined, map)
+  const runnable = toCurl(
+    model,
+    variablesForCurlCopy(set, 'ready'),
+    pathVariablesForCurlCopy(set, 'ready'),
+  )
+  const shareable = toCurl(
+    model,
+    variablesForCurlCopy(set, 'shareable'),
+    pathVariablesForCurlCopy(set, 'shareable'),
+  )
+  const general = toCurl(
+    model,
+    variablesForCurlCopy(set, 'general'),
+    pathVariablesForCurlCopy(set, 'general'),
+  )
 
   expect('the runnable form expands the path', runnable.includes('/things/42'), true)
   expect('the shareable form also expands the path', shareable.includes('/things/42'), true)
@@ -445,6 +481,60 @@ group('path parameters survive copy as curl')
     shareable.includes('-H "x-api-key: $API_KEY"'),
     true,
   )
+  expect('the general form keeps the path parameter', general.includes('/things/:id'), true)
+  expect(
+    'the general form also defers the secret',
+    general.includes('-H "x-api-key: $API_KEY"'),
+    true,
+  )
+  detail('shareable output:\n', shareable)
+}
+
+group('shareable copy expands public vars only')
+{
+  const secretId = uid()
+  const set = mergeScopes(
+    [
+      {
+        scope: 'environment',
+        rows: [
+          { id: secretId, name: 'API_KEY', value: '', enabled: true, secret: true },
+          row('BASE_URL', 'https://api.example.com'),
+        ],
+      },
+    ],
+    { [secretId]: 'secret-abc' },
+  )
+  const model = newRequest({
+    url: '${BASE_URL}/things',
+    headers: [{ id: uid(), name: 'x-api-key', value: '${API_KEY}', enabled: true }],
+  })
+
+  const shareable = toCurl(
+    model,
+    variablesForCurlCopy(set, 'shareable'),
+    pathVariablesForCurlCopy(set, 'shareable'),
+  )
+  const general = toCurl(
+    model,
+    variablesForCurlCopy(set, 'general'),
+    pathVariablesForCurlCopy(set, 'general'),
+  )
+  const ready = toCurl(
+    model,
+    variablesForCurlCopy(set, 'ready'),
+    pathVariablesForCurlCopy(set, 'ready'),
+  )
+
+  expect(
+    'shareable expands the public url',
+    shareable.includes('https://api.example.com/things'),
+    true,
+  )
+  expect('shareable defers the secret', shareable.includes('-H "x-api-key: $API_KEY"'), true)
+  expect('shareable does not leak the secret value', shareable.includes('secret-abc'), false)
+  expect('general keeps every placeholder', general.includes('"$BASE_URL/things"'), true)
+  expect('ready expands everything', ready.includes('secret-abc'), true)
   detail('shareable output:\n', shareable)
 }
 
@@ -495,7 +585,10 @@ group('build trace')
 group('buildVariableSet')
 
 {
-  state.globals = rows([['SHARED', 'from-globals'], ['BASE_URL', 'http://global']])
+  state.globals = rows([
+    ['SHARED', 'from-globals'],
+    ['BASE_URL', 'http://global'],
+  ])
   state.builtins = { USER: 'someone' }
 
   const lower = env([['BASE_URL', 'http://lower.test']])
@@ -521,10 +614,7 @@ group('buildVariableSet')
 
   expect(
     'the same request resolves to two different URLs',
-    [
-      resolveRequest(model, lowerSet.values).url,
-      resolveRequest(model, prodSet.values).url,
-    ],
+    [resolveRequest(model, lowerSet.values).url, resolveRequest(model, prodSet.values).url],
     ['http://lower.test/things', 'https://prod.test/things'],
   )
 

@@ -21,7 +21,12 @@ import {
   type Lane,
 } from '../lib/compare'
 import { copyText } from '../lib/clipboard'
-import { toCurl } from '../lib/curl'
+import {
+  toCurl,
+  variablesForCurlCopy,
+  pathVariablesForCurlCopy,
+  type CurlCopyMode,
+} from '../lib/curl'
 import { describeIssues, inspect, resolveUrl } from '../lib/vars'
 import { state } from '../lib/store'
 import type { EditableScope, RequestModel } from '../types'
@@ -123,9 +128,11 @@ const columns = computed(() => ({
   gridTemplateColumns: `minmax(140px, 220px) repeat(${lanes.value.length}, minmax(0, 1fr))`,
 }))
 
-async function copyCurl(lane: Lane, resolved: boolean) {
-  const variables = laneVariables(lane).values
-  await copyText(toCurl(lane.request, resolved ? variables : undefined, variables))
+async function copyCurl(lane: Lane, mode: CurlCopyMode) {
+  const set = laneVariables(lane)
+  await copyText(
+    toCurl(lane.request, variablesForCurlCopy(set, mode), pathVariablesForCurlCopy(set, mode)),
+  )
 }
 
 function onImported(request: RequestModel) {

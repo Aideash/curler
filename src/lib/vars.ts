@@ -228,10 +228,7 @@ export interface BuildTrace {
   droppedFields: string[]
 }
 
-export function traceRequest(
-  request: RequestModel,
-  set: VariableSet,
-): BuildTrace {
+export function traceRequest(request: RequestModel, set: VariableSet): BuildTrace {
   const { values, origins, secretNames } = set
   const seen = new Map<string, TraceVariable>()
   const droppedHeaders: string[] = []
@@ -240,11 +237,7 @@ export function traceRequest(
   const displayValue = (name: string) =>
     secretNames.has(name) ? SECRET_REDACTED : (values[name] ?? '')
 
-  const noteUsage = (
-    input: string,
-    where: string,
-    includePathParams = false,
-  ) => {
+  const noteUsage = (input: string, where: string, includePathParams = false) => {
     for (const name of referencedNames(input, includePathParams)) {
       const existing = seen.get(name)
       if (existing) {

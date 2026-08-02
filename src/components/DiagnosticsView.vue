@@ -55,9 +55,7 @@ function statusTone(status: number): string {
     <section v-if="trace" class="block">
       <h3>Request build</h3>
 
-      <p v-if="!trace.variables.length" class="faint small">
-        No variables were referenced.
-      </p>
+      <p v-if="!trace.variables.length" class="faint small">No variables were referenced.</p>
 
       <div v-for="entry in trace.variables" :key="entry.name" class="var-row">
         <span class="mono var-name">${{ entry.name }}</span>
@@ -83,8 +81,8 @@ function statusTone(status: number): string {
 
     <p v-if="diagnostics?.truncated" class="notice warn">
       <span class="material-icons sm">content_cut</span>
-      The response was cut off at the {{ diagnostics.maxResponseMb }} MB cap. Raise it in
-      the Options tab to read the whole thing.
+      The response was cut off at the {{ diagnostics.maxResponseMb }} MB cap. Raise it in the
+      Options tab to read the whole thing.
     </p>
 
     <!-- One block per hop ---------------------------------------------- -->
@@ -143,9 +141,16 @@ function statusTone(status: number): string {
             <template v-if="!hop.tls.authorized"> · not verified</template>
           </span>
         </summary>
-        <div class="kv"><span>Subject</span><span class="mono">{{ hop.tls.subject ?? '—' }}</span></div>
-        <div class="kv"><span>Issuer</span><span class="mono">{{ hop.tls.issuer ?? '—' }}</span></div>
-        <div class="kv"><span>Valid</span><span class="mono">{{ hop.tls.validFrom }} → {{ hop.tls.validTo }}</span></div>
+        <div class="kv">
+          <span>Subject</span><span class="mono">{{ hop.tls.subject ?? '—' }}</span>
+        </div>
+        <div class="kv">
+          <span>Issuer</span><span class="mono">{{ hop.tls.issuer ?? '—' }}</span>
+        </div>
+        <div class="kv">
+          <span>Valid</span
+          ><span class="mono">{{ hop.tls.validFrom }} → {{ hop.tls.validTo }}</span>
+        </div>
         <div v-if="hop.tls.altNames" class="kv">
           <span>Alt names</span><span class="mono">{{ hop.tls.altNames }}</span>
         </div>
@@ -162,7 +167,9 @@ function statusTone(status: number): string {
             {{ hop.requestHeaders.length }} sent · {{ hop.responseHeaders.length }} received
           </span>
         </summary>
-        <pre class="wire mono"><span class="sent">&gt; {{ hop.method }} {{ hop.requestTarget }} HTTP/1.1</span>
+        <pre
+          class="wire mono"
+        ><span class="sent">&gt; {{ hop.method }} {{ hop.requestTarget }} HTTP/1.1</span>
 <span v-for="([name, value], i) in hop.requestHeaders" :key="'q' + i" class="sent">&gt; {{ name }}: {{ value }}</span>
 <span v-if="hop.requestBodyBytes" class="sent">&gt; <em>[{{ bytes(hop.requestBodyBytes) }} of body]</em></span>
 <span class="recv">&lt; HTTP/{{ hop.httpVersion }} {{ hop.status }} {{ hop.statusText }}</span>
@@ -275,10 +282,22 @@ h3 .mono {
   border: 1px solid var(--border-strong);
 }
 
-.chip.green { color: var(--green); border-color: var(--green-border); }
-.chip.amber { color: var(--amber); border-color: var(--amber-border); }
-.chip.red { color: var(--red); border-color: var(--red-border); }
-.chip.purple { color: var(--purple); border-color: var(--purple-border); }
+.chip.green {
+  color: var(--green);
+  border-color: var(--green-border);
+}
+.chip.amber {
+  color: var(--amber);
+  border-color: var(--amber-border);
+}
+.chip.red {
+  color: var(--red);
+  border-color: var(--red-border);
+}
+.chip.purple {
+  color: var(--purple);
+  border-color: var(--purple-border);
+}
 
 .fact {
   font-size: 12px;
@@ -329,11 +348,21 @@ h3 .mono {
   border-radius: 2px;
 }
 
-.dns { background: var(--purple); }
-.connect { background: var(--accent); }
-.tls { background: var(--green); }
-.waiting { background: var(--amber); }
-.download { background: var(--text-faint); }
+.dns {
+  background: var(--purple);
+}
+.connect {
+  background: var(--accent);
+}
+.tls {
+  background: var(--green);
+}
+.waiting {
+  background: var(--amber);
+}
+.download {
+  background: var(--text-faint);
+}
 
 /* Sub-sections ---------------------------------------------------------- */
 

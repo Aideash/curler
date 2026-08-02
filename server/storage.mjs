@@ -17,7 +17,7 @@ export async function readWorkspace() {
     return await fs.readFile(WORKSPACE_FILE, 'utf8')
   } catch (error) {
     if (error.code === 'ENOENT') return null
-    throw new Error(`Could not read ${WORKSPACE_FILE}: ${error.message}`)
+    throw new Error(`Could not read ${WORKSPACE_FILE}: ${error.message}`, { cause: error })
   }
 }
 
@@ -96,11 +96,10 @@ async function backup(incoming) {
   for (;;) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     try {
-      await fs.writeFile(
-        path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`),
-        current,
-        { encoding: 'utf8', flag: 'wx' },
-      )
+      await fs.writeFile(path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`), current, {
+        encoding: 'utf8',
+        flag: 'wx',
+      })
       break
     } catch (error) {
       if (error.code !== 'EEXIST') throw error

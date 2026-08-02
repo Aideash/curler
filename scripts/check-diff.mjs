@@ -39,11 +39,7 @@ function response(partial = {}) {
 
 group('normalizeJson')
 
-expect(
-  'key order stops mattering',
-  normalizeJson('{"b":1,"a":2}'),
-  normalizeJson('{"a":2,"b":1}'),
-)
+expect('key order stops mattering', normalizeJson('{"b":1,"a":2}'), normalizeJson('{"a":2,"b":1}'))
 
 expect(
   'nested objects are sorted too',
@@ -75,11 +71,7 @@ group('diffLines')
 
 const identical = diffLines('a\nb\nc', 'a\nb\nc')
 expect('identical text reports identical', identical.identical, true)
-expect('identical text is all same rows', shape(identical), [
-  'same a|a',
-  'same b|b',
-  'same c|c',
-])
+expect('identical text is all same rows', shape(identical), ['same a|a', 'same b|b', 'same c|c'])
 expect('identical text has no changes in the summary', identical.summary, {
   same: 3,
   added: 0,
@@ -96,11 +88,7 @@ expect('an inserted line is added, not changed', shape(inserted), [
 expect('an insert is not identical', inserted.identical, false)
 
 const deleted = diffLines('a\nb\nc', 'a\nc')
-expect('a deleted line is removed', shape(deleted), [
-  'same a|a',
-  'removed b|',
-  'same c|c',
-])
+expect('a deleted line is removed', shape(deleted), ['same a|a', 'removed b|', 'same c|c'])
 
 const modified = diffLines('a\nb\nc', 'a\nB\nc')
 expect('a modified line pairs into one changed row', shape(modified), [
@@ -125,11 +113,11 @@ expect('the added remainder follows the paired rows', shape(grown), [
   'same d|d',
 ])
 
-expect('line numbers track each side independently', deleted.rows.map((r) => `${r.leftNo ?? '-'}:${r.rightNo ?? '-'}`), [
-  '1:1',
-  '2:-',
-  '3:2',
-])
+expect(
+  'line numbers track each side independently',
+  deleted.rows.map((r) => `${r.leftNo ?? '-'}:${r.rightNo ?? '-'}`),
+  ['1:1', '2:-', '3:2'],
+)
 
 const fromEmpty = diffLines('', 'a\nb')
 expect('everything is added when the left side is empty', shape(fromEmpty), [
@@ -246,32 +234,46 @@ expect('timing is reported', meta.Time.values, ['10 ms', '900 ms'])
 expect('but timing is never flagged as a difference', meta.Time.differs, false)
 
 const partial = compareMeta([response({ status: 200 }), null])
-expect(
-  'a lane with no response yet contributes null, not a false difference',
-  partial[0].values,
-  ['200 OK', null],
-)
+expect('a lane with no response yet contributes null, not a false difference', partial[0].values, [
+  '200 OK',
+  null,
+])
 expect('and one value alone cannot differ', partial[0].differs, false)
 
-expect('three lanes agreeing is not a difference', compareMeta([
-  response({ status: 200 }),
-  response({ status: 200 }),
-  response({ status: 200 }),
-])[0].differs, false)
+expect(
+  'three lanes agreeing is not a difference',
+  compareMeta([response({ status: 200 }), response({ status: 200 }), response({ status: 200 })])[0]
+    .differs,
+  false,
+)
 
-expect('one lane out of three differing is', compareMeta([
-  response({ status: 200 }),
-  response({ status: 200 }),
-  response({ status: 500, statusText: 'Server Error' }),
-])[0].differs, true)
+expect(
+  'one lane out of three differing is',
+  compareMeta([
+    response({ status: 200 }),
+    response({ status: 200 }),
+    response({ status: 500, statusText: 'Server Error' }),
+  ])[0].differs,
+  true,
+)
 
 /* Headers ---------------------------------------------------------------- */
 
 group('compareHeaders')
 
 const headerRows = compareHeaders([
-  response({ headers: [['Content-Type', 'application/json'], ['X-Only-Left', '1']] }),
-  response({ headers: [['content-type', 'application/json'], ['X-Only-Right', '2']] }),
+  response({
+    headers: [
+      ['Content-Type', 'application/json'],
+      ['X-Only-Left', '1'],
+    ],
+  }),
+  response({
+    headers: [
+      ['content-type', 'application/json'],
+      ['X-Only-Right', '2'],
+    ],
+  }),
 ])
 const headers = Object.fromEntries(headerRows.map((row) => [row.label, row]))
 
@@ -279,11 +281,11 @@ expect('header names are compared case-insensitively', headers['content-type'].d
 expect('names are lowercased for display', Object.keys(headers).includes('Content-Type'), false)
 expect('a header only one side sent is present as null', headers['x-only-left'].values, ['1', null])
 expect('and is not counted as a difference on its own', headers['x-only-left'].differs, false)
-expect('names come out sorted', headerRows.map((row) => row.label), [
-  'content-type',
-  'x-only-left',
-  'x-only-right',
-])
+expect(
+  'names come out sorted',
+  headerRows.map((row) => row.label),
+  ['content-type', 'x-only-left', 'x-only-right'],
+)
 
 const differing = compareHeaders([
   response({ headers: [['etag', 'aaa']] }),
@@ -292,7 +294,12 @@ const differing = compareHeaders([
 expect('a header with two different values is flagged', differing[0].differs, true)
 
 const repeated = compareHeaders([
-  response({ headers: [['set-cookie', 'a=1'], ['set-cookie', 'b=2']] }),
+  response({
+    headers: [
+      ['set-cookie', 'a=1'],
+      ['set-cookie', 'b=2'],
+    ],
+  }),
   response({ headers: [['set-cookie', 'a=1']] }),
 ])
 expect('repeated header names are joined rather than dropped', repeated[0].values, [

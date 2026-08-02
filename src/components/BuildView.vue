@@ -7,7 +7,12 @@ import CurlImportDialog from './CurlImportDialog.vue'
 import VariablesDialog from './VariablesDialog.vue'
 import ModalShell from './ModalShell.vue'
 import ThemePicker from './ThemePicker.vue'
-import { toCurl } from '../lib/curl'
+import {
+  toCurl,
+  variablesForCurlCopy,
+  pathVariablesForCurlCopy,
+  type CurlCopyMode,
+} from '../lib/curl'
 import { copyText } from '../lib/clipboard'
 import { performSend } from '../lib/send'
 import { startComparison } from '../lib/compare'
@@ -83,15 +88,22 @@ async function send() {
   }
 }
 
-async function copyAsCurl(resolved: boolean) {
+async function copyAsCurl(mode: CurlCopyMode) {
+  const set = variableSet.value
   const command = toCurl(
     currentRequest.value,
-    resolved ? variables.value : undefined,
-    variables.value,
+    variablesForCurlCopy(set, mode),
+    pathVariablesForCurlCopy(set, mode),
   )
   try {
     await copyText(command)
-    flash(resolved ? 'Copied, variables resolved' : 'Copied with placeholders')
+    const message =
+      mode === 'ready'
+        ? 'Copied, variables resolved'
+        : mode === 'shareable'
+          ? 'Copied, secrets left as placeholders'
+          : 'Copied with placeholders'
+    flash(message)
   } catch (caught) {
     flash(`Copy failed: ${caught instanceof Error ? caught.message : String(caught)}`, 'error')
   }

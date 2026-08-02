@@ -1,11 +1,6 @@
 import { reactive } from 'vue'
 import { newRequest, uid, type Environment, type RequestModel } from '../types'
-import {
-  buildVariableSet,
-  collectionOfRequest,
-  environmentById,
-  state,
-} from './store'
+import { buildVariableSet, collectionOfRequest, environmentById, state } from './store'
 import { performSend, type SendOutcome } from './send'
 import type { VariableSet } from './vars'
 
@@ -119,10 +114,7 @@ export function seedLane(id: string, requestId: string) {
  * since carrying stale lanes into a new one only causes confusion.
  */
 export function startComparison(request: RequestModel, sourceRequestId: string | null) {
-  compare.lanes = [
-    makeLane(request, sourceRequestId),
-    makeLane(request, sourceRequestId),
-  ]
+  compare.lanes = [makeLane(request, sourceRequestId), makeLane(request, sourceRequestId)]
   relabel()
 }
 

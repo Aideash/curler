@@ -8,7 +8,6 @@ import { performRequest } from './client.mjs'
 import {
   copySecret,
   deleteSecret,
-  getSecret,
   readSecrets,
   readWorkspaceMeta,
   requireWorkspaceId,

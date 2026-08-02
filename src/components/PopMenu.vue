@@ -62,18 +62,25 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
 }
 
+function onScroll(event: Event) {
+  if (!open.value) return
+  const target = event.target as Node
+  if (panel.value?.contains(target)) return
+  close()
+}
+
 onMounted(() => {
   window.addEventListener('mousedown', onPointerDown, true)
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', close)
-  window.addEventListener('scroll', close, true)
+  window.addEventListener('scroll', onScroll, true)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('mousedown', onPointerDown, true)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', close)
-  window.removeEventListener('scroll', close, true)
+  window.removeEventListener('scroll', onScroll, true)
 })
 
 defineExpose({ close })

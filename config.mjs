@@ -66,9 +66,7 @@ export function resolveWorkspaceHome(env = process.env) {
   if (!override) return path.join(os.homedir(), '.curler')
 
   // A .env is not read by a shell, so a leading ~ arrives literally.
-  const expanded = override.startsWith('~/')
-    ? path.join(os.homedir(), override.slice(2))
-    : override
+  const expanded = override.startsWith('~/') ? path.join(os.homedir(), override.slice(2)) : override
 
   return path.resolve(expanded)
 }

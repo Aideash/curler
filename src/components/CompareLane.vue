@@ -6,6 +6,7 @@ import { copyText } from '../lib/clipboard'
 import { formatBytes, isJsonResponse, prettyBody, statusClass } from '../lib/response'
 import { normalizeJson } from '../lib/diff'
 import {
+  compare,
   duplicateLane,
   laneEnvironment,
   laneIsStale,
@@ -15,7 +16,7 @@ import {
   type Lane,
 } from '../lib/compare'
 import { state } from '../lib/store'
-import { HTTP_METHODS } from '../types'
+import { HTTP_METHODS, type HttpMethod } from '../types'
 
 const props = defineProps<{
   lane: Lane
@@ -70,6 +71,20 @@ async function copyBody() {
     copied.value = false
   }
 }
+
+function laneById() {
+  return compare.lanes.find((item) => item.id === props.lane.id)
+}
+
+function setMethod(method: HttpMethod) {
+  const found = laneById()
+  if (found) found.request.method = method
+}
+
+function setUrl(url: string) {
+  const found = laneById()
+  if (found) found.request.url = url
+}
 </script>
 
 <template>
@@ -79,20 +94,22 @@ async function copyBody() {
 
       <select
         :id="`${idStem}-method`"
-        v-model="lane.request.method"
+        :value="lane.request.method"
         class="method mono"
         :class="lane.request.method.toLowerCase()"
         title="Method"
+        @input="setMethod(($event.target as HTMLSelectElement).value as HttpMethod)"
       >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">{{ method }}</option>
       </select>
 
       <input
         :id="`${idStem}-url`"
-        v-model="lane.request.url"
+        :value="lane.request.url"
         class="url mono"
         placeholder="${BASE_URL}/things"
         spellcheck="false"
+        @input="setUrl(($event.target as HTMLInputElement).value)"
         @keydown.enter="sendLane(lane.id)"
       />
 
@@ -117,11 +134,7 @@ async function copyBody() {
       <PopMenu icon="more_vert" :title="`Lane ${lane.label} actions`" :width="300">
         <template #default="{ close }">
           <div class="menu-section">This lane</div>
-          <button
-            class="menu-item"
-            :disabled="!canAdd"
-            @click="duplicateLane(lane.id), close()"
-          >
+          <button class="menu-item" :disabled="!canAdd" @click="(duplicateLane(lane.id), close())">
             <span class="menu-label">Duplicate into a new lane</span>
             <span class="menu-desc">
               {{ canAdd ? 'Same request, ready for one change' : 'The lane limit is reached' }}
@@ -130,7 +143,7 @@ async function copyBody() {
           <button
             class="menu-item danger"
             :disabled="laneCount <= 2"
-            @click="removeLane(lane.id), close()"
+            @click="(removeLane(lane.id), close())"
           >
             <span class="menu-label">Remove lane</span>
             <span class="menu-desc">
@@ -144,7 +157,7 @@ async function copyBody() {
               v-for="request in collection.requests"
               :key="request.id"
               class="menu-item"
-              @click="seedLane(lane.id, request.id), close()"
+              @click="(seedLane(lane.id, request.id), close())"
             >
               <span class="menu-label">{{ request.name }}</span>
               <span class="menu-desc mono">{{ collection.name }}</span>
@@ -169,7 +182,11 @@ async function copyBody() {
       <span v-else-if="error" class="chip red">{{ lane.outcome?.errorChip }}</span>
       <span v-else class="faint">Not sent</span>
 
-      <span v-if="stale" class="stale" title="This lane has been edited since this response arrived">
+      <span
+        v-if="stale"
+        class="stale"
+        title="This lane has been edited since this response arrived"
+      >
         <span class="material-icons sm">history</span>
         Stale
       </span>
@@ -208,9 +225,7 @@ async function copyBody() {
         <p>{{ error }}</p>
       </div>
 
-      <div v-else-if="!response" class="placeholder faint">
-        Send this lane to see its response.
-      </div>
+      <div v-else-if="!response" class="placeholder faint">Send this lane to see its response.</div>
 
       <p v-else-if="response.bodyIsBinary" class="placeholder faint">{{ response.body }}</p>
       <p v-else-if="!response.body" class="placeholder faint">Empty response body.</p>
@@ -271,13 +286,27 @@ async function copyBody() {
   padding: 5px 6px;
 }
 
-.method.get { color: var(--green); }
-.method.post { color: var(--accent); }
-.method.put { color: var(--amber); }
-.method.patch { color: var(--purple); }
-.method.delete { color: var(--red); }
-.method.options { color: var(--cyan); }
-.method.trace { color: var(--pink); }
+.method.get {
+  color: var(--green);
+}
+.method.post {
+  color: var(--accent);
+}
+.method.put {
+  color: var(--amber);
+}
+.method.patch {
+  color: var(--purple);
+}
+.method.delete {
+  color: var(--red);
+}
+.method.options {
+  color: var(--cyan);
+}
+.method.trace {
+  color: var(--pink);
+}
 
 .url {
   flex: 1;
@@ -324,11 +353,25 @@ async function copyBody() {
   white-space: nowrap;
 }
 
-.chip.green { color: var(--green); border-color: var(--green-border); }
-.chip.amber { color: var(--amber); border-color: var(--amber-border); }
-.chip.red { color: var(--red); border-color: var(--red-border); }
-.chip.purple { color: var(--purple); border-color: var(--purple-border); }
-.chip.dim { color: var(--text-dim); }
+.chip.green {
+  color: var(--green);
+  border-color: var(--green-border);
+}
+.chip.amber {
+  color: var(--amber);
+  border-color: var(--amber-border);
+}
+.chip.red {
+  color: var(--red);
+  border-color: var(--red-border);
+}
+.chip.purple {
+  color: var(--purple);
+  border-color: var(--purple-border);
+}
+.chip.dim {
+  color: var(--text-dim);
+}
 
 .metric {
   font-family: var(--mono);

@@ -37,9 +37,7 @@ function describeCertificate(socket) {
     validTo: certificate.valid_to ?? null,
     altNames: certificate.subjectaltname ?? null,
     authorized: socket.authorized === true,
-    authorizationError: socket.authorizationError
-      ? String(socket.authorizationError)
-      : null,
+    authorizationError: socket.authorizationError ? String(socket.authorizationError) : null,
   }
 }
 
@@ -172,8 +170,15 @@ function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes
         reject(new Error(`Could not resolve host "${target.hostname}".`))
       } else if (error.code === 'ECONNREFUSED') {
         reject(new Error(`Connection refused by ${target.host}.`))
-      } else if (error.code === 'DEPTH_ZERO_SELF_SIGNED_CERT' || error.code === 'SELF_SIGNED_CERT_IN_CHAIN') {
-        reject(new Error('The server presented a self-signed certificate. Enable "Skip TLS verify" to accept it.'))
+      } else if (
+        error.code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+        error.code === 'SELF_SIGNED_CERT_IN_CHAIN'
+      ) {
+        reject(
+          new Error(
+            'The server presented a self-signed certificate. Enable "Skip TLS verify" to accept it.',
+          ),
+        )
       } else {
         reject(error)
       }
@@ -250,8 +255,7 @@ export async function performRequest(spec) {
     else headers[name] = [headers[name], value]
   }
 
-  const has = (name) =>
-    Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
+  const has = (name) => Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
 
   if (!has('accept')) headers.Accept = '*/*'
   if (!has('user-agent')) headers['User-Agent'] = 'curler/0.1'
@@ -313,7 +317,10 @@ export async function performRequest(spec) {
 
       // 303 always becomes GET; 301 and 302 do so for anything that is not GET/HEAD,
       // which is what curl -L and every browser actually do in practice.
-      if (result.status === 303 || (method !== 'GET' && method !== 'HEAD' && result.status !== 307 && result.status !== 308)) {
+      if (
+        result.status === 303 ||
+        (method !== 'GET' && method !== 'HEAD' && result.status !== 307 && result.status !== 308)
+      ) {
         method = 'GET'
         payload = null
         delete headers['Content-Length']

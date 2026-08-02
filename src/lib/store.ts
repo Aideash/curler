@@ -8,7 +8,15 @@ import {
   type KeyValue,
   type RequestModel,
 } from '../types'
-import { readBuiltins, readSecrets, readWorkspace, writeSecret, writeWorkspace, deleteSecret, copySecret } from './backend'
+import {
+  readBuiltins,
+  readSecrets,
+  readWorkspace,
+  writeSecret,
+  writeWorkspace,
+  deleteSecret,
+  copySecret,
+} from './backend'
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
 
 interface State {
@@ -81,9 +89,7 @@ function defaultWorkspace() {
   const environment: Environment = {
     id: uid(),
     name: 'Local',
-    variables: [
-      { id: uid(), name: 'BASE_URL', value: 'http://localhost:8080', enabled: true },
-    ],
+    variables: [{ id: uid(), name: 'BASE_URL', value: 'http://localhost:8080', enabled: true }],
   }
   state.collections = [{ id: uid(), name: 'My requests', requests: [], variables: [] }]
   state.environments = [environment]

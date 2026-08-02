@@ -43,9 +43,7 @@ function swatch(id: string) {
             <span class="theme-option__name">System default</span>
             <span class="theme-option__hint">{{ systemLabel }}</span>
           </span>
-          <span v-if="preference === systemPreference" class="material-icons sm tick">
-            check
-          </span>
+          <span v-if="preference === systemPreference" class="material-icons sm tick"> check </span>
         </button>
 
         <div class="theme-menu__rule" />

@@ -41,8 +41,8 @@ function confirm() {
     />
 
     <p class="hint faint">
-      Shell variables such as <code>$API_KEY</code> are kept as curler variables, so they
-      resolve from the active environment instead of being expanded now.
+      Shell variables such as <code>$API_KEY</code> are kept as curler variables, so they resolve
+      from the active environment instead of being expanded now.
     </p>
 
     <div v-if="preview?.request" class="preview">
@@ -72,9 +72,7 @@ function confirm() {
 
     <template #footer>
       <button @click="emit('close')">Cancel</button>
-      <button class="primary" :disabled="!preview?.request?.url" @click="confirm">
-        Import
-      </button>
+      <button class="primary" :disabled="!preview?.request?.url" @click="confirm">Import</button>
     </template>
   </ModalShell>
 </template>

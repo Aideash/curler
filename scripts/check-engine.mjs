@@ -23,11 +23,21 @@ function selfSignedCertificate() {
     execFileSync(
       'openssl',
       [
-        'req', '-x509', '-newkey', 'rsa:2048',
-        '-keyout', key, '-out', cert,
-        '-days', '1', '-nodes',
-        '-subj', '/CN=localhost/O=Curler Test',
-        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+        '-days',
+        '1',
+        '-nodes',
+        '-subj',
+        '/CN=localhost/O=Curler Test',
+        '-addext',
+        'subjectAltName=DNS:localhost,IP:127.0.0.1',
       ],
       { stdio: 'ignore' },
     )
@@ -183,7 +193,11 @@ if (!certificate) {
   } catch (error) {
     rejection = error.message
   }
-  h.expect('a self-signed certificate is refused by default', /self-signed/i.test(rejection ?? ''), true)
+  h.expect(
+    'a self-signed certificate is refused by default',
+    /self-signed/i.test(rejection ?? ''),
+    true,
+  )
   h.expect('and the message points at the fix', /Skip TLS verify/.test(rejection ?? ''), true)
 
   const accepted = await performRequest({
