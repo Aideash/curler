@@ -16,7 +16,7 @@ import {
   type Lane,
 } from '../lib/compare'
 import { state } from '../lib/store'
-import { HTTP_METHODS, type HttpMethod } from '../types'
+import { HTTP_METHODS, type HttpMethod, type RequestModel } from '../types'
 
 const props = defineProps<{
   lane: Lane
@@ -57,6 +57,27 @@ const sourceName = computed(() => {
   }
   return null
 })
+
+const requestFilter = ref('')
+
+const filteredSavedRequests = computed(() => {
+  const needle = requestFilter.value.trim().toLowerCase()
+  const results: { collectionName: string; request: RequestModel }[] = []
+  for (const collection of state.collections) {
+    for (const request of collection.requests) {
+      if (
+        !needle ||
+        request.name.toLowerCase().includes(needle) ||
+        collection.name.toLowerCase().includes(needle)
+      ) {
+        results.push({ collectionName: collection.name, request })
+      }
+    }
+  }
+  return results
+})
+
+const hasSavedRequests = computed(() => state.collections.some((c) => c.requests.length))
 
 const copied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -152,19 +173,26 @@ function setUrl(url: string) {
           </button>
 
           <div class="menu-section">Load a saved request</div>
-          <template v-for="collection in state.collections" :key="collection.id">
-            <button
-              v-for="request in collection.requests"
-              :key="request.id"
-              class="menu-item"
-              @click="(seedLane(lane.id, request.id), close())"
-            >
-              <span class="menu-label">{{ request.name }}</span>
-              <span class="menu-desc mono">{{ collection.name }}</span>
-            </button>
-          </template>
-          <div v-if="!state.collections.some((c) => c.requests.length)" class="menu-empty faint">
-            No saved requests yet.
+          <input
+            v-if="hasSavedRequests"
+            v-model="requestFilter"
+            class="menu-filter"
+            type="search"
+            placeholder="Filter requests…"
+            @keydown.stop
+          />
+          <button
+            v-for="{ collectionName, request } in filteredSavedRequests"
+            :key="request.id"
+            class="menu-item"
+            @click="(seedLane(lane.id, request.id), close())"
+          >
+            <span class="menu-label">{{ request.name }}</span>
+            <span class="menu-desc mono">{{ collectionName }}</span>
+          </button>
+          <div v-if="!hasSavedRequests" class="menu-empty faint">No saved requests yet.</div>
+          <div v-else-if="!filteredSavedRequests.length" class="menu-empty faint">
+            No matching requests.
           </div>
         </template>
       </PopMenu>
@@ -484,6 +512,18 @@ function setUrl(url: string) {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
+}
+
+.menu-filter {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 0 10px 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12.5px;
 }
 
 .menu-item {
