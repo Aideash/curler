@@ -4,6 +4,7 @@ import type { GraphQLSchema } from 'graphql'
 import CodeEditor from './CodeEditor.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import GraphqlSchemaExplorer from './GraphqlSchemaExplorer.vue'
+import SkipLinks from './SkipLinks.vue'
 import ThemePicker from './ThemePicker.vue'
 import TitleBar from './TitleBar.vue'
 import TitleBarButton from './TitleBarButton.vue'
@@ -117,6 +118,12 @@ function cancel() {
 
 <template>
   <div v-if="draft" class="graphql-builder">
+    <SkipLinks
+      :links="[
+        { targetId: 'graphql-explorer', label: 'Skip to schema explorer' },
+        { targetId: 'graphql-editor', label: 'Skip to query editor' },
+      ]"
+    />
     <TitleBar>
       <TitleBarButton
         back
@@ -153,7 +160,7 @@ function cancel() {
     <p v-if="builderError" class="banner error">{{ builderError }}</p>
 
     <div class="workspace">
-      <aside class="explorer-pane">
+      <aside id="graphql-explorer" class="explorer-pane" tabindex="-1">
         <div class="pane-toolbar">
           <input
             v-model="schemaFilter"
@@ -175,7 +182,7 @@ function cancel() {
         </div>
       </aside>
 
-      <main class="editor-pane">
+      <main id="graphql-editor" class="editor-pane" tabindex="-1">
         <div class="pane-head">
           <span class="section-label">Query</span>
           <div class="pane-head-right">
@@ -261,6 +268,12 @@ function cancel() {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.explorer-pane:focus-visible,
+.editor-pane:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: -2px;
 }
 
 .pane-toolbar {

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CompareLane from './CompareLane.vue'
 import DiffView from './DiffView.vue'
 import RequestPanel from './RequestPanel.vue'
+import SkipLinks from './SkipLinks.vue'
 import ModalShell from './ModalShell.vue'
 import ThemePicker from './ThemePicker.vue'
 import TitleBar from './TitleBar.vue'
@@ -166,6 +167,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="compare">
+    <SkipLinks
+      :links="[
+        { targetId: 'compare-toolbar', label: 'Skip to compare tabs' },
+        { targetId: 'compare-content', label: 'Skip to compare results' },
+      ]"
+    />
     <TitleBar>
       <TitleBarButton
         back
@@ -205,7 +212,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <ThemePicker />
     </TitleBar>
 
-    <div class="toolbar">
+    <div id="compare-toolbar" class="toolbar" tabindex="-1">
       <div class="tabs">
         <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
           Body
@@ -271,69 +278,71 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </div>
     </div>
 
-    <!-- Body, as a diff ------------------------------------------------- -->
-    <DiffView
-      v-if="tab === 'body' && diff && diffReady"
-      :left="bodyFor(leftLane)"
-      :right="bodyFor(rightLane)"
-      :left-label="`${leftLane?.label} ${leftLane?.request.url || 'lane'}`"
-      :right-label="`${rightLane?.label} ${rightLane?.request.url || 'lane'}`"
-      :normalize="normalize"
-    />
-
-    <div v-else-if="tab === 'body' && diff" class="placeholder faint">
-      Send both lanes to see a diff. Until then, turn Diff off to work on them side by side.
-    </div>
-
-    <!-- Body, side by side --------------------------------------------- -->
-    <div v-else-if="tab === 'body'" class="lanes">
-      <CompareLane
-        v-for="lane in lanes"
-        :key="lane.id"
-        :lane="lane"
-        :lane-count="lanes.length"
+    <div id="compare-content" class="compare-content" tabindex="-1">
+      <!-- Body, as a diff ------------------------------------------------- -->
+      <DiffView
+        v-if="tab === 'body' && diff && diffReady"
+        :left="bodyFor(leftLane)"
+        :right="bodyFor(rightLane)"
+        :left-label="`${leftLane?.label} ${leftLane?.request.url || 'lane'}`"
+        :right-label="`${rightLane?.label} ${rightLane?.request.url || 'lane'}`"
         :normalize="normalize"
-        :can-add="canAdd"
-        @edit="editingId = lane.id"
       />
-    </div>
 
-    <!-- Headers and meta ------------------------------------------------ -->
-    <div v-else class="table-wrap">
-      <div class="table">
-        <div class="table-head" :style="columns">
-          <div class="cell label-cell">{{ tab === 'meta' ? 'Property' : 'Header' }}</div>
-          <div v-for="lane in lanes" :key="lane.id" class="cell">
-            <span class="label">{{ lane.label }}</span>
-            <span class="col-url mono faint" :title="lane.request.url">{{
-              lane.request.url || '—'
-            }}</span>
-          </div>
-        </div>
+      <div v-else-if="tab === 'body' && diff" class="placeholder faint">
+        Send both lanes to see a diff. Until then, turn Diff off to work on them side by side.
+      </div>
 
-        <div
-          v-for="row in tab === 'meta' ? metaRows : headerRows"
-          :key="row.label"
-          class="table-row"
-          :class="{ differs: row.differs }"
-          :style="columns"
-        >
-          <div class="cell label-cell mono">
-            <span v-if="row.differs" class="material-icons sm dot">chevron_right</span>
-            {{ row.label }}
-          </div>
-          <div v-for="(value, index) in row.values" :key="index" class="cell mono value">
-            <span v-if="value === null" class="faint absent">absent</span>
-            <template v-else>{{ value }}</template>
-          </div>
-        </div>
+      <!-- Body, side by side --------------------------------------------- -->
+      <div v-else-if="tab === 'body'" class="lanes">
+        <CompareLane
+          v-for="lane in lanes"
+          :key="lane.id"
+          :lane="lane"
+          :lane-count="lanes.length"
+          :normalize="normalize"
+          :can-add="canAdd"
+          @edit="editingId = lane.id"
+        />
+      </div>
 
-        <div v-if="!(tab === 'meta' ? metaRows : headerRows).length" class="placeholder faint">
-          {{
-            responses.some((response) => response)
-              ? 'No differences here.'
-              : 'Send the lanes to compare them.'
-          }}
+      <!-- Headers and meta ------------------------------------------------ -->
+      <div v-else class="table-wrap">
+        <div class="table">
+          <div class="table-head" :style="columns">
+            <div class="cell label-cell">{{ tab === 'meta' ? 'Property' : 'Header' }}</div>
+            <div v-for="lane in lanes" :key="lane.id" class="cell">
+              <span class="label">{{ lane.label }}</span>
+              <span class="col-url mono faint" :title="lane.request.url">{{
+                lane.request.url || '—'
+              }}</span>
+            </div>
+          </div>
+
+          <div
+            v-for="row in tab === 'meta' ? metaRows : headerRows"
+            :key="row.label"
+            class="table-row"
+            :class="{ differs: row.differs }"
+            :style="columns"
+          >
+            <div class="cell label-cell mono">
+              <span v-if="row.differs" class="material-icons sm dot">chevron_right</span>
+              {{ row.label }}
+            </div>
+            <div v-for="(value, index) in row.values" :key="index" class="cell mono value">
+              <span v-if="value === null" class="faint absent">absent</span>
+              <template v-else>{{ value }}</template>
+            </div>
+          </div>
+
+          <div v-if="!(tab === 'meta' ? metaRows : headerRows).length" class="placeholder faint">
+            {{
+              responses.some((response) => response)
+                ? 'No differences here.'
+                : 'Send the lanes to compare them.'
+            }}
+          </div>
         </div>
       </div>
     </div>
@@ -409,6 +418,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 12px;
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.toolbar:focus-visible,
+.compare-content:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: -2px;
+}
+
+.compare-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .tabs {

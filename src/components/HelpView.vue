@@ -322,11 +322,16 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
                 <td><kbd>Esc</kbd></td>
                 <td>Close the open dialog</td>
               </tr>
+              <tr>
+                <td><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></td>
+                <td>Clear focus and jump back to the skip links</td>
+              </tr>
             </tbody>
           </table>
           <p class="faint">
             Inside a lane’s editor in Compare, <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>
-            sends that lane alone.
+            sends that lane alone. On the builder, tabbing in lands on skip links first — use them
+            to jump straight to the request or response panel.
           </p>
         </section>
 

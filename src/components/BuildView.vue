@@ -7,6 +7,7 @@ import CurlImportDialog from './CurlImportDialog.vue'
 import VariablesDialog from './VariablesDialog.vue'
 import ModalShell from './ModalShell.vue'
 import ThemePicker from './ThemePicker.vue'
+import SkipLinks from './SkipLinks.vue'
 import TitleBar from './TitleBar.vue'
 import TitleBarButton from './TitleBarButton.vue'
 import {
@@ -192,6 +193,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="app">
+    <SkipLinks
+      :links="[
+        { targetId: 'request-panel', label: 'Skip to request' },
+        { targetId: 'response-panel', label: 'Skip to response' },
+      ]"
+    />
     <BuildSidebar @manage-variables="openVariables" />
 
     <main class="main">

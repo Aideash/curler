@@ -222,7 +222,7 @@ const flagPreview = computed(() =>
 </script>
 
 <template>
-  <section class="request">
+  <section id="request-panel" class="request" tabindex="-1">
     <div class="url-bar">
       <select
         id="request-method"
@@ -657,6 +657,11 @@ const flagPreview = computed(() =>
   flex-direction: column;
   min-height: 0;
   border-bottom: 1px solid var(--border);
+}
+
+.request:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: -2px;
 }
 
 .url-bar {

@@ -7,6 +7,7 @@ const props = defineProps<{
   parentPath: string[]
   depth: number
   expanded: Set<string>
+  insertModeOn: boolean
   visibleFields: (op: RootOperation, path: string[]) => SchemaFieldNode[]
   isExpanded: (op: RootOperation, path: string[]) => boolean
 }>()
@@ -20,6 +21,15 @@ const fields = computed(() => props.visibleFields(props.operation, props.parentP
 
 function childPath(fieldName: string) {
   return [...props.parentPath, fieldName]
+}
+
+function mainHandler(operation: RootOperation, parentPath: string[], field: SchemaFieldNode) {
+  if (field.composite && !props.isExpanded(operation, childPath(field.name))) {
+    emit('toggle', operation, childPath(field.name))
+  }
+  if (props.insertModeOn) {
+    emit('insert', operation, parentPath, field.name)
+  }
 }
 </script>
 
@@ -43,7 +53,7 @@ function childPath(fieldName: string) {
           type="button"
           class="ghost field-btn"
           :title="field.description || field.name"
-          @click="emit('insert', operation, parentPath, field.name)"
+          @click="mainHandler(operation, parentPath, field)"
         >
           <span class="field-name">{{ field.name }}</span>
           <span class="field-meta faint">{{ field.argsSummary }}: {{ field.typeLabel }}</span>
@@ -57,6 +67,7 @@ function childPath(fieldName: string) {
         :expanded="expanded"
         :visible-fields="visibleFields"
         :is-expanded="isExpanded"
+        :insert-mode-on="insertModeOn"
         @toggle="(op, path) => emit('toggle', op, path)"
         @insert="(op, path, name) => emit('insert', op, path, name)"
       />

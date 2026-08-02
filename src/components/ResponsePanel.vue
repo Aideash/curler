@@ -72,7 +72,7 @@ watch(
 </script>
 
 <template>
-  <section class="response">
+  <section id="response-panel" class="response" tabindex="-1">
     <div class="status-bar">
       <template v-if="response">
         <span class="chip" :class="statusClass">
@@ -201,6 +201,11 @@ input {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+.response:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: -2px;
 }
 
 /*
