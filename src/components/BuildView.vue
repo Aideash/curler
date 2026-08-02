@@ -16,6 +16,7 @@ import {
 import { copyText } from '../lib/clipboard'
 import { performSend } from '../lib/send'
 import { startComparison } from '../lib/compare'
+import { openFromRequest } from '../lib/graphqlBuilder'
 import { navigate } from '../composables/useRoute'
 import { describeIssues, resolveRequest, type BuildTrace } from '../lib/vars'
 import {
@@ -29,6 +30,7 @@ import {
   variableSet,
 } from '../lib/store'
 import type { EditableScope, HttpResponse, RequestModel } from '../types'
+import { uid } from '../types'
 
 const sending = ref(false)
 const response = ref<HttpResponse | null>(null)
@@ -148,6 +150,28 @@ function openCompare() {
   navigate('compare')
 }
 
+function openGraphqlBuilder() {
+  const req = currentRequest.value
+  if (req.body.mode !== 'graphql') {
+    req.method = 'POST'
+    req.body.mode = 'graphql'
+    const ct = req.headers.find((h) => h.name.toLowerCase() === 'content-type')
+    if (ct) {
+      ct.value = 'application/json'
+      ct.enabled = true
+    } else {
+      req.headers.push({
+        id: uid(),
+        name: 'Content-Type',
+        value: 'application/json',
+        enabled: true,
+      })
+    }
+  }
+  openFromRequest(req)
+  navigate('graphql')
+}
+
 function onKeydown(event: KeyboardEvent) {
   const meta = event.metaKey || event.ctrlKey
   if (meta && event.key === 'Enter') {
@@ -200,6 +224,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           {{ toast }}
         </span>
         <button
+          v-if="currentRequest.body.mode === 'graphql'"
+          class="ghost"
+          title="Open the GraphQL query builder"
+          @click="openGraphqlBuilder"
+        >
+          <span class="material-icons sm">account_tree</span>
+          GraphQL
+        </button>
+        <button
           class="ghost"
           title="Compare this request against itself in another environment, or against another request"
           @click="openCompare"
@@ -229,11 +262,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <RequestPanel
         :request="currentRequest"
         :variables="variables"
+        :variable-set="variableSet"
+        :environment-name="activeEnvironment?.name ?? 'none'"
+        :graphql-tools="true"
         :sending="sending"
         @send="send"
         @import-curl="showImport = true"
         @copy-curl="copyAsCurl"
         @manage-variables="openVariables('collection')"
+        @open-graphql-builder="openGraphqlBuilder"
       />
 
       <ResponsePanel

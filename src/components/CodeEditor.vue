@@ -6,8 +6,10 @@ import { Compartment, EditorState, Prec, type Extension } from '@codemirror/stat
 import { EditorView, placeholder as placeholderExt } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
-import { graphqlLanguageSupport } from 'cm6-graphql'
-import { linter, lintGutter } from '@codemirror/lint'
+import { graphql, graphqlLanguageSupport, updateSchema } from 'cm6-graphql'
+import { linter, lintGutter, type Diagnostic } from '@codemirror/lint'
+import type { GraphQLSchema } from 'graphql'
+import { firstErrorMessage, validateSyntax } from '../lib/graphqlValidate'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
@@ -19,8 +21,10 @@ const props = withDefaults(
     placeholder?: string
     /** Tab indents; Esc then Tab leaves the editor. Off when readonly. */
     indentWithTab?: boolean
+    /** When set, GraphQL mode uses schema-aware lint and completion. */
+    schema?: GraphQLSchema | null
   }>(),
-  { language: 'text', readonly: false, placeholder: '', indentWithTab: true },
+  { language: 'text', readonly: false, placeholder: '', indentWithTab: true, schema: null },
 )
 
 const emit = defineEmits<{
@@ -78,9 +82,33 @@ const highlighting = HighlightStyle.define([
   { tag: tags.invalid, color: 'var(--red)' },
 ])
 
-function languageExtensions(): Extension {
+function graphqlSyntaxLinter() {
+  return linter((view): Diagnostic[] => {
+    const result = validateSyntax(view.state.doc.toString())
+    if (result.valid) return []
+    const err = result.errors[0]
+    if (!err) return []
+    try {
+      const line = view.state.doc.line(err.line)
+      const from = Math.max(line.from, Math.min(line.to, line.from + err.col - 1))
+      return [{ from, to: Math.min(from + 1, line.to), severity: 'error', message: err.message }]
+    } catch {
+      return [{ from: 0, to: 1, severity: 'error', message: err.message }]
+    }
+  })
+}
+
+function graphqlExtensions(): Extension[] {
+  if (props.schema) {
+    // cm6-graphql types target an older graphql release; runtime values match.
+    return [...graphql(props.schema as Parameters<typeof graphql>[0]), lintGutter()]
+  }
+  return [graphqlLanguageSupport(), graphqlSyntaxLinter(), lintGutter()]
+}
+
+function languageExtensions(): Extension[] {
   if (props.language === 'json') return [json(), linter(jsonParseLinter()), lintGutter()]
-  if (props.language === 'graphql') return [graphqlLanguageSupport()]
+  if (props.language === 'graphql') return graphqlExtensions()
   return []
 }
 
@@ -93,19 +121,33 @@ function tabIndentExtensions(): Extension[] {
  * document parses at all so the surrounding UI can react.
  */
 function reportValidity(text: string) {
-  if (props.language !== 'json' || text.trim() === '') {
-    emit('validity', { valid: true, message: '' })
+  if (props.language === 'json') {
+    if (text.trim() === '') {
+      emit('validity', { valid: true, message: '' })
+      return
+    }
+    try {
+      JSON.parse(text)
+      emit('validity', { valid: true, message: '' })
+    } catch (error) {
+      emit('validity', {
+        valid: false,
+        message: error instanceof Error ? error.message : 'Invalid JSON',
+      })
+    }
     return
   }
-  try {
-    JSON.parse(text)
-    emit('validity', { valid: true, message: '' })
-  } catch (error) {
+
+  if (props.language === 'graphql') {
+    const result = validateSyntax(text)
     emit('validity', {
-      valid: false,
-      message: error instanceof Error ? error.message : 'Invalid JSON',
+      valid: result.valid,
+      message: result.valid ? '' : firstErrorMessage(result),
     })
+    return
   }
+
+  emit('validity', { valid: true, message: '' })
 }
 
 onMounted(() => {
@@ -160,6 +202,19 @@ watch(
 )
 
 watch(
+  () => props.schema,
+  (schema, prev) => {
+    if (!view || props.language !== 'graphql') return
+    const hadSchema = Boolean(prev)
+    const hasSchema = Boolean(schema)
+    if (hadSchema !== hasSchema) {
+      view.dispatch({ effects: languageCompartment.reconfigure(graphqlExtensions()) })
+    }
+    if (hasSchema) updateSchema(view, schema as Parameters<typeof updateSchema>[1])
+  },
+)
+
+watch(
   () => props.readonly,
   (value) => {
     view?.dispatch({
@@ -188,6 +243,9 @@ defineExpose({
     } catch {
       return false
     }
+  },
+  getCursorOffset() {
+    return view?.state.selection.main.head ?? 0
   },
 })
 </script>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import CodeEditor from './CodeEditor.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import PopMenu from './PopMenu.vue'
@@ -15,30 +15,92 @@ import {
   terminalFlagArgs,
   type TerminalGroup,
 } from '../lib/terminalFlags'
-import { braceBareReferences, inspect } from '../lib/vars'
+import { braceBareReferences, inspect, type VariableSet } from '../lib/vars'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
+import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
+import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { resolvedRowValue } from '../lib/store'
 import { type CurlCopyMode } from '../lib/curl'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
+import type { GraphQLSchema } from 'graphql'
 
 const request = defineModel<RequestModel>('request', { required: true })
 
-const props = defineProps<{
-  variables: Record<string, string>
-  sending: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    variables: Record<string, string>
+    sending: boolean
+    environmentName?: string
+    /** Full GraphQL tooling (validate, open builder). Off in compare lanes. */
+    graphqlTools?: boolean
+    variableSet?: VariableSet | undefined
+  }>(),
+  { environmentName: 'none', graphqlTools: false, variableSet: undefined },
+)
 
 const emit = defineEmits<{
   send: []
   importCurl: []
   copyCurl: [mode: CurlCopyMode]
   manageVariables: []
+  openGraphqlBuilder: []
 }>()
 
 type Tab = 'headers' | 'body' | 'vars' | 'options'
 const tab = ref<Tab>('headers')
 const bodyEditor = ref<InstanceType<typeof CodeEditor>>()
 const bodyValidity = ref({ valid: true, message: '' })
+const graphqlSyntaxValidity = ref({ valid: true, message: '' })
+const graphqlSchemaValidity = ref<{ valid: boolean; message: string; checked: boolean }>({
+  valid: true,
+  message: '',
+  checked: false,
+})
+const graphqlSchema = shallowRef<GraphQLSchema | null>(null)
+const validatingSchema = ref(false)
+
+const graphqlCacheKey = computed(() => {
+  if (!props.variableSet) return ''
+  return schemaCacheKey(request.value, props.variableSet)
+})
+
+watch(graphqlCacheKey, (key) => {
+  graphqlSchema.value = key ? (getCachedSchema(key) ?? null) : null
+  graphqlSchemaValidity.value = { valid: true, message: '', checked: false }
+})
+
+async function validateGraphqlSchema() {
+  if (!props.variableSet) return
+  validatingSchema.value = true
+  graphqlSchemaValidity.value = { valid: true, message: '', checked: false }
+
+  try {
+    const result = await fetchSchema(request.value, props.variableSet, props.environmentName)
+    if (!result.ok) {
+      graphqlSchemaValidity.value = {
+        valid: false,
+        message: result.error,
+        checked: true,
+      }
+      graphqlSchema.value = null
+      return
+    }
+
+    graphqlSchema.value = result.schema
+    const validation = validateAgainstSchema(request.value.body.graphql.query, result.schema)
+    graphqlSchemaValidity.value = {
+      valid: validation.valid,
+      message: validation.valid ? '' : firstErrorMessage(validation),
+      checked: true,
+    }
+  } finally {
+    validatingSchema.value = false
+  }
+}
+
+function openGraphqlBuilder() {
+  emit('openGraphqlBuilder')
+}
 
 const BODY_MODES: { value: BodyMode; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -324,6 +386,63 @@ const flagPreview = computed(() =>
               <span class="material-icons sm">format_indent_increase</span>
               Format
             </button>
+            <template v-if="request.body.mode === 'graphql'">
+              <span
+                v-if="!graphqlSyntaxValidity.valid"
+                class="invalid"
+                :title="graphqlSyntaxValidity.message ?? 'Invalid'"
+              >
+                <span class="material-icons sm">error_outline</span>
+                {{ graphqlSyntaxValidity.message }}
+              </span>
+              <span
+                v-else-if="graphqlSchemaValidity.checked && !graphqlSchemaValidity.valid"
+                class="invalid"
+                :title="graphqlSchemaValidity.message ?? 'Invalid'"
+              >
+                <span class="material-icons sm">error_outline</span>
+                {{ graphqlSchemaValidity.message }}
+              </span>
+              <span
+                v-else-if="
+                  graphqlSchemaValidity.checked &&
+                  graphqlSchemaValidity.valid &&
+                  request.body.graphql.query.trim()
+                "
+                class="valid"
+              >
+                <span class="material-icons sm">check_circle_outline</span>
+                Valid query
+              </span>
+              <span
+                v-else-if="graphqlSyntaxValidity.valid && request.body.graphql.query.trim()"
+                class="valid faint"
+              >
+                <span class="material-icons sm">check_circle_outline</span>
+                Valid syntax
+              </span>
+              <button
+                v-if="graphqlTools"
+                class="ghost"
+                :disabled="validatingSchema || !request.url.trim()"
+                :title="request.url.trim() ? 'Validate against server schema' : 'Set a URL first'"
+                @click="validateGraphqlSchema"
+              >
+                <span class="material-icons sm">{{
+                  validatingSchema ? 'hourglass_top' : 'rule'
+                }}</span>
+                {{ validatingSchema ? 'Validating…' : 'Validate' }}
+              </button>
+              <button
+                v-if="graphqlTools"
+                class="ghost"
+                title="Open the GraphQL query builder"
+                @click="openGraphqlBuilder"
+              >
+                <span class="material-icons sm">account_tree</span>
+                Builder
+              </button>
+            </template>
           </div>
         </div>
 
@@ -348,7 +467,9 @@ const flagPreview = computed(() =>
               id="request-graphql-query"
               v-model="request.body.graphql.query"
               language="graphql"
+              :schema="graphqlSchema"
               placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
+              @validity="graphqlSyntaxValidity = $event"
             />
           </div>
           <p class="section-label">Variables</p>
@@ -562,8 +683,8 @@ const flagPreview = computed(() =>
     min-width: 100%;
   }
 
-  .pane-head {
-    flex-wrap: wrap;
+  .pane-head button {
+    padding: 2px 4px;
   }
 }
 
@@ -711,13 +832,15 @@ const flagPreview = computed(() =>
   justify-content: space-between;
   margin-bottom: 10px;
   min-height: 30px;
+  flex-wrap: wrap;
 }
 
 .pane-head-right {
   display: flex;
   align-items: center;
+  justify-content: end;
   gap: 10px;
-  min-width: 250px;
+  max-width: 100%;
 }
 
 .pane-hint {
@@ -795,17 +918,21 @@ const flagPreview = computed(() =>
 
 .valid {
   color: var(--green);
-  font-size: 12px;
 }
 
 .invalid {
   color: var(--red);
-  font-size: 12px;
   font-family: var(--mono);
   max-width: 460px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.valid,
+.invalid {
+  min-width: 15px;
+  font-size: 12px;
 }
 
 .editor-wrap {

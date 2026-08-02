@@ -1,9 +1,10 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-export type RouteName = 'build' | 'compare'
+export type RouteName = 'build' | 'compare' | 'graphql'
 
 const ROUTES: Record<string, RouteName> = {
   '#/compare': 'compare',
+  '#/graphql': 'graphql',
 }
 
 function readRoute(): RouteName {
@@ -17,7 +18,7 @@ function sync() {
 }
 
 export function navigate(route: RouteName) {
-  const hash = route === 'build' ? '#/' : '#/compare'
+  const hash = route === 'build' ? '#/' : route === 'compare' ? '#/compare' : '#/graphql'
   if (window.location.hash === hash) return
   window.location.hash = hash
 }
