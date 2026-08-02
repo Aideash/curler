@@ -120,6 +120,16 @@ function confirmSave() {
 }
 
 /**
+ * Reset the response panel to its initial state.
+ */
+function resetResponse() {
+  response.value = null
+  error.value = null
+  errorTitle.value = ''
+  errorChip.value = ''
+}
+
+/**
  * Carries whatever is on screen over to the comparison, saved or not, as both
  * lanes. Two copies of the same request with one environment changed is the
  * case this exists for, and it saves rebuilding the request twice.
@@ -220,6 +230,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         :trace="trace"
         :error-title="errorTitle"
         :error-chip="errorChip"
+        @reset="resetResponse"
       />
     </main>
 

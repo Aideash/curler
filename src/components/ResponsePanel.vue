@@ -25,6 +25,10 @@ const props = withDefaults(
   { errorTitle: 'Request failed', errorChip: 'Failed' },
 )
 
+const emit = defineEmits<{
+  (e: 'reset'): void
+}>()
+
 type Tab = 'body' | 'headers' | 'diagnostics'
 const tab = ref<Tab>('body')
 const pretty = ref(true)
@@ -51,6 +55,10 @@ async function copyBody() {
   } catch {
     copied.value = false
   }
+}
+
+function resetPane() {
+  emit('reset')
 }
 
 watch(
@@ -91,30 +99,46 @@ watch(
       <div class="spacer" />
 
       <template v-if="response">
+        <label v-if="isJson && tab === 'body'" class="pretty" title="Pretty print">
+          <input id="response-pretty" v-model="pretty" type="checkbox" />
+          <span class="pretty-label">Pretty</span>
+          <span class="alt-icon material-icons sm">format_indent_increase</span>
+        </label>
+        <button v-if="tab === 'body'" class="ghost copy" @click="copyBody">
+          <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
+          <span class="action-button-text">{{ copied ? 'Copied' : 'Copy' }}</span>
+        </button>
         <div class="tabs">
-          <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
-            Body
+          <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'" aria-label="Body" title="Body">
+            <span class="tab-text">
+              Body
+            </span>
+            <span class="alt-icon material-icons sm">man</span>
           </button>
-          <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'">
-            Headers
+          <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'" aria-label="Headers" title="Headers">
+            <span class="tab-text">
+              Headers
+            </span>
+            <span class="alt-icon material-icons sm">face</span>
             <span class="badge">{{ response.headers.length }}</span>
           </button>
           <button
             class="ghost tab"
             :class="{ active: tab === 'diagnostics' }"
             @click="tab = 'diagnostics'"
+            aria-label="Diagnostics"
+            title="Diagnostics"
           >
-            Diagnostics
+            <span class="tab-text">
+              Diagnostics
+            </span>
+            <span class="alt-icon material-icons sm">troubleshoot</span>
             <span v-if="response.truncated" class="material-icons sm warn-dot">content_cut</span>
           </button>
         </div>
-        <label v-if="isJson && tab === 'body'" class="pretty">
-          <input id="response-pretty" v-model="pretty" type="checkbox" />
-          Pretty
-        </label>
-        <button v-if="tab === 'body'" class="ghost copy" @click="copyBody">
-          <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
-          {{ copied ? 'Copied' : 'Copy' }}
+        <button class="ghost reset" @click="resetPane">
+          <span class="material-icons sm">refresh</span>
+          <span class="action-button-text">Reset</span>
         </button>
       </template>
     </div>
@@ -160,6 +184,10 @@ watch(
 </template>
 
 <style scoped>
+input {
+  cursor: pointer;
+}
+
 .response {
   display: flex;
   flex-direction: column;
@@ -175,19 +203,10 @@ watch(
 .status-bar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   min-height: 44px;
-}
-
-/* The metrics carry their own units, so the icons are what can go once the
-   window is narrow enough for the row to be breaking up anyway. */
-@media screen and (max-width: 950px) {
-  .metric .material-icons {
-    display: none;
-  }
 }
 
 .chip {
@@ -222,12 +241,17 @@ watch(
   vertical-align: 0;
 }
 
-.copy {
+.copy,
+.reset {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   min-width: 82px;
   justify-content: center;
+}
+
+.reset {
+    margin-left: auto;
 }
 
 .final-url {
@@ -249,11 +273,17 @@ watch(
 .tab {
   padding: 5px 10px;
   border-radius: 4px;
+  text-wrap-mode: nowrap;
+  white-space: nowrap;
 }
 
 .tab.active {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+.alt-icon {
+  display: none;
 }
 
 .badge {
@@ -320,7 +350,7 @@ watch(
 
 .header-row {
   display: grid;
-  grid-template-columns: minmax(160px, 260px) 1fr;
+  grid-template-columns: minmax(0, 260px) calc(50% - 16px);
   gap: 16px;
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
@@ -333,5 +363,50 @@ watch(
 .header-value {
   color: var(--text-dim);
   word-break: break-all;
+}
+
+/* Wrap the status bar on narrow-ish screens */
+@media screen and (max-width: 1100px) {
+  .status-bar {
+    flex-wrap: wrap;
+  }
+
+  .spacer {
+    flex: none;
+  }
+
+  .final-url {
+    flex: 1 1 100px;
+  }
+}
+
+/* The metrics carry their own units, so the icons are what can go once the
+   window is narrow enough for the row to be breaking up anyway. */
+@media screen and (max-width: 950px) {
+  .metric .material-icons {
+    display: none;
+  }
+}
+
+/* Wrap the status bar on narrow-ish screens */
+@media screen and (max-width: 500px) {
+  .status-bar .copy, .status-bar .reset {
+    min-width: 25px;
+  }
+  .status-bar button span.action-button-text {
+    display: none;
+  }
+
+  .alt-icon {
+    display: inline-block;
+  }
+
+  .tab-text {
+    display: none;
+  }
+
+  .pretty-label {
+    display: none;
+  }
 }
 </style>
