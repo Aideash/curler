@@ -1,5 +1,6 @@
 /** Pre-filled name for a new environment variable, by far the most common one. */
-export const DEFAULT_VARIABLE_NAME = 'API_KEY'
+//export const DEFAULT_VARIABLE_NAME = 'API_KEY'
+export const DEFAULT_VARIABLE_NAME = undefined;
 
 export interface HeaderPreset {
   name: string

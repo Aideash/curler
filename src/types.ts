@@ -19,21 +19,25 @@ export const HTTP_METHODS: HttpMethod[] = [
   'TRACE',
 ]
 
-export type BodyMode = 'none' | 'json' | 'text' | 'form'
+export type BodyMode = 'none' | 'json' | 'text' | 'form' | 'graphql'
 
 export interface KeyValue {
   id: string
   name: string
   value: string
   enabled: boolean
+  /** Value lives in the OS keychain; `value` is not persisted. */
+  secret?: boolean
 }
 
 export interface RequestBody {
   mode: BodyMode
-  /** Raw text for the `json` and `text` modes. */
+  /** Raw text for the `json`, `text`, and `graphql` modes. */
   text: string
   /** Field list for the `form` mode (application/x-www-form-urlencoded). */
   form: KeyValue[]
+  /** Variable list for the `graphql` mode (the JSON `variables` object). */
+  graphqlVariables: KeyValue[]
 }
 
 export interface RequestOptions {
@@ -85,6 +89,8 @@ export interface Environment {
 }
 
 export interface Workspace {
+  /** Stable id for keychain entries; survives CURLER_HOME moves. */
+  workspaceId?: string
   collections: Collection[]
   environments: Environment[]
   activeEnvironmentId: string | null
@@ -206,7 +212,7 @@ export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
     method: 'GET',
     url: '',
     headers: [],
-    body: { mode: 'none', text: '', form: [] },
+    body: { mode: 'none', text: '', form: [], graphqlVariables: [] },
     options: {
       followRedirects: true,
       insecure: false,

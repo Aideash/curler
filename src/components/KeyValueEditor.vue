@@ -2,6 +2,13 @@
 import { computed } from 'vue'
 import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue } from '../types'
+import {
+  disableRowSecret,
+  enableRowSecret,
+  queueSecretSave,
+  removeRowSecret,
+  secretCache,
+} from '../lib/store'
 import { braceBareReferences, inspect } from '../lib/vars'
 
 const props = withDefaults(
@@ -26,6 +33,8 @@ const props = withDefaults(
      * so a `$` in it means nothing and no reference warning belongs on it.
      */
     resolves?: boolean
+    /** Offer the OS keychain toggle for variable definitions. */
+    allowSecrets?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -36,15 +45,20 @@ const props = withDefaults(
     idPrefix: 'kv',
     defaultName: '',
     resolves: true,
+    allowSecrets: false,
   },
 )
+
+function valueOf(row: KeyValue): string {
+  return props.allowSecrets && row.secret ? (secretCache[row.id] ?? '') : row.value
+}
 
 /**
  * A row is only sent once it has both halves, so that is what the checkbox
  * tracks. Anything short of it is inert.
  */
 function isUsable(row: KeyValue): boolean {
-  return row.name.trim() !== '' && row.value.trim() !== ''
+  return row.name.trim() !== '' && valueOf(row).trim() !== ''
 }
 
 /**
@@ -53,7 +67,7 @@ function isUsable(row: KeyValue): boolean {
  * filled in and the list would grow without end.
  */
 function isBlank(row: KeyValue): boolean {
-  if (row.value.trim() !== '') return false
+  if (valueOf(row).trim() !== '') return false
   const name = row.name.trim()
   return name === '' || (props.defaultName !== '' && name === props.defaultName)
 }
@@ -73,9 +87,48 @@ function ensureTrailingRow() {
   if (!last || !isBlank(last)) props.rows.push(newRow())
 }
 
-function remove(index: number) {
+async function remove(index: number) {
+  const row = props.rows[index]
+  if (props.allowSecrets && row.secret && isUsable(row)) {
+    const ok = window.confirm(
+      'This secret is stored in your OS keychain and will be deleted. It cannot be recovered. Remove anyway?',
+    )
+    if (!ok) return
+    await removeRowSecret(row.id)
+  }
   props.rows.splice(index, 1)
   ensureTrailingRow()
+}
+
+function onValueInput(row: KeyValue, event: Event) {
+  const next = (event.target as HTMLInputElement).value
+  if (props.allowSecrets && row.secret) queueSecretSave(row.id, next)
+  else row.value = next
+  ensureTrailingRow()
+}
+
+async function toggleSecret(row: KeyValue) {
+  if (row.secret) {
+    if (
+      !window.confirm(
+        'This value will be stored in plaintext in workspace.json. Continue?',
+      )
+    ) {
+      return
+    }
+    try {
+      await disableRowSecret(row)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
+    return
+  }
+
+  try {
+    await enableRowSecret(row)
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : String(error))
+  }
 }
 
 /**
@@ -105,7 +158,7 @@ ensureTrailingRow()
 </script>
 
 <template>
-  <div class="kv">
+  <div class="kv" :class="{ 'with-secrets': allowSecrets }">
     <datalist :id="listId">
       <option v-for="option in nameOptions" :key="option" :value="option" />
     </datalist>
@@ -114,7 +167,7 @@ ensureTrailingRow()
       v-for="(row, index) in rows"
       :key="row.id"
       class="kv-row"
-      :class="{ blank: isBlank(row), partial: isPartial(row) }"
+      :class="{ blank: isBlank(row), partial: isPartial(row), secret: row.secret }"
     >
       <input
         :id="`${idPrefix}-${index}-enabled`"
@@ -148,12 +201,15 @@ ensureTrailingRow()
       <div class="kv-value">
         <input
           :id="`${idPrefix}-${index}-value`"
-          v-model="row.value"
+          :value="valueOf(row)"
           class="mono"
+          :type="allowSecrets && row.secret ? 'password' : 'text'"
           :placeholder="valuePlaceholder"
           spellcheck="false"
-          :class="{ warn: issues.has(row.id) || (isPartial(row) && row.value.trim() === '') }"
-          @input="ensureTrailingRow"
+          :class="{
+            warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
+          }"
+          @input="onValueInput(row, $event)"
         />
         <VariableIssues
           class="kv-warn"
@@ -161,6 +217,16 @@ ensureTrailingRow()
           @fix="(name) => braceRowReference(row, name)"
         />
       </div>
+      <button
+        v-if="allowSecrets"
+        class="ghost kv-secret"
+        :class="{ active: row.secret }"
+        title="Secure secret"
+        :disabled="isBlank(row) && !row.secret"
+        @click="toggleSecret(row)"
+      >
+        <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
+      </button>
       <button
         class="ghost kv-remove"
         title="Remove"
@@ -191,6 +257,10 @@ ensureTrailingRow()
   align-items: center;
 }
 
+.kv.with-secrets .kv-row {
+  grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
 .kv-toggle {
   min-width: 0;
   padding: 0;
@@ -218,6 +288,10 @@ ensureTrailingRow()
   color: var(--amber);
 }
 
+.kv.with-secrets .kv-notice {
+  margin-left: 58px;
+}
+
 .kv-value {
   position: relative;
   display: flex;
@@ -243,13 +317,28 @@ ensureTrailingRow()
   padding-left: 6px;
 }
 
+.kv-secret,
 .kv-remove {
   display: inline-flex;
   padding: 3px;
   line-height: 1;
 }
 
-.kv-remove .material-icons {
+.kv-secret {
+  color: var(--text-faint);
+}
+
+.kv-secret.active {
+  color: var(--accent);
+}
+
+.kv-secret:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.kv-remove .material-icons,
+.kv-secret .material-icons {
   vertical-align: 0;
 }
 </style>

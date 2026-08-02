@@ -8,6 +8,7 @@ import {
   currentRequest,
   deleteEnvironment,
   isScratch,
+  resolvedRowValue,
   state,
   variableSet,
 } from '../lib/store'
@@ -75,7 +76,9 @@ const current = computed(() => scopes.value.find((item) => item.id === scope.val
 /** How many rows in a scope are actually usable, for the tab counts. */
 function usableCount(rows: KeyValue[] | null): number {
   if (!rows) return 0
-  return rows.filter((row) => row.enabled && row.name.trim() && row.value.trim()).length
+  return rows.filter(
+    (row) => row.enabled && row.name.trim() && resolvedRowValue(row).trim(),
+  ).length
 }
 
 /**
@@ -87,7 +90,7 @@ const shadowed = computed(() => {
   const names = new Set<string>()
   for (const row of rows) {
     const name = row.name.trim()
-    if (!row.enabled || !name || !row.value.trim()) continue
+    if (!row.enabled || !name || !resolvedRowValue(row).trim()) continue
     const winner = variableSet.value.origins[name]
     if (winner && winner !== scope.value) names.add(`${name} (${SCOPE_LABELS[winner]})`)
   }
@@ -181,6 +184,7 @@ function confirmDeleteEnvironment() {
       value-placeholder="Value"
       :default-name="defaultName"
       :resolves="false"
+      allow-secrets
     />
 
     <p v-if="shadowed.length" class="notice">

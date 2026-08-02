@@ -8,7 +8,7 @@ import {
   type KeyValue,
   type RequestModel,
 } from '../types'
-import { readBuiltins, readWorkspace, writeWorkspace } from './backend'
+import { readBuiltins, readSecrets, readWorkspace, writeSecret, writeWorkspace, deleteSecret, copySecret } from './backend'
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
 
 interface State {
@@ -20,6 +20,8 @@ interface State {
   persistable: boolean
   error: string | null
   workspacePath: string
+  /** Stable id for OS keychain entries. */
+  workspaceId: string
   collections: Collection[]
   environments: Environment[]
   activeEnvironmentId: string | null
@@ -36,6 +38,7 @@ const state = reactive<State>({
   persistable: false,
   error: null,
   workspacePath: '',
+  workspaceId: '',
   collections: [],
   environments: [],
   activeEnvironmentId: null,
@@ -45,7 +48,34 @@ const state = reactive<State>({
   scratch: newRequest(),
 })
 
+/** Decrypted secret values, keyed by variable row id. Never persisted. */
+export const secretCache = reactive<Record<string, string>>({})
+
+const secretSaveTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+
+function visitVariableRows(visitor: (rows: KeyValue[]) => void) {
+  visitor(state.globals)
+  for (const environment of state.environments) visitor(environment.variables)
+  for (const collection of state.collections) {
+    visitor(collection.variables)
+    for (const request of collection.requests) visitor(request.variables)
+  }
+}
+
+function secretIdsFromRows(rows: KeyValue[]): string[] {
+  return rows.filter((row) => row.secret).map((row) => row.id)
+}
+
+function sanitizeRows(rows: KeyValue[]): KeyValue[] {
+  return rows.map((row) => (row.secret ? { ...row, value: '' } : row))
+}
+
+function ensureWorkspaceId() {
+  if (!state.workspaceId) state.workspaceId = uid()
+}
+
 function defaultWorkspace() {
+  ensureWorkspaceId()
   // The editor appends its own pre-filled API_KEY row, so seeding one here too
   // would only create a duplicate.
   const environment: Environment = {
@@ -112,6 +142,7 @@ function migrate(parsed: Record<string, unknown>) {
         maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
       }
       request.options.maxResponseMb ??= DEFAULT_MAX_RESPONSE_MB
+      request.body.graphqlVariables ??= []
       braceRequestReferences(request)
     }
   }
@@ -120,6 +151,13 @@ function migrate(parsed: Record<string, unknown>) {
   state.environments = (parsed.environments ?? []) as Environment[]
   state.activeEnvironmentId = (parsed.activeEnvironmentId ?? null) as string | null
   state.globals = (parsed.globals ?? []) as KeyValue[]
+  state.workspaceId = (parsed.workspaceId as string) ?? uid()
+
+  visitVariableRows((rows) => {
+    for (const row of rows) {
+      if (row.secret) row.value = ''
+    }
+  })
 
   // There is no "no environment" choice any more, so make sure one is active.
   if (!state.environments.length) {
@@ -130,12 +168,71 @@ function migrate(parsed: Record<string, unknown>) {
   }
 }
 
+async function adoptPlaintextSecrets() {
+  const pending: Promise<void>[] = []
+  visitVariableRows((rows) => {
+    for (const row of rows) {
+      if (!row.secret || !row.value) continue
+      secretCache[row.id] = row.value
+      pending.push(writeSecret(row.id, row.value))
+      row.value = ''
+    }
+  })
+  await Promise.all(pending)
+}
+
+async function loadSecretCache() {
+  try {
+    const values = await readSecrets()
+    for (const [id, value] of Object.entries(values)) {
+      if (value !== null) secretCache[id] = value
+    }
+  } catch {
+    // Keychain may be unavailable; secrets resolve empty until it is.
+  }
+}
+
+function purgeSecretCache(ids: string[]) {
+  for (const id of ids) delete secretCache[id]
+}
+
+async function removeSecrets(ids: string[]) {
+  purgeSecretCache(ids)
+  await Promise.all(ids.map((id) => deleteSecret(id).catch(() => undefined)))
+}
+
+function rekeySecretRows(rows: KeyValue[]): Map<string, string> {
+  const pairs = new Map<string, string>()
+  for (const row of rows) {
+    if (!row.secret) continue
+    const fromId = row.id
+    row.id = uid()
+    row.value = ''
+    pairs.set(fromId, row.id)
+  }
+  return pairs
+}
+
+async function copySecretPairs(pairs: Map<string, string>) {
+  for (const [fromId, toId] of pairs) {
+    try {
+      const copied = await copySecret(fromId, toId)
+      if (copied && fromId in secretCache) secretCache[toId] = secretCache[fromId]
+    } catch {
+      // The copy still works from keychain even when the cache missed it.
+    }
+  }
+}
+
 export async function initStore() {
   try {
     const { contents, path } = await readWorkspace()
     state.workspacePath = path
     if (contents) migrate(JSON.parse(contents))
     else defaultWorkspace()
+    ensureWorkspaceId()
+    await adoptPlaintextSecrets()
+    await loadSecretCache()
     state.persistable = true
   } catch (error) {
     /**
@@ -166,24 +263,35 @@ export async function initStore() {
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
+function workspaceSnapshot() {
+  return {
+    workspaceId: state.workspaceId,
+    collections: state.collections.map((collection) => ({
+      ...collection,
+      variables: sanitizeRows(collection.variables),
+      requests: collection.requests.map((request) => ({
+        ...request,
+        variables: sanitizeRows(request.variables),
+      })),
+    })),
+    environments: state.environments.map((environment) => ({
+      ...environment,
+      variables: sanitizeRows(environment.variables),
+    })),
+    activeEnvironmentId: state.activeEnvironmentId,
+    globals: sanitizeRows(state.globals),
+  }
+}
+
 function persist() {
   clearTimeout(saveTimer)
   saveTimer = setTimeout(async () => {
     // Re-checked at flush time: the gate may have closed during the debounce.
     if (!state.persistable) return
     try {
-      await writeWorkspace(
-        JSON.stringify(
-          {
-            collections: state.collections,
-            environments: state.environments,
-            activeEnvironmentId: state.activeEnvironmentId,
-            globals: state.globals,
-          },
-          null,
-          2,
-        ),
-      )
+      ensureWorkspaceId()
+      const snapshot = workspaceSnapshot()
+      await writeWorkspace(JSON.stringify(snapshot, null, 2))
       state.error = null
     } catch (error) {
       state.error = error instanceof Error ? error.message : String(error)
@@ -191,8 +299,45 @@ function persist() {
   }, 400)
 }
 
+export function queueSecretSave(rowId: string, value: string) {
+  secretCache[rowId] = value
+  clearTimeout(secretSaveTimers[rowId])
+  secretSaveTimers[rowId] = setTimeout(() => {
+    writeSecret(rowId, value).catch((error) => {
+      state.error = error instanceof Error ? error.message : String(error)
+    })
+  }, 400)
+}
+
+export async function enableRowSecret(row: KeyValue): Promise<void> {
+  const value = row.value.trim() !== '' ? row.value : (secretCache[row.id] ?? '')
+  await writeSecret(row.id, value)
+  row.secret = true
+  row.value = ''
+  secretCache[row.id] = value
+}
+
+export async function disableRowSecret(row: KeyValue): Promise<void> {
+  const value = secretCache[row.id] ?? (await readSecrets([row.id]))[row.id] ?? ''
+  await deleteSecret(row.id)
+  delete secretCache[row.id]
+  row.secret = false
+  row.value = value
+}
+
+export async function removeRowSecret(rowId: string): Promise<void> {
+  delete secretCache[rowId]
+  clearTimeout(secretSaveTimers[rowId])
+  await deleteSecret(rowId).catch(() => undefined)
+}
+
+export function resolvedRowValue(row: KeyValue): string {
+  return row.secret ? (secretCache[row.id] ?? '') : row.value
+}
+
 watch(
   () => [
+    state.workspaceId,
     state.collections,
     state.environments,
     state.activeEnvironmentId,
@@ -252,13 +397,16 @@ export function buildVariableSet(
   collection: Collection | null,
   environment: Environment | null,
 ): VariableSet {
-  return mergeScopes([
-    { scope: 'request', rows: request.variables },
-    { scope: 'collection', rows: collection?.variables ?? [] },
-    { scope: 'environment', rows: environment?.variables ?? [] },
-    { scope: 'global', rows: state.globals },
-    { scope: 'builtin', rows: builtinRows() },
-  ])
+  return mergeScopes(
+    [
+      { scope: 'request', rows: request.variables },
+      { scope: 'collection', rows: collection?.variables ?? [] },
+      { scope: 'environment', rows: environment?.variables ?? [] },
+      { scope: 'global', rows: state.globals },
+      { scope: 'builtin', rows: builtinRows() },
+    ],
+    secretCache,
+  )
 }
 
 export const variableSet = computed<VariableSet>(() =>
@@ -324,19 +472,35 @@ export function duplicateRequest(id: string) {
       const copy: RequestModel = JSON.parse(JSON.stringify(collection.requests[index]))
       copy.id = uid()
       copy.name = `${copy.name} copy`
+      const pairs = rekeySecretRows(copy.variables)
       collection.requests.splice(index + 1, 0, copy)
       state.activeRequestId = copy.id
+      void copySecretPairs(pairs)
       return
     }
   }
+}
+
+export function reorderRequest(collectionId: string, fromIndex: number, toIndex: number) {
+  const collection = state.collections.find((item) => item.id === collectionId)
+  if (!collection) return
+  const { length } = collection.requests
+  if (fromIndex < 0 || fromIndex >= length || toIndex < 0 || toIndex > length) return
+  const insertAt = fromIndex < toIndex ? toIndex - 1 : toIndex
+  if (insertAt === fromIndex) return
+  const [item] = collection.requests.splice(fromIndex, 1)
+  collection.requests.splice(insertAt, 0, item)
 }
 
 export function deleteRequest(id: string) {
   for (const collection of state.collections) {
     const index = collection.requests.findIndex((request) => request.id === id)
     if (index !== -1) {
+      const request = collection.requests[index]
+      const ids = secretIdsFromRows(request.variables)
       collection.requests.splice(index, 1)
       if (state.activeRequestId === id) state.activeRequestId = null
+      void removeSecrets(ids)
       return
     }
   }
@@ -358,7 +522,12 @@ export function renameCollection(id: string, name: string) {
 
 export function deleteCollection(id: string) {
   const index = state.collections.findIndex((item) => item.id === id)
-  if (index !== -1) state.collections.splice(index, 1)
+  if (index === -1) return
+  const collection = state.collections[index]
+  const ids = secretIdsFromRows(collection.variables)
+  for (const request of collection.requests) ids.push(...secretIdsFromRows(request.variables))
+  state.collections.splice(index, 1)
+  void removeSecrets(ids)
 }
 
 export function addEnvironment(name: string) {
@@ -376,10 +545,12 @@ export function deleteEnvironment(id: string) {
   if (state.environments.length <= 1) return
   const index = state.environments.findIndex((item) => item.id === id)
   if (index === -1) return
+  const ids = secretIdsFromRows(state.environments[index].variables)
   state.environments.splice(index, 1)
   if (state.activeEnvironmentId === id) {
     state.activeEnvironmentId = state.environments[0].id
   }
+  void removeSecrets(ids)
 }
 
 export { state }

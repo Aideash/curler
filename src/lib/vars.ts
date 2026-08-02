@@ -1,4 +1,6 @@
 import type { KeyValue, RequestModel, Scope } from '../types'
+import { SECRET_REDACTED } from './secrets'
+import { buildGraphqlBody } from './graphql'
 
 /**
  * Matches `${NAME}`, and only that. A bare `$NAME` is literal text, because a
@@ -37,23 +39,30 @@ export type VariableIssue = { name: string; kind: 'missing' | 'empty' | 'bare' }
 export interface VariableSet {
   values: Record<string, string>
   origins: Record<string, Scope>
+  /** Names whose winning definition is stored as a secret. */
+  secretNames: Set<string>
 }
 
-export const EMPTY_VARIABLE_SET: VariableSet = { values: {}, origins: {} }
+export const EMPTY_VARIABLE_SET: VariableSet = { values: {}, origins: {}, secretNames: new Set() }
 
 /**
  * Folds the scopes into one lookup table. Sources are supplied narrowest
  * first, and the first definition of a name wins, so a request-level value
  * quietly takes precedence over the collection or environment it sits in.
  */
-export function mergeScopes(sources: { scope: Scope; rows: KeyValue[] }[]): VariableSet {
+export function mergeScopes(
+  sources: { scope: Scope; rows: KeyValue[] }[],
+  secretValues: Record<string, string> = {},
+): VariableSet {
   const values: Record<string, string> = {}
   const origins: Record<string, Scope> = {}
+  const secretNames = new Set<string>()
 
-  const claim = (scope: Scope, name: string, value: string) => {
+  const claim = (scope: Scope, name: string, row: KeyValue) => {
     if (name in values) return
-    values[name] = value
+    values[name] = row.secret ? (secretValues[row.id] ?? '') : row.value
     origins[name] = scope
+    if (row.secret) secretNames.add(name)
   }
 
   // Rows carrying an actual value are considered first, across every scope.
@@ -61,20 +70,23 @@ export function mergeScopes(sources: { scope: Scope; rows: KeyValue[] }[]): Vari
   // half-typed name in one of those must not blank out a real value further
   // out. Blank rows only get to define a name nothing else defines, where
   // they still serve a purpose: reporting it as empty rather than missing.
+  // Secret rows count as filled when the keychain holds a value, even though
+  // the persisted `value` field is empty.
   for (const pass of [1, 2]) {
     for (const { scope, rows } of sources) {
       for (const row of rows) {
         if (!row.enabled) continue
         const name = row.name.trim()
         if (!name) continue
-        const blank = row.value === ''
+        const resolved = row.secret ? (secretValues[row.id] ?? '') : row.value
+        const blank = resolved === ''
         if (blank === (pass === 1)) continue
-        claim(scope, name, row.value)
+        claim(scope, name, row)
       }
     }
   }
 
-  return { values, origins }
+  return { values, origins, secretNames }
 }
 
 /** Kept for the simple single-list case, mainly in checks. */
@@ -216,39 +228,39 @@ export interface BuildTrace {
   droppedFields: string[]
 }
 
-function noteUsage(
-  seen: Map<string, TraceVariable>,
-  input: string,
-  where: string,
-  variables: Record<string, string>,
-  origins: Record<string, Scope>,
-  includePathParams = false,
-) {
-  for (const name of referencedNames(input, includePathParams)) {
-    const existing = seen.get(name)
-    if (existing) {
-      if (!existing.usedIn.includes(where)) existing.usedIn.push(where)
-      continue
-    }
-    seen.set(name, {
-      name,
-      value: variables[name] ?? '',
-      scope: name in variables ? (origins[name] ?? null) : null,
-      usedIn: [where],
-    })
-  }
-}
-
 export function traceRequest(
   request: RequestModel,
   set: VariableSet,
 ): BuildTrace {
-  const { values, origins } = set
+  const { values, origins, secretNames } = set
   const seen = new Map<string, TraceVariable>()
   const droppedHeaders: string[] = []
   const droppedFields: string[] = []
 
-  noteUsage(seen, request.url, 'URL', values, origins, true)
+  const displayValue = (name: string) =>
+    secretNames.has(name) ? SECRET_REDACTED : (values[name] ?? '')
+
+  const noteUsage = (
+    input: string,
+    where: string,
+    includePathParams = false,
+  ) => {
+    for (const name of referencedNames(input, includePathParams)) {
+      const existing = seen.get(name)
+      if (existing) {
+        if (!existing.usedIn.includes(where)) existing.usedIn.push(where)
+        continue
+      }
+      seen.set(name, {
+        name,
+        value: displayValue(name),
+        scope: name in values ? (origins[name] ?? null) : null,
+        usedIn: [where],
+      })
+    }
+  }
+
+  noteUsage(request.url, 'URL', true)
 
   for (const header of request.headers) {
     if (!header.enabled) continue
@@ -258,11 +270,23 @@ export function traceRequest(
       }
       continue
     }
-    noteUsage(seen, `${header.name} ${header.value}`, `header ${header.name.trim()}`, values, origins)
+    noteUsage(`${header.name} ${header.value}`, `header ${header.name.trim()}`)
   }
 
   if (request.body.mode === 'json' || request.body.mode === 'text') {
-    noteUsage(seen, request.body.text, 'body', values, origins)
+    noteUsage(request.body.text, 'body')
+  } else if (request.body.mode === 'graphql') {
+    noteUsage(request.body.text, 'GraphQL query')
+    for (const row of request.body.graphqlVariables) {
+      if (!row.enabled) continue
+      if (!row.name.trim() || !row.value.trim()) {
+        if (row.name.trim() || row.value.trim()) {
+          droppedFields.push(row.name.trim() || `(value "${row.value.trim()}")`)
+        }
+        continue
+      }
+      noteUsage(row.value, `GraphQL variable ${row.name.trim()}`)
+    }
   } else if (request.body.mode === 'form') {
     for (const field of request.body.form) {
       if (!field.enabled) continue
@@ -272,7 +296,7 @@ export function traceRequest(
         }
         continue
       }
-      noteUsage(seen, `${field.name} ${field.value}`, `field ${field.name.trim()}`, values, origins)
+      noteUsage(`${field.name} ${field.value}`, `field ${field.name.trim()}`)
     }
   }
 
@@ -315,6 +339,11 @@ export function resolveRequest(
   let body: string | null = null
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     body = request.body.text ? apply(request.body.text) : null
+  } else if (request.body.mode === 'graphql') {
+    body = buildGraphqlBody(request.body.text, request.body.graphqlVariables ?? [], apply)
+    if (body && !headers.some(([name]) => name.toLowerCase() === 'content-type')) {
+      headers.push(['Content-Type', 'application/json'])
+    }
   } else if (request.body.mode === 'form') {
     const encoded = request.body.form
       .filter((field) => field.enabled && field.name.trim() && field.value.trim())

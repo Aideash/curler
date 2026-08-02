@@ -7,6 +7,7 @@ import {
   type KeyValue,
   type RequestModel,
 } from '../types'
+import { parseGraphqlBody, buildGraphqlBody } from './graphql'
 import { resolve, resolveUrl } from './vars'
 import {
   TERMINAL_FLAGS,
@@ -496,14 +497,21 @@ export function parseCurl(input: string): ParsedCurl {
   if (data && dataAsQuery) {
     request.url += (request.url.includes('?') ? '&' : '?') + data
   } else if (data) {
-    request.body.mode = looksLikeJson(data) ? 'json' : 'text'
-    request.body.text = data
+    const graphql = parseGraphqlBody(data)
+    if (graphql) {
+      request.body.mode = 'graphql'
+      request.body.text = graphql.query
+      request.body.graphqlVariables = graphql.variables
+    } else {
+      request.body.mode = looksLikeJson(data) ? 'json' : 'text'
+      request.body.text = data
+    }
   }
 
   if (explicitMethod) request.method = explicitMethod
   else if (request.body.mode !== 'none') request.method = 'POST'
 
-  if (request.body.mode === 'json') {
+  if (request.body.mode === 'json' || request.body.mode === 'graphql') {
     const hasContentType = request.headers.some(
       (h) => h.name.toLowerCase() === 'content-type',
     )
@@ -654,6 +662,13 @@ export function toCurl(
 
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     if (request.body.text) parts.push('-d', quote(apply(request.body.text)))
+  } else if (request.body.mode === 'graphql') {
+    const payload = buildGraphqlBody(
+      request.body.text,
+      request.body.graphqlVariables ?? [],
+      apply,
+    )
+    if (payload) parts.push('-d', quote(payload))
   } else if (request.body.mode === 'form') {
     const encoded = request.body.form
       .filter((field) => field.enabled && field.name.trim() && field.value.trim())

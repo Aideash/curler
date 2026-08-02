@@ -55,3 +55,33 @@ export async function writeWorkspace(contents: string): Promise<void> {
     body: JSON.stringify({ contents }),
   })
 }
+
+export async function readSecrets(rowIds?: string[]): Promise<Record<string, string | null>> {
+  const query = rowIds?.length ? `?ids=${encodeURIComponent(rowIds.join(','))}` : ''
+  const { values } = await api<{ values: Record<string, string | null> }>(`/secrets${query}`)
+  return values
+}
+
+export async function writeSecret(rowId: string, value: string): Promise<void> {
+  await api(`/secrets/${encodeURIComponent(rowId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  })
+}
+
+export async function deleteSecret(rowId: string): Promise<void> {
+  await api(`/secrets/${encodeURIComponent(rowId)}`, { method: 'DELETE' })
+}
+
+export async function copySecret(fromRowId: string, toRowId: string): Promise<boolean> {
+  const { copied } = await api<{ copied: boolean }>(
+    `/secrets/${encodeURIComponent(toRowId)}/copy`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromRowId }),
+    },
+  )
+  return copied
+}

@@ -16,7 +16,8 @@ import {
   type TerminalGroup,
 } from '../lib/terminalFlags'
 import { braceBareReferences, inspect } from '../lib/vars'
-import { HTTP_METHODS, uid, type BodyMode, type RequestModel } from '../types'
+import { resolvedRowValue } from '../lib/store'
+import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
 
 const props = defineProps<{
   request: RequestModel
@@ -41,7 +42,16 @@ const BODY_MODES: { value: BodyMode; label: string }[] = [
   { value: 'json', label: 'JSON' },
   { value: 'text', label: 'Raw' },
   { value: 'form', label: 'Form' },
+  { value: 'graphql', label: 'GraphQL' },
 ]
+
+function isModeDisabled(mode: BodyMode, method: HttpMethod) {
+  if (mode === 'none') return false
+
+  return (method === 'TRACE' && mode !== 'text') || 
+    (method !== 'POST' && mode === 'graphql') || 
+    (method === 'GET')
+}
 
 const enabledHeaderCount = computed(
   () => props.request.headers.filter((h) => h.enabled && h.name.trim()).length,
@@ -56,7 +66,10 @@ function braceUrlReference(name: string) {
 }
 
 const requestVarCount = computed(
-  () => props.request.variables.filter((v) => v.enabled && v.name.trim() && v.value.trim()).length,
+  () =>
+    props.request.variables.filter(
+      (v) => v.enabled && v.name.trim() && resolvedRowValue(v).trim(),
+    ).length,
 )
 
 const canSend = computed(
@@ -89,8 +102,15 @@ function applyBundle(headers: { name: string; value: string }[]) {
 
 function setBodyMode(mode: BodyMode) {
   props.request.body.mode = mode
-  if (mode === 'json') {
+  if (mode === 'json' || mode === 'graphql') {
     applyHeader('Content-Type', 'application/json')
+  }
+}
+
+function setMethod(method: HttpMethod) {
+  props.request.method = method
+  if (isModeDisabled(props.request.body.mode, method)) {
+    setBodyMode('none')
   }
 }
 
@@ -129,9 +149,10 @@ const flagPreview = computed(() =>
     <div class="url-bar">
       <select
         id="request-method"
-        v-model="request.method"
+        :value="request.method"
         class="method"
         :class="request.method.toLowerCase()"
+        @input="setMethod((($event.target as HTMLSelectElement).value as HttpMethod))"
       >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">
           {{ method }}
@@ -264,6 +285,7 @@ const flagPreview = computed(() =>
               :key="mode.value"
               class="ghost mode"
               :class="{ active: request.body.mode === mode.value }"
+              :disabled="isModeDisabled(mode.value, request.method)"
               @click="setBodyMode(mode.value)"
             >
               {{ mode.label }}
@@ -286,7 +308,7 @@ const flagPreview = computed(() =>
         </div>
 
         <p v-if="request.body.mode === 'none'" class="empty">
-          This request has no body. Pick JSON, Raw or Form to add one.
+          This request has no body. Pick JSON, Raw, Form or GraphQL to add one.
         </p>
 
         <div v-else-if="request.body.mode === 'form'" class="form-body">
@@ -296,6 +318,27 @@ const flagPreview = computed(() =>
             list-id="form-names"
             id-prefix="form-field"
             name-placeholder="Field"
+          />
+        </div>
+
+        <div v-else-if="request.body.mode === 'graphql'" class="graphql-body">
+          <p class="section-label">Query</p>
+          <div class="editor-wrap graphql-query">
+            <CodeEditor
+              id="request-graphql-query"
+              v-model="request.body.text"
+              language="text"
+              placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
+            />
+          </div>
+          <p class="section-label">Variables</p>
+          <KeyValueEditor
+            :rows="request.body.graphqlVariables"
+            :variables="variables"
+            list-id="graphql-variable-names"
+            id-prefix="graphql-variable"
+            name-placeholder="Name"
+            value-placeholder='Value (JSON, e.g. "1" or 1 or true)'
           />
         </div>
 
@@ -709,6 +752,25 @@ const flagPreview = computed(() =>
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+}
+
+.graphql-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.graphql-body .section-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.graphql-query {
+  height: 180px;
 }
 
 .empty {

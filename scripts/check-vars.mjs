@@ -3,6 +3,7 @@ import { createHarness, loadModules } from './harness.mjs'
 const { modules, close } = await loadModules([
   '/src/lib/vars.ts',
   '/src/lib/curl.ts',
+  '/src/lib/graphql.ts',
   '/src/lib/store.ts',
   '/src/types.ts',
 ])
@@ -21,6 +22,8 @@ const {
   newRequest,
   uid,
   buildVariableSet,
+  buildGraphqlBody,
+  parseCurl,
   state,
 } = modules
 const { group, expect, detail, summary } = createHarness('variables')
@@ -66,6 +69,53 @@ group('resolution')
     'a bare name is never reported as missing',
     resolveRequest(request('$API_KEY'), map).missing,
     [],
+  )
+}
+
+group('GraphQL body mode')
+{
+  const map = environmentMap(env([['API_KEY', 'secret-abc'], ['id', 'nope']]))
+  const gql = newRequest({
+    method: 'POST',
+    url: 'https://api.example.com/graphql',
+    body: {
+      mode: 'graphql',
+      text: 'query Hero($id: ID!) { hero(id: $id) { name } }',
+      form: [],
+      graphqlVariables: [
+        row('role', '"admin"'),
+        row('count', '2'),
+        row('flag', 'true'),
+        row('token', '${API_KEY}'),
+        row('label', 'plain'),
+      ],
+    },
+  })
+
+  const resolved = resolveRequest(gql, map)
+  const parsed = JSON.parse(resolved.body)
+  expect('query keeps literal GraphQL $id', parsed.query.includes('$id'), true)
+  expect('a curler variable resolves in the table', parsed.variables.token, 'secret-abc')
+  expect('a JSON string stays a string', parsed.variables.role, 'admin')
+  expect('a bare number coerces', parsed.variables.count, 2)
+  expect('a bare boolean coerces', parsed.variables.flag, true)
+  expect('unparseable text becomes a string', parsed.variables.label, 'plain')
+  expect('nothing is reported as unresolved', [resolved.missing, resolved.empty], [[], []])
+
+  const shareable = toCurl(gql)
+  const roundTrip = parseCurl(shareable).request
+  expect('curl import picks GraphQL mode', roundTrip.body.mode, 'graphql')
+  expect('the query round-trips', roundTrip.body.text, gql.body.text)
+  const wire = (model) =>
+    JSON.parse(
+      buildGraphqlBody(model.body.text, model.body.graphqlVariables, (value) => value) ?? '{}',
+    )
+  expect('the payload round-trips on the wire', wire(roundTrip), wire(gql))
+
+  expect(
+    'an empty variables table is omitted from the wire JSON',
+    buildGraphqlBody('query { ping }', [], (value) => value),
+    '{"query":"query { ping }"}',
   )
 }
 

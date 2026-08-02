@@ -5,6 +5,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { performRequest } from './client.mjs'
+import {
+  copySecret,
+  deleteSecret,
+  getSecret,
+  readSecrets,
+  readWorkspaceMeta,
+  requireWorkspaceId,
+  setSecret,
+} from './secrets.mjs'
 import { readWorkspace, writeWorkspace, WORKSPACE_FILE } from './storage.mjs'
 import { debugEnabled, debugLog } from './debug.mjs'
 import { resolvePorts } from '../config.mjs'
@@ -169,6 +178,46 @@ const server = http.createServer(async (request, response) => {
       const { contents } = JSON.parse(await readBody(request))
       await writeWorkspace(contents)
       sendJson(response, 200, { ok: true })
+      return
+    }
+
+    if (url === '/api/secrets' && request.method === 'GET') {
+      const { workspaceId, secretIds } = await readWorkspaceMeta()
+      if (!workspaceId) {
+        sendJson(response, 200, { values: {} })
+        return
+      }
+      const requested = new URL(request.url ?? '', 'http://127.0.0.1').searchParams.get('ids')
+      const rowIds = requested ? requested.split(',').filter(Boolean) : secretIds
+      sendJson(response, 200, { values: await readSecrets(workspaceId, rowIds) })
+      return
+    }
+
+    const secretMatch = url.match(/^\/api\/secrets\/([^/]+)$/)
+    if (secretMatch && request.method === 'PUT') {
+      const rowId = decodeURIComponent(secretMatch[1])
+      const { value } = JSON.parse(await readBody(request))
+      const workspaceId = await requireWorkspaceId()
+      await setSecret(workspaceId, rowId, value ?? '')
+      sendJson(response, 200, { ok: true })
+      return
+    }
+
+    if (secretMatch && request.method === 'DELETE') {
+      const rowId = decodeURIComponent(secretMatch[1])
+      const workspaceId = await requireWorkspaceId()
+      await deleteSecret(workspaceId, rowId)
+      sendJson(response, 200, { ok: true })
+      return
+    }
+
+    const copyMatch = url.match(/^\/api\/secrets\/([^/]+)\/copy$/)
+    if (copyMatch && request.method === 'POST') {
+      const toRowId = decodeURIComponent(copyMatch[1])
+      const { fromRowId } = JSON.parse(await readBody(request))
+      const workspaceId = await requireWorkspaceId()
+      const copied = await copySecret(workspaceId, fromRowId, toRowId)
+      sendJson(response, 200, { ok: true, copied })
       return
     }
 

@@ -43,11 +43,6 @@ API_PORT=5174
 UI_PORT=5173
 ```
 
-Values need no quotes and no trailing semicolon; a `.env` is not a shell script.
-A port that is not a whole number in range is an error rather than a shrug,
-because `Number('5174;')` is `NaN` and listening on `NaN` quietly binds a random
-port instead of failing.
-
 Both ports resolve through `config.mjs`, which the API server and `vite.config.ts`
 share. The Vite proxy target and the port the server actually binds have to
 agree, and keeping them in two files is how you end up proxying into nothing.
@@ -71,6 +66,14 @@ A leading `~` is expanded, since no shell has seen the file.
 **Compose requests.** Method, URL, headers and body, with the body editor backed
 by CodeMirror. In JSON mode you get syntax highlighting, bracket matching and
 inline error markers on malformed JSON, plus a Format button.
+
+**GraphQL** is a separate body mode: a plain-text query editor and a variables
+table for the JSON `variables` object. On send curler posts the usual
+`{"query":"...","variables":{...}}` payload with `Content-Type:
+application/json`. A `$id` in the query is GraphQL syntax and is sent literally;
+`${VAR}` in the variables table is curler syntax and is substituted before the
+value is parsed as JSON. Pasting a browser curl that carries a GraphQL body
+splits it into this form automatically.
 
 **Quick-add headers.** The Headers tab has a menu of common single headers and
 of combinations that come up constantly — "JSON API" adds both `Content-Type`
@@ -165,6 +168,14 @@ pre-named `API_KEY`, since that is the common case; the name is selected when
 you click into it, so typing replaces it the way a placeholder would, while a
 second click lets you edit it in place.
 
+**Secret variables.** In the Vars dialog, the lock toggle beside a row stores its
+value in your OS keychain rather than in `workspace.json`. The name, scope and
+enabled flag still save with the workspace; only the value stays behind on this
+machine. Secret values are masked in the editor and show as `(secret)` in
+Diagnostics rather than in plain text. Turning the lock off moves the value back
+into the workspace file, after a confirmation. Deleting a secret row removes the
+keychain entry too, and asks first — there is no undo.
+
 Anything that would quietly break the request is caught before it leaves the
 machine. A request that references a variable which is undefined, or defined but
 empty, is **not sent at all** — you get an explanation naming the variables
@@ -176,8 +187,8 @@ request that already happened.
 
 It opens with how the request was *built*: each variable that was referenced,
 the scope that answered for it, the value it resolved to and where in the
-request it was used. Rows dropped for having a name but no value, or the other
-way round, are listed too. Between them these answer the question that
+request it was used — except secrets, which appear as `(secret)`. Rows dropped
+for having a name but no value, or the other way round, are listed too. Between them these answer the question that
 otherwise costs twenty minutes: why the request that went out is not the one
 you thought you wrote.
 

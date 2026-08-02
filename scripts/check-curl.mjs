@@ -1,7 +1,8 @@
 import { createHarness, loadModules } from './harness.mjs'
 
-const { modules, close } = await loadModules(['/src/lib/curl.ts'])
+const { modules, close } = await loadModules(['/src/lib/curl.ts', '/src/lib/graphql.ts'])
 const { parseCurl, toCurl } = modules
+const { buildGraphqlBody } = modules
 const { group, detail, expect, pass, fail, summary } = createHarness('curl round-trip')
 
 /**
@@ -39,8 +40,8 @@ const cases = [
   --data-raw $'{"operationName":"Hero","query":"mutation Hero {\\n  rename(name: \\"Ada!\\")\\n}","variables":{}}'`,
     {
       method: 'POST',
-      bodyMode: 'json',
-      body: String.raw`{"operationName":"Hero","query":"mutation Hero {\n  rename(name: \"Ada!\")\n}","variables":{}}`,
+      bodyMode: 'graphql',
+      body: 'mutation Hero {\n  rename(name: "Ada!")\n}',
     },
   ],
   [
@@ -64,8 +65,9 @@ const cases = [
   -H 'content-type: application/json' \
   --data-raw $'{"query":"query Hero($id: ID!) {\\n  hero(id: $id) {\\n    name\\n  }\\n}","variables":{"id":"1"}}'`,
     {
-      bodyMode: 'json',
-      body: String.raw`{"query":"query Hero($id: ID!) {\n  hero(id: $id) {\n    name\n  }\n}","variables":{"id":"1"}}`,
+      bodyMode: 'graphql',
+      body: 'query Hero($id: ID!) {\n  hero(id: $id) {\n    name\n  }\n}',
+      graphqlVariables: [['id', '1']],
     },
   ],
   [
@@ -103,16 +105,30 @@ for (const [label, input, wanted] of cases) {
   if (wanted?.headers !== undefined) expect('headers', headers, wanted.headers)
   if (wanted?.bodyMode !== undefined) expect('body mode', request.body.mode, wanted.bodyMode)
   if (wanted?.body !== undefined) expect('body', request.body.text, wanted.body)
+  if (wanted?.graphqlVariables !== undefined) {
+    const got = request.body.graphqlVariables
+      .filter((row) => row.enabled && row.name.trim())
+      .map((row) => [row.name, row.value])
+    expect('graphql variables', got, wanted.graphqlVariables)
+  }
 
   // Form bodies are exported as a URL-encoded -d payload, so compare what
   // actually goes over the wire rather than the editor representation.
-  const wireBody = (model) =>
-    model.body.mode === 'form'
-      ? model.body.form
-          .filter((field) => field.enabled && field.name.trim())
-          .map((field) => `${encodeURIComponent(field.name)}=${encodeURIComponent(field.value)}`)
-          .join('&')
-      : model.body.text
+  const wireBody = (model) => {
+    if (model.body.mode === 'form') {
+      return model.body.form
+        .filter((field) => field.enabled && field.name.trim())
+        .map((field) => `${encodeURIComponent(field.name)}=${encodeURIComponent(field.value)}`)
+        .join('&')
+    }
+    if (model.body.mode === 'graphql') {
+      return (
+        buildGraphqlBody(model.body.text, model.body.graphqlVariables ?? [], (value) => value) ??
+        ''
+      )
+    }
+    return model.body.text
+  }
 
   const roundTrip = parseCurl(toCurl(request)).request
   const stable =

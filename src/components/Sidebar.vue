@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   addCollection,
   deleteCollection,
@@ -8,6 +8,7 @@ import {
   newScratchRequest,
   renameCollection,
   renameRequest,
+  reorderRequest,
   selectRequest,
   state,
 } from '../lib/store'
@@ -166,6 +167,85 @@ function confirmDeleteCollection(id: string, name: string) {
     deleteCollection(id)
   }
 }
+
+const dragging = ref<{ collectionId: string; fromIndex: number } | null>(null)
+const dropTarget = ref<{ collectionId: string; index: number } | null>(null)
+
+function startDrag(collectionId: string, fromIndex: number, event: DragEvent) {
+  dragging.value = { collectionId, fromIndex }
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(fromIndex))
+  }
+}
+
+function endDrag() {
+  dragging.value = null
+  dropTarget.value = null
+}
+
+function dragOverRequest(collectionId: string, index: number, event: DragEvent) {
+  if (!dragging.value || dragging.value.collectionId !== collectionId) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  const row = event.currentTarget
+  if (!(row instanceof HTMLElement)) return
+  const after = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2
+  dropTarget.value = { collectionId, index: after ? index + 1 : index }
+}
+
+function dropOnRequests(collectionId: string, event: DragEvent) {
+  event.preventDefault()
+  if (!dragging.value || dragging.value.collectionId !== collectionId) return
+  const toIndex = dropTarget.value?.index ?? dragging.value.fromIndex
+  reorderRequest(collectionId, dragging.value.fromIndex, toIndex)
+  endDrag()
+}
+
+function dropIndicator(
+  collectionId: string,
+  index: number,
+  length: number,
+): 'before' | 'after' | null {
+  if (!dropTarget.value || dropTarget.value.collectionId !== collectionId) return null
+  const insert = dropTarget.value.index
+  if (insert === index) return 'before'
+  if (insert === length && index === length - 1) return 'after'
+  return null
+}
+
+function reorderByKeyboard(
+  collectionId: string,
+  index: number,
+  direction: -1 | 1,
+  event: KeyboardEvent,
+) {
+  event.preventDefault()
+  const collection = state.collections.find((item) => item.id === collectionId)
+  if (!collection) return
+  const requestId = collection.requests[index]?.id
+  if (!requestId) return
+  const { length } = collection.requests
+  let moved = false
+  if (direction === -1 && index > 0) {
+    reorderRequest(collectionId, index, index - 1)
+    moved = true
+  } else if (direction === 1 && index < length - 1) {
+    reorderRequest(collectionId, index, index + 2)
+    moved = true
+  }
+  if (moved) void refocusDragHandle(requestId)
+}
+
+async function refocusDragHandle(requestId: string) {
+  await nextTick()
+  root.value?.querySelector<HTMLButtonElement>(`.drag-handle[data-request-id="${requestId}"]`)?.focus()
+}
+
+function onHandleKeydown(collectionId: string, index: number, event: KeyboardEvent) {
+  if (event.key === 'ArrowUp') reorderByKeyboard(collectionId, index, -1, event)
+  else if (event.key === 'ArrowDown') reorderByKeyboard(collectionId, index, 1, event)
+}
 </script>
 
 <template>
@@ -270,14 +350,41 @@ function confirmDeleteCollection(id: string, name: string) {
           <span class="count faint">{{ collection.requests.length }}</span>
         </div>
 
-        <ul v-if="!collapsed.has(collection.id)" class="requests">
+        <TransitionGroup
+          v-if="!collapsed.has(collection.id)"
+          tag="ul"
+          name="request"
+          class="requests"
+          @dragover.prevent
+          @drop="dropOnRequests(collection.id, $event)"
+        >
           <li
-            v-for="request in collection.requests"
+            v-for="(request, index) in collection.requests"
             :key="request.id"
             class="request-item"
-            :class="{ active: state.activeRequestId === request.id }"
+            :class="{
+              active: state.activeRequestId === request.id,
+              dragging: dragging?.fromIndex === index && dragging?.collectionId === collection.id,
+              'drop-before': dropIndicator(collection.id, index, collection.requests.length) === 'before',
+              'drop-after': dropIndicator(collection.id, index, collection.requests.length) === 'after',
+            }"
             @click="selectRequest(request.id)"
+            @dragover="dragOverRequest(collection.id, index, $event)"
           >
+            <button
+              class="ghost drag-handle"
+              draggable="true"
+              :data-request-id="request.id"
+              title="Drag to reorder"
+              aria-label="Drag to reorder, or press arrow up or down"
+              aria-keyshortcuts="ArrowUp ArrowDown"
+              @click.stop
+              @dragstart="startDrag(collection.id, index, $event)"
+              @dragend="endDrag"
+              @keydown="onHandleKeydown(collection.id, index, $event)"
+            >
+              <span class="material-icons sm">drag_indicator</span>
+            </button>
             <span class="method mono" :class="request.method.toLowerCase()">
               {{ request.method.slice(0, 4) }}
             </span>
@@ -318,8 +425,8 @@ function confirmDeleteCollection(id: string, name: string) {
               </button>
             </span>
           </li>
-          <li v-if="!collection.requests.length" class="empty faint">No saved requests</li>
-        </ul>
+          <li v-if="!collection.requests.length" key="empty" class="empty faint">No saved requests</li>
+        </TransitionGroup>
       </div>
 
       <button class="ghost add-collection" @click="promptCollection">
@@ -544,8 +651,44 @@ function confirmDeleteCollection(id: string, name: string) {
 .collection-head:hover .tiny,
 .collection-head:has(:focus-visible) .tiny,
 .request-item:hover .tiny,
-.request-item:has(:focus-visible) .tiny {
+.request-item:has(:focus-visible) .tiny,
+.request-item:hover .drag-handle,
+.request-item:has(:focus-visible) .drag-handle {
   opacity: 1;
+}
+
+.drag-handle {
+  opacity: 0;
+  padding: 0 1px;
+  color: var(--text-faint);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.request-item.dragging {
+  opacity: 0.45;
+}
+
+.request-item.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.request-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.request-move {
+  transition: transform 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .request-move {
+    transition: none;
+  }
 }
 
 .requests {
