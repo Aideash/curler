@@ -19,8 +19,9 @@ import { braceBareReferences, inspect } from '../lib/vars'
 import { resolvedRowValue } from '../lib/store'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
 
+const request = defineModel<RequestModel>('request', { required: true })
+
 const props = defineProps<{
-  request: RequestModel
   variables: Record<string, string>
   sending: boolean
 }>()
@@ -48,49 +49,48 @@ const BODY_MODES: { value: BodyMode; label: string }[] = [
 function isModeDisabled(mode: BodyMode, method: HttpMethod) {
   if (mode === 'none') return false
 
-  return (method === 'TRACE' && mode !== 'text') || 
-    (method !== 'POST' && mode === 'graphql') || 
-    (method === 'GET')
+  return (
+    (method === 'TRACE' && mode !== 'text') ||
+    (method !== 'POST' && mode === 'graphql') ||
+    method === 'GET'
+  )
 }
 
 const enabledHeaderCount = computed(
-  () => props.request.headers.filter((h) => h.enabled && h.name.trim()).length,
+  () => request.value.headers.filter((h) => h.enabled && h.name.trim()).length,
 )
 
 // Path parameters only mean anything in a URL, so only the URL is checked
 // for them.
-const urlIssues = computed(() => inspect(props.request.url, props.variables, true))
+const urlIssues = computed(() => inspect(request.value.url, props.variables, true))
 
 function braceUrlReference(name: string) {
-  props.request.url = braceBareReferences(props.request.url, name)
+  request.value.url = braceBareReferences(request.value.url, name)
 }
 
 const requestVarCount = computed(
   () =>
-    props.request.variables.filter(
-      (v) => v.enabled && v.name.trim() && resolvedRowValue(v).trim(),
-    ).length,
+    request.value.variables.filter((v) => v.enabled && v.name.trim() && resolvedRowValue(v).trim())
+      .length,
 )
 
-const canSend = computed(
-  () => props.request.url.trim().length > 0 && !props.sending,
-)
+const canSend = computed(() => request.value.url.trim().length > 0 && !props.sending)
 
 function applyHeader(name: string, value: string) {
-  const existing = props.request.headers.find(
+  const existing = request.value.headers.find(
     (header) => header.name.toLowerCase() === name.toLowerCase(),
   )
   if (existing) {
     existing.value = value
     existing.enabled = true
   } else {
-    const blank = props.request.headers.find((h) => !h.name.trim() && !h.value.trim())
+    const blank = request.value.headers.find((h) => !h.name.trim() && !h.value.trim())
     if (blank) {
       blank.name = name
       blank.value = value
       blank.enabled = true
     } else {
-      props.request.headers.push({ id: uid(), name, value, enabled: true })
+      request.value.headers.push({ id: uid(), name, value, enabled: true })
     }
   }
 }
@@ -101,15 +101,15 @@ function applyBundle(headers: { name: string; value: string }[]) {
 }
 
 function setBodyMode(mode: BodyMode) {
-  props.request.body.mode = mode
+  request.value.body.mode = mode
   if (mode === 'json' || mode === 'graphql') {
     applyHeader('Content-Type', 'application/json')
   }
 }
 
 function setMethod(method: HttpMethod) {
-  props.request.method = method
-  if (isModeDisabled(props.request.body.mode, method)) {
+  request.value.method = method
+  if (isModeDisabled(request.value.body.mode, method)) {
     setBodyMode('none')
   }
 }
@@ -127,18 +127,18 @@ function labelsFor(ids: string[]): string {
 }
 
 function toggleFlag(id: string, on: boolean) {
-  if (on) props.request.terminalFlags[id] = true
-  else delete props.request.terminalFlags[id]
+  if (on) request.value.terminalFlags[id] = true
+  else delete request.value.terminalFlags[id]
 }
 
 function setFlagValue(id: string, value: string) {
-  if (value.trim()) props.request.terminalFlags[id] = value
-  else delete props.request.terminalFlags[id]
+  if (value.trim()) request.value.terminalFlags[id] = value
+  else delete request.value.terminalFlags[id]
 }
 
 /** What the flags will look like once appended, so the effect is visible. */
 const flagPreview = computed(() =>
-  terminalFlagArgs(props.request.terminalFlags)
+  terminalFlagArgs(request.value.terminalFlags)
     .map((arg) => (arg.value === undefined ? arg.flag : `${arg.flag} ${arg.value}`))
     .join(' '),
 )
@@ -152,7 +152,7 @@ const flagPreview = computed(() =>
         :value="request.method"
         class="method"
         :class="request.method.toLowerCase()"
-        @input="setMethod((($event.target as HTMLSelectElement).value as HttpMethod))"
+        @input="setMethod(($event.target as HTMLSelectElement).value as HttpMethod)"
       >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">
           {{ method }}
@@ -168,11 +168,7 @@ const flagPreview = computed(() =>
           spellcheck="false"
           @keydown.enter="canSend && emit('send')"
         />
-        <VariableIssues
-          class="url-warn"
-          :issues="urlIssues"
-          @fix="braceUrlReference"
-        />
+        <VariableIssues class="url-warn" :issues="urlIssues" @fix="braceUrlReference" />
       </div>
 
       <button class="primary send" :disabled="!canSend" @click="emit('send')">
@@ -183,11 +179,7 @@ const flagPreview = computed(() =>
 
     <div class="toolbar">
       <div class="tabs">
-        <button
-          class="ghost tab"
-          :class="{ active: tab === 'headers' }"
-          @click="tab = 'headers'"
-        >
+        <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'">
           Headers
           <span v-if="enabledHeaderCount" class="badge">{{ enabledHeaderCount }}</span>
         </button>
@@ -201,11 +193,7 @@ const flagPreview = computed(() =>
           Vars
           <span v-if="requestVarCount" class="badge">{{ requestVarCount }}</span>
         </button>
-        <button
-          class="ghost tab"
-          :class="{ active: tab === 'options' }"
-          @click="tab = 'options'"
-        >
+        <button class="ghost tab" :class="{ active: tab === 'options' }" @click="tab = 'options'">
           Options
         </button>
       </div>
@@ -217,17 +205,11 @@ const flagPreview = computed(() =>
         </button>
         <PopMenu icon="content_copy" label="Copy as curl" :width="330">
           <template #default="{ close }">
-            <button
-              class="preset-item"
-              @click="emit('copyCurl', true), close()"
-            >
+            <button class="preset-item" @click="(emit('copyCurl', true), close())">
               <span class="preset-label">Ready to run</span>
               <span class="preset-desc">Variables replaced with their values</span>
             </button>
-            <button
-              class="preset-item"
-              @click="emit('copyCurl', false), close()"
-            >
+            <button class="preset-item" @click="(emit('copyCurl', false), close())">
               <span class="preset-label">Shareable</span>
               <span class="preset-desc">Keeps ${VARIABLE} placeholders</span>
             </button>
@@ -248,7 +230,7 @@ const flagPreview = computed(() =>
                 v-for="bundle in HEADER_BUNDLES"
                 :key="bundle.label"
                 class="preset-item"
-                @click="applyBundle(bundle.headers), close()"
+                @click="(applyBundle(bundle.headers), close())"
               >
                 <span class="preset-label">{{ bundle.label }}</span>
                 <span class="preset-desc">{{ bundle.description }}</span>
@@ -258,7 +240,7 @@ const flagPreview = computed(() =>
                 v-for="(preset, index) in HEADER_PRESETS"
                 :key="index"
                 class="preset-item"
-                @click="applyBundle([preset]), close()"
+                @click="(applyBundle([preset]), close())"
               >
                 <span class="preset-label mono">{{ preset.name }}</span>
                 <span class="preset-desc mono">{{ preset.value || '—' }}</span>
@@ -296,7 +278,10 @@ const flagPreview = computed(() =>
               <span class="material-icons sm">error_outline</span>
               {{ bodyValidity.message }}
             </span>
-            <span v-else-if="request.body.mode === 'json' && request.body.text.trim()" class="valid">
+            <span
+              v-else-if="request.body.mode === 'json' && request.body.text.trim()"
+              class="valid"
+            >
               <span class="material-icons sm">check_circle_outline</span>
               Valid JSON
             </span>
@@ -348,7 +333,11 @@ const flagPreview = computed(() =>
             ref="bodyEditor"
             v-model="request.body.text"
             :language="request.body.mode === 'json' ? 'json' : 'text'"
-            :placeholder="request.body.mode === 'json' ? '{\n  &quot;key&quot;: &quot;value&quot;\n}' : 'Request body'"
+            :placeholder="
+              request.body.mode === 'json'
+                ? '{\n  &quot;key&quot;: &quot;value&quot;\n}'
+                : 'Request body'
+            "
             @validity="bodyValidity = $event"
           />
         </div>
@@ -364,8 +353,8 @@ const flagPreview = computed(() =>
           </button>
         </div>
         <p class="pane-hint faint">
-          These override anything of the same name in the collection, environment or
-          globals. Toggle rows on and off to switch between values — handy for a
+          These override anything of the same name in the collection, environment or globals. Toggle
+          rows on and off to switch between values — handy for a
           <code>:id</code> path parameter with a few candidates.
         </p>
         <KeyValueEditor
@@ -424,8 +413,8 @@ const flagPreview = computed(() =>
           <span>
             <strong>Response size cap (MB)</strong>
             <em class="faint">
-              Stops reading past this much rather than buffering the whole thing.
-              A truncated response says so in Diagnostics.
+              Stops reading past this much rather than buffering the whole thing. A truncated
+              response says so in Diagnostics.
             </em>
           </span>
         </label>
@@ -437,9 +426,9 @@ const flagPreview = computed(() =>
             Terminal-only flags
           </h3>
           <p class="faint terminal-hint">
-            Added to both <strong>Copy as curl</strong> forms and nothing else. They have
-            no effect on requests sent from here — there is no progress meter to quieten
-            and no file to write. Flags that contradict each other cannot both be picked.
+            Added to both <strong>Copy as curl</strong> forms and nothing else. They have no effect
+            on requests sent from here — there is no progress meter to quieten and no file to write.
+            Flags that contradict each other cannot both be picked.
           </p>
 
           <div v-for="group in TERMINAL_GROUPS" :key="group.id" class="flag-group">
@@ -463,7 +452,11 @@ const flagPreview = computed(() =>
                   v-else
                   :id="`flag-${flag.id}`"
                   class="mono flag-value"
-                  :value="typeof request.terminalFlags[flag.id] === 'string' ? request.terminalFlags[flag.id] : ''"
+                  :value="
+                    typeof request.terminalFlags[flag.id] === 'string'
+                      ? request.terminalFlags[flag.id]
+                      : ''
+                  "
                   :placeholder="flag.placeholder"
                   :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
                   spellcheck="false"
@@ -476,10 +469,15 @@ const flagPreview = computed(() =>
                   </span>
                   <em class="faint">{{ flag.description }}</em>
                   <em v-if="blockedBy(request.terminalFlags, flag.id).length" class="blocked-note">
-                    Unavailable while {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is on.
+                    Unavailable while {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is
+                    on.
                   </em>
-                  <em v-else-if="ineffective(request.terminalFlags, flag.id).length" class="blocked-note">
-                    Does nothing without {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
+                  <em
+                    v-else-if="ineffective(request.terminalFlags, flag.id).length"
+                    class="blocked-note"
+                  >
+                    Does nothing without
+                    {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
                   </em>
                 </span>
               </label>
@@ -538,13 +536,27 @@ const flagPreview = computed(() =>
   text-align: center;
 }
 
-.method.get { color: var(--green); }
-.method.post { color: var(--accent); }
-.method.put { color: var(--amber); }
-.method.patch { color: var(--purple); }
-.method.delete { color: var(--red); }
-.method.options { color: var(--cyan); }
-.method.trace { color: var(--pink); }
+.method.get {
+  color: var(--green);
+}
+.method.post {
+  color: var(--accent);
+}
+.method.put {
+  color: var(--amber);
+}
+.method.patch {
+  color: var(--purple);
+}
+.method.delete {
+  color: var(--red);
+}
+.method.options {
+  color: var(--cyan);
+}
+.method.trace {
+  color: var(--pink);
+}
 
 .url-field {
   position: relative;

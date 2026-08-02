@@ -25,7 +25,11 @@
     "check:flags": "node scripts/check-terminal-flags.mjs",
     "check:engine": "node scripts/check-engine.mjs",
     "check:storage": "node scripts/check-storage.mjs",
-    "check:theme": "node scripts/check-theme.mjs"
+    "check:theme": "node scripts/check-theme.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
@@ -41,12 +45,21 @@
     "vue": "^3.5.40"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.13.3",
     "@types/shell-quote": "^1.7.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.65.0",
     "vite": "^8.2.0",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.8"
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
-import Sidebar from './Sidebar.vue'
+import BuildSidebar from './BuildSidebar.vue'
 import RequestPanel from './RequestPanel.vue'
 import ResponsePanel from './ResponsePanel.vue'
 import CurlImportDialog from './CurlImportDialog.vue'
@@ -93,10 +93,7 @@ async function copyAsCurl(resolved: boolean) {
     await copyText(command)
     flash(resolved ? 'Copied, variables resolved' : 'Copied with placeholders')
   } catch (caught) {
-    flash(
-      `Copy failed: ${caught instanceof Error ? caught.message : String(caught)}`,
-      'error',
-    )
+    flash(`Copy failed: ${caught instanceof Error ? caught.message : String(caught)}`, 'error')
   }
 }
 
@@ -157,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <div class="app">
-    <Sidebar @manage-variables="openVariables" />
+    <BuildSidebar @manage-variables="openVariables" />
 
     <main class="main">
       <div class="title-bar">
@@ -198,7 +195,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span class="material-icons sm">compare_arrows</span>
           Compare
         </button>
-        <span v-if="!state.persistable && state.loaded" class="not-saving" :title="state.error ?? ''">
+        <span
+          v-if="!state.persistable && state.loaded"
+          class="not-saving"
+          :title="state.error ?? ''"
+        >
           <span class="material-icons sm">cloud_off</span>
           Not saving
         </span>
@@ -234,11 +235,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       />
     </main>
 
-    <CurlImportDialog
-      v-if="showImport"
-      @close="showImport = false"
-      @imported="onImported"
-    />
+    <CurlImportDialog v-if="showImport" @close="showImport = false" @imported="onImported" />
 
     <VariablesDialog
       v-if="showVariables"
@@ -254,7 +251,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <label class="field">
         <span class="faint">Collection</span>
         <select id="save-collection" v-model="saveCollectionId">
-          <option v-for="collection in state.collections" :key="collection.id" :value="collection.id">
+          <option
+            v-for="collection in state.collections"
+            :key="collection.id"
+            :value="collection.id"
+          >
             {{ collection.name }}
           </option>
         </select>

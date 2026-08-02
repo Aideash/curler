@@ -239,7 +239,9 @@ function reorderByKeyboard(
 
 async function refocusDragHandle(requestId: string) {
   await nextTick()
-  root.value?.querySelector<HTMLButtonElement>(`.drag-handle[data-request-id="${requestId}"]`)?.focus()
+  root.value
+    ?.querySelector<HTMLButtonElement>(`.drag-handle[data-request-id="${requestId}"]`)
+    ?.focus()
 }
 
 function onHandleKeydown(collectionId: string, index: number, event: KeyboardEvent) {
@@ -273,171 +275,191 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
 
     <!-- Full panel, shown when expanded. -->
     <div class="panel">
-    <header class="brand">
-      <span class="logo mono">curler</span>
-      <span class="brand-actions">
-        <button class="ghost" title="New request" @click="newScratchRequest()">
-          <span class="material-icons sm">add</span>
-          New
-        </button>
-        <button class="ghost rail-toggle" title="Collapse the sidebar" @click="toggleRail">
-          <span class="material-icons sm">keyboard_double_arrow_left</span>
-        </button>
-      </span>
-    </header>
-
-    <div class="env">
-      <select
-        id="active-environment"
-        v-model="state.activeEnvironmentId"
-        title="Active environment"
-      >
-        <option v-for="environment in state.environments" :key="environment.id" :value="environment.id">
-          {{ environment.name }}
-        </option>
-      </select>
-      <button class="ghost" title="Manage variables" @click="emit('manageVariables')">
-        <span class="material-icons sm">data_object</span>
-        Vars
-      </button>
-    </div>
-
-    <div class="tree">
-      <div v-for="collection in state.collections" :key="collection.id" class="collection">
-        <div class="collection-head">
-          <button
-            class="ghost chevron"
-            :title="collapsed.has(collection.id) ? 'Expand collection' : 'Collapse collection'"
-            :aria-expanded="!collapsed.has(collection.id)"
-            @click="toggle(collection.id)"
-          >
-            <span class="material-icons sm">
-              {{ collapsed.has(collection.id) ? 'chevron_right' : 'expand_more' }}
-            </span>
+      <header class="brand">
+        <span class="logo mono">curler</span>
+        <span class="brand-actions">
+          <button class="ghost" title="New request" @click="newScratchRequest()">
+            <span class="material-icons sm">add</span>
+            New
           </button>
-          <input
-            v-if="renamingId === collection.id"
-            id="collection-rename"
-            v-model="renameValue"
-            :ref="focusRename"
-            class="rename"
-            aria-label="Collection name"
-            @blur="commitRename('collection')"
-            @keydown.enter="submitRename('collection')"
-            @keydown.esc="cancelRename"
-          />
-          <span
-            v-else
-            class="collection-name"
-            @dblclick="startRename(collection.id, collection.name)"
-          >
-            {{ collection.name }}
-          </span>
-          <button
-            class="ghost tiny"
-            title="Rename collection"
-            @click="startRename(collection.id, collection.name)"
-          >
-            <span class="material-icons sm">edit</span>
+          <button class="ghost rail-toggle" title="Collapse the sidebar" @click="toggleRail">
+            <span class="material-icons sm">keyboard_double_arrow_left</span>
           </button>
-          <button
-            class="ghost danger tiny"
-            title="Delete collection"
-            @click="confirmDeleteCollection(collection.id, collection.name)"
-          >
-            <span class="material-icons sm">delete_outline</span>
-          </button>
-          <span class="count faint">{{ collection.requests.length }}</span>
-        </div>
+        </span>
+      </header>
 
-        <TransitionGroup
-          v-if="!collapsed.has(collection.id)"
-          tag="ul"
-          name="request"
-          class="requests"
-          @dragover.prevent
-          @drop="dropOnRequests(collection.id, $event)"
+      <div class="env">
+        <select
+          id="active-environment"
+          v-model="state.activeEnvironmentId"
+          title="Active environment"
         >
-          <li
-            v-for="(request, index) in collection.requests"
-            :key="request.id"
-            class="request-item"
-            :class="{
-              active: state.activeRequestId === request.id,
-              dragging: dragging?.fromIndex === index && dragging?.collectionId === collection.id,
-              'drop-before': dropIndicator(collection.id, index, collection.requests.length) === 'before',
-              'drop-after': dropIndicator(collection.id, index, collection.requests.length) === 'after',
-            }"
-            @click="selectRequest(request.id)"
-            @dragover="dragOverRequest(collection.id, index, $event)"
+          <option
+            v-for="environment in state.environments"
+            :key="environment.id"
+            :value="environment.id"
           >
+            {{ environment.name }}
+          </option>
+        </select>
+        <button class="ghost" title="Manage variables" @click="emit('manageVariables')">
+          <span class="material-icons sm">data_object</span>
+          Vars
+        </button>
+      </div>
+
+      <div class="tree">
+        <div v-for="collection in state.collections" :key="collection.id" class="collection">
+          <div class="collection-head">
             <button
-              class="ghost drag-handle"
-              draggable="true"
-              :data-request-id="request.id"
-              title="Drag to reorder"
-              aria-label="Drag to reorder, or press arrow up or down"
-              aria-keyshortcuts="ArrowUp ArrowDown"
-              @click.stop
-              @dragstart="startDrag(collection.id, index, $event)"
-              @dragend="endDrag"
-              @keydown="onHandleKeydown(collection.id, index, $event)"
+              class="ghost chevron"
+              :title="collapsed.has(collection.id) ? 'Expand collection' : 'Collapse collection'"
+              :aria-expanded="!collapsed.has(collection.id)"
+              @click="toggle(collection.id)"
             >
-              <span class="material-icons sm">drag_indicator</span>
+              <span class="material-icons sm">
+                {{ collapsed.has(collection.id) ? 'chevron_right' : 'expand_more' }}
+              </span>
             </button>
-            <span class="method mono" :class="request.method.toLowerCase()">
-              {{ request.method.slice(0, 4) }}
-            </span>
             <input
-              v-if="renamingId === request.id"
-              id="request-rename"
-              v-model="renameValue"
+              v-if="renamingId === collection.id"
+              id="collection-rename"
               :ref="focusRename"
+              v-model="renameValue"
               class="rename"
-              aria-label="Request name"
-              @click.stop
-              @blur="commitRename('request')"
-              @keydown.enter="submitRename('request')"
+              aria-label="Collection name"
+              @blur="commitRename('collection')"
+              @keydown.enter="submitRename('collection')"
               @keydown.esc="cancelRename"
             />
-            <!--
+            <span
+              v-else
+              class="collection-name"
+              @dblclick="startRename(collection.id, collection.name)"
+            >
+              {{ collection.name }}
+            </span>
+            <button
+              class="ghost tiny"
+              title="Rename collection"
+              @click="startRename(collection.id, collection.name)"
+            >
+              <span class="material-icons sm">edit</span>
+            </button>
+            <button
+              class="ghost danger tiny"
+              title="Delete collection"
+              @click="confirmDeleteCollection(collection.id, collection.name)"
+            >
+              <span class="material-icons sm">delete_outline</span>
+            </button>
+            <span class="count faint">{{ collection.requests.length }}</span>
+          </div>
+
+          <TransitionGroup
+            v-if="!collapsed.has(collection.id)"
+            tag="ul"
+            name="request"
+            class="requests"
+            @dragover.prevent
+            @drop="dropOnRequests(collection.id, $event)"
+          >
+            <li
+              v-for="(request, index) in collection.requests"
+              :key="request.id"
+              class="request-item"
+              :class="{
+                active: state.activeRequestId === request.id,
+                dragging: dragging?.fromIndex === index && dragging?.collectionId === collection.id,
+                'drop-before':
+                  dropIndicator(collection.id, index, collection.requests.length) === 'before',
+                'drop-after':
+                  dropIndicator(collection.id, index, collection.requests.length) === 'after',
+              }"
+              @click="selectRequest(request.id)"
+              @dragover="dragOverRequest(collection.id, index, $event)"
+            >
+              <button
+                class="ghost drag-handle"
+                draggable="true"
+                :data-request-id="request.id"
+                title="Drag to reorder"
+                aria-label="Drag to reorder, or press arrow up or down"
+                aria-keyshortcuts="ArrowUp ArrowDown"
+                @click.stop
+                @dragstart="startDrag(collection.id, index, $event)"
+                @dragend="endDrag"
+                @keydown="onHandleKeydown(collection.id, index, $event)"
+              >
+                <span class="material-icons sm">drag_indicator</span>
+              </button>
+              <span class="method mono" :class="request.method.toLowerCase()">
+                {{ request.method.slice(0, 4) }}
+              </span>
+              <input
+                v-if="renamingId === request.id"
+                id="request-rename"
+                :ref="focusRename"
+                v-model="renameValue"
+                class="rename"
+                aria-label="Request name"
+                @click.stop
+                @blur="commitRename('request')"
+                @keydown.enter="submitRename('request')"
+                @keydown.esc="cancelRename"
+              />
+              <!--
               The whole row is a click target for the mouse, but selecting one
               by keyboard needs a real control: this button carries no handler
               of its own because activating it bubbles to the row's.
             -->
-            <button
-              v-else
-              class="request-name"
-              :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
-              @dblclick.stop="startRename(request.id, request.name)"
-            >
-              {{ request.name }}
-            </button>
-            <span class="row-actions">
-              <button class="ghost tiny" title="Rename" @click.stop="startRename(request.id, request.name)">
-                <span class="material-icons sm">edit</span>
+              <button
+                v-else
+                class="request-name"
+                :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
+                @dblclick.stop="startRename(request.id, request.name)"
+              >
+                {{ request.name }}
               </button>
-              <button class="ghost tiny" title="Duplicate" @click.stop="duplicateRequest(request.id)">
-                <span class="material-icons sm">content_copy</span>
-              </button>
-              <button class="ghost tiny danger" title="Delete" @click.stop="deleteRequest(request.id)">
-                <span class="material-icons sm">delete_outline</span>
-              </button>
-            </span>
-          </li>
-          <li v-if="!collection.requests.length" key="empty" class="empty faint">No saved requests</li>
-        </TransitionGroup>
+              <span class="row-actions">
+                <button
+                  class="ghost tiny"
+                  title="Rename"
+                  @click.stop="startRename(request.id, request.name)"
+                >
+                  <span class="material-icons sm">edit</span>
+                </button>
+                <button
+                  class="ghost tiny"
+                  title="Duplicate"
+                  @click.stop="duplicateRequest(request.id)"
+                >
+                  <span class="material-icons sm">content_copy</span>
+                </button>
+                <button
+                  class="ghost tiny danger"
+                  title="Delete"
+                  @click.stop="deleteRequest(request.id)"
+                >
+                  <span class="material-icons sm">delete_outline</span>
+                </button>
+              </span>
+            </li>
+            <li v-if="!collection.requests.length" key="empty" class="empty faint">
+              No saved requests
+            </li>
+          </TransitionGroup>
+        </div>
+
+        <button class="ghost add-collection" @click="promptCollection">
+          <span class="material-icons sm">create_new_folder</span>
+          Collection
+        </button>
       </div>
 
-      <button class="ghost add-collection" @click="promptCollection">
-        <span class="material-icons sm">create_new_folder</span>
-        Collection
-      </button>
-    </div>
-
-    <footer class="footer faint mono" :title="state.workspacePath">
-      {{ state.error ? state.error : state.workspacePath }}
-    </footer>
+      <footer class="footer faint mono" :title="state.workspacePath">
+        {{ state.error ? state.error : state.workspacePath }}
+      </footer>
     </div>
   </aside>
 
@@ -488,7 +510,9 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.22s ease, visibility 0.22s;
+    transition:
+      opacity 0.22s ease,
+      visibility 0.22s;
   }
 
   .scrim.show {
@@ -513,7 +537,9 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
   min-height: 0;
   /* Visibility keeps the hidden layer out of the tab order, and transitioning
      it defers the flip until the fade has finished. */
-  transition: opacity 0.16s ease, visibility 0.16s;
+  transition:
+    opacity 0.16s ease,
+    visibility 0.16s;
 }
 
 .panel {
@@ -721,14 +747,30 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
   flex-shrink: 0;
 }
 
-.method.get { color: var(--green); }
-.method.post { color: var(--accent); }
-.method.put { color: var(--amber); }
-.method.patch { color: var(--purple); }
-.method.delete { color: var(--red); }
-.method.head { color: var(--text-dim); }
-.method.options { color: var(--cyan); }
-.method.trace { color: var(--pink); }
+.method.get {
+  color: var(--green);
+}
+.method.post {
+  color: var(--accent);
+}
+.method.put {
+  color: var(--amber);
+}
+.method.patch {
+  color: var(--purple);
+}
+.method.delete {
+  color: var(--red);
+}
+.method.head {
+  color: var(--text-dim);
+}
+.method.options {
+  color: var(--cyan);
+}
+.method.trace {
+  color: var(--pink);
+}
 
 /* Reset to a bare row label: the button exists for focus and Enter, not looks. */
 .sidebar .request-name {

@@ -1,6 +1,6 @@
 /** Pre-filled name for a new environment variable, by far the most common one. */
 //export const DEFAULT_VARIABLE_NAME = 'API_KEY'
-export const DEFAULT_VARIABLE_NAME = undefined;
+export const DEFAULT_VARIABLE_NAME = undefined
 
 export interface HeaderPreset {
   name: string
@@ -36,9 +36,7 @@ export const HEADER_BUNDLES: HeaderBundle[] = [
   {
     label: 'Form submit',
     description: 'URL-encoded form body',
-    headers: [
-      { name: 'Content-Type', value: 'application/x-www-form-urlencoded' },
-    ],
+    headers: [{ name: 'Content-Type', value: 'application/x-www-form-urlencoded' }],
   },
   {
     label: 'No cache',
@@ -72,6 +70,4 @@ export const HEADER_PRESETS: HeaderPreset[] = [
   { name: 'X-Request-Id', value: '' },
 ]
 
-export const HEADER_NAMES: string[] = [
-  ...new Set(HEADER_PRESETS.map((preset) => preset.name)),
-]
+export const HEADER_NAMES: string[] = [...new Set(HEADER_PRESETS.map((preset) => preset.name))]

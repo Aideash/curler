@@ -86,7 +86,9 @@ watch(
         </span>
         <span v-if="response.redirectChain.length" class="metric">
           <span class="material-icons sm">alt_route</span>
-          {{ response.redirectChain.length }} redirect{{ response.redirectChain.length > 1 ? 's' : '' }}
+          {{ response.redirectChain.length }} redirect{{
+            response.redirectChain.length > 1 ? 's' : ''
+          }}
         </span>
         <span class="final-url mono faint" :title="response.finalUrl">
           {{ response.finalUrl }}
@@ -109,29 +111,35 @@ watch(
           <span class="action-button-text">{{ copied ? 'Copied' : 'Copy' }}</span>
         </button>
         <div class="tabs">
-          <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'" aria-label="Body" title="Body">
-            <span class="tab-text">
-              Body
-            </span>
+          <button
+            class="ghost tab"
+            :class="{ active: tab === 'body' }"
+            aria-label="Body"
+            title="Body"
+            @click="tab = 'body'"
+          >
+            <span class="tab-text"> Body </span>
             <span class="alt-icon material-icons sm">man</span>
           </button>
-          <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'" aria-label="Headers" title="Headers">
-            <span class="tab-text">
-              Headers
-            </span>
+          <button
+            class="ghost tab"
+            :class="{ active: tab === 'headers' }"
+            aria-label="Headers"
+            title="Headers"
+            @click="tab = 'headers'"
+          >
+            <span class="tab-text"> Headers </span>
             <span class="alt-icon material-icons sm">face</span>
             <span class="badge">{{ response.headers.length }}</span>
           </button>
           <button
             class="ghost tab"
             :class="{ active: tab === 'diagnostics' }"
-            @click="tab = 'diagnostics'"
             aria-label="Diagnostics"
             title="Diagnostics"
+            @click="tab = 'diagnostics'"
           >
-            <span class="tab-text">
-              Diagnostics
-            </span>
+            <span class="tab-text"> Diagnostics </span>
             <span class="alt-icon material-icons sm">troubleshoot</span>
             <span v-if="response.truncated" class="material-icons sm warn-dot">content_cut</span>
           </button>
@@ -219,11 +227,25 @@ input {
   border: 1px solid var(--border-strong);
 }
 
-.chip.green { color: var(--green); border-color: var(--green-border); }
-.chip.amber { color: var(--amber); border-color: var(--amber-border); }
-.chip.red { color: var(--red); border-color: var(--red-border); }
-.chip.purple { color: var(--purple); border-color: var(--purple-border); }
-.chip.dim { color: var(--text-dim); }
+.chip.green {
+  color: var(--green);
+  border-color: var(--green-border);
+}
+.chip.amber {
+  color: var(--amber);
+  border-color: var(--amber-border);
+}
+.chip.red {
+  color: var(--red);
+  border-color: var(--red-border);
+}
+.chip.purple {
+  color: var(--purple);
+  border-color: var(--purple-border);
+}
+.chip.dim {
+  color: var(--text-dim);
+}
 
 /* Short enough to be worth keeping whole: given the chance these break between
    the number and its unit. */
@@ -251,7 +273,7 @@ input {
 }
 
 .reset {
-    margin-left: auto;
+  margin-left: auto;
 }
 
 .final-url {
@@ -390,7 +412,8 @@ input {
 
 /* Wrap the status bar on narrow-ish screens */
 @media screen and (max-width: 500px) {
-  .status-bar .copy, .status-bar .reset {
+  .status-bar .copy,
+  .status-bar .reset {
     min-width: 25px;
   }
   .status-bar button span.action-button-text {

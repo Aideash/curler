@@ -49,9 +49,7 @@ const editing = computed<Lane | null>(
   () => lanes.value.find((lane) => lane.id === editingId.value) ?? null,
 )
 
-const editingVariables = computed(() =>
-  editing.value ? laneVariables(editing.value).values : {},
-)
+const editingVariables = computed(() => (editing.value ? laneVariables(editing.value).values : {}))
 
 const editingUrl = computed(() => {
   const lane = editing.value
@@ -105,8 +103,8 @@ function bodyFor(lane: Lane | null): string {
   return isJsonResponse(response) ? prettyBody(response.body) : response.body
 }
 
-const diffReady = computed(
-  () => Boolean(leftLane.value?.outcome?.response && rightLane.value?.outcome?.response),
+const diffReady = computed(() =>
+  Boolean(leftLane.value?.outcome?.response && rightLane.value?.outcome?.response),
 )
 
 const responses = computed(() => lanes.value.map((lane) => lane.outcome?.response ?? null))
@@ -165,7 +163,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         Builder
       </button>
       <span class="heading">Compare</span>
-      <span class="faint hint">Not saved. Lanes are copies, so editing one leaves your saved requests alone.</span>
+      <span class="faint hint"
+        >Not saved. Lanes are copies, so editing one leaves your saved requests alone.</span
+      >
 
       <div class="spacer" />
 
@@ -173,7 +173,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <span class="material-icons sm">data_object</span>
         Vars
       </button>
-      <button class="ghost" :disabled="!canAdd" :title="canAdd ? 'Add a lane' : `The limit is ${MAX_LANES} lanes`" @click="addLane()">
+      <button
+        class="ghost"
+        :disabled="!canAdd"
+        :title="canAdd ? 'Add a lane' : `The limit is ${MAX_LANES} lanes`"
+        @click="addLane()"
+      >
         <span class="material-icons sm">add</span>
         Lane
       </button>
@@ -204,18 +209,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         </label>
 
         <template v-if="tab === 'body'">
-          <label class="toggle" title="Sort JSON keys before comparing, so field order is not reported as a change">
+          <label
+            class="toggle"
+            title="Sort JSON keys before comparing, so field order is not reported as a change"
+          >
             <input id="compare-normalise-json" v-model="normalize" type="checkbox" />
             Normalise JSON
           </label>
-          <label class="toggle strong" title="Off shows the responses independently, which is easier when they are genuinely unrelated">
+          <label
+            class="toggle strong"
+            title="Off shows the responses independently, which is easier when they are genuinely unrelated"
+          >
             <input id="compare-diff" v-model="diff" type="checkbox" />
             Diff
           </label>
 
           <template v-if="diff && lanes.length > 2">
-            <select id="compare-diff-left" v-model="leftId" class="pair" title="Left side of the diff">
-              <option v-for="lane in lanes" :key="lane.id" :value="lane.id">{{ lane.label }}</option>
+            <select
+              id="compare-diff-left"
+              v-model="leftId"
+              class="pair"
+              title="Left side of the diff"
+            >
+              <option v-for="lane in lanes" :key="lane.id" :value="lane.id">
+                {{ lane.label }}
+              </option>
             </select>
             <span class="faint">vs</span>
             <select
@@ -271,12 +289,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <div class="cell label-cell">{{ tab === 'meta' ? 'Property' : 'Header' }}</div>
           <div v-for="lane in lanes" :key="lane.id" class="cell">
             <span class="label">{{ lane.label }}</span>
-            <span class="col-url mono faint" :title="lane.request.url">{{ lane.request.url || '—' }}</span>
+            <span class="col-url mono faint" :title="lane.request.url">{{
+              lane.request.url || '—'
+            }}</span>
           </div>
         </div>
 
         <div
-          v-for="row in (tab === 'meta' ? metaRows : headerRows)"
+          v-for="row in tab === 'meta' ? metaRows : headerRows"
           :key="row.label"
           class="table-row"
           :class="{ differs: row.differs }"
@@ -313,7 +333,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <label class="env-field">
           <span class="faint">Environment</span>
           <select id="lane-environment" v-model="editing.environmentId">
-            <option v-for="environment in state.environments" :key="environment.id" :value="environment.id">
+            <option
+              v-for="environment in state.environments"
+              :key="environment.id"
+              :value="environment.id"
+            >
               {{ environment.name }}
             </option>
           </select>
@@ -323,7 +347,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
              environment above is visible before sending. -->
         <span class="resolved">
           <span class="faint">Resolves to</span>
-          <span class="mono" :class="{ unresolved: editingUrl.issues.length }" :title="editingUrl.title">
+          <span
+            class="mono"
+            :class="{ unresolved: editingUrl.issues.length }"
+            :title="editingUrl.title"
+          >
             {{ editingUrl.value || '—' }}
           </span>
         </span>
