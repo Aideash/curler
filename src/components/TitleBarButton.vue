@@ -10,7 +10,7 @@ const props = withDefaults(
     disabled?: boolean
     back?: boolean
   }>(),
-  { variant: 'ghost' },
+  { icon: undefined, title: undefined, variant: 'ghost' },
 )
 
 const emit = defineEmits<{ click: [event: MouseEvent] }>()
