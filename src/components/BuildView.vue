@@ -252,7 +252,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span class="material-icons sm">cloud_off</span>
           Not saving
         </span>
-        <TitleBarButton v-else-if="isScratch" icon="bookmark_add" label="Save" @click="openSave" />
+        <TitleBarButton
+          v-else-if="isScratch"
+          class="save-button"
+          icon="bookmark_add"
+          label="Save"
+          @click="openSave"
+        />
         <span v-else class="faint autosaved">
           <span class="material-icons sm">cloud_done</span>
           Saved
@@ -414,5 +420,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 .field span {
   font-size: 12px;
+}
+
+.save-button {
+  background-color: var(--bg-raised);
+  color: var(--text);
 }
 </style>
