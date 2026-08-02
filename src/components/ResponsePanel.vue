@@ -144,11 +144,11 @@ watch(
             <span v-if="response.truncated" class="material-icons sm warn-dot">content_cut</span>
           </button>
         </div>
-        <button class="ghost reset" @click="resetPane">
-          <span class="material-icons sm">refresh</span>
-          <span class="action-button-text">Reset</span>
-        </button>
       </template>
+      <button class="ghost reset" @click="resetPane">
+        <span class="material-icons sm">refresh</span>
+        <span class="action-button-text">Reset</span>
+      </button>
     </div>
 
     <div class="content">
