@@ -9,6 +9,7 @@ import {
   type RequestBody,
   type RequestModel,
 } from '../types'
+import { reorderItems } from '../composables/useReorderList'
 import {
   readBuiltins,
   readSecrets,
@@ -501,12 +502,7 @@ export function duplicateRequest(id: string) {
 export function reorderRequest(collectionId: string, fromIndex: number, toIndex: number) {
   const collection = state.collections.find((item) => item.id === collectionId)
   if (!collection) return
-  const { length } = collection.requests
-  if (fromIndex < 0 || fromIndex >= length || toIndex < 0 || toIndex > length) return
-  const insertAt = fromIndex < toIndex ? toIndex - 1 : toIndex
-  if (insertAt === fromIndex) return
-  const [item] = collection.requests.splice(fromIndex, 1)
-  collection.requests.splice(insertAt, 0, item)
+  reorderItems(collection.requests, fromIndex, toIndex)
 }
 
 export function deleteRequest(id: string) {

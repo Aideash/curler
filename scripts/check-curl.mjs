@@ -102,9 +102,11 @@ for (const [label, input, wanted] of cases) {
   detail(`method   ${request.method}`)
   detail(`url      ${request.url}`)
   detail(`headers  ${headers || '(none)'}`)
-  detail(`body     [${request.body.mode}] ${
-    request.body.mode === 'graphql' ? request.body.graphql.query : request.body.text || '(empty)'
-  }`)
+  detail(
+    `body     [${request.body.mode}] ${
+      request.body.mode === 'graphql' ? request.body.graphql.query : request.body.text || '(empty)'
+    }`,
+  )
   if (request.options.insecure) detail('insecure true')
   if (warnings.length) detail(`warnings ${warnings.join('; ')}`)
 
@@ -113,8 +115,7 @@ for (const [label, input, wanted] of cases) {
   if (wanted?.headers !== undefined) expect('headers', headers, wanted.headers)
   if (wanted?.bodyMode !== undefined) expect('body mode', request.body.mode, wanted.bodyMode)
   if (wanted?.body !== undefined) {
-    const got =
-      request.body.mode === 'graphql' ? request.body.graphql.query : request.body.text
+    const got = request.body.mode === 'graphql' ? request.body.graphql.query : request.body.text
     expect('body', got, wanted.body)
   }
   if (wanted?.graphqlVariables !== undefined) {
@@ -135,8 +136,11 @@ for (const [label, input, wanted] of cases) {
     }
     if (model.body.mode === 'graphql') {
       return (
-        buildGraphqlBody(model.body.graphql.query, model.body.graphql.variables, (value) => value) ??
-        ''
+        buildGraphqlBody(
+          model.body.graphql.query,
+          model.body.graphql.variables,
+          (value) => value,
+        ) ?? ''
       )
     }
     return model.body.text

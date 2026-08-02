@@ -364,3 +364,19 @@ export function resolveRequest(
     empty: [...empty],
   }
 }
+
+/**
+ * Every `${NAME}` the request actually uses (URL, headers, form, GraphQL
+ * variables). A request with no references is ready; it does not need to
+ * define every key in the active environment.
+ */
+export function requestVariableIssues(
+  request: RequestModel,
+  variables: Record<string, string>,
+): VariableIssue[] {
+  const resolved = resolveRequest(request, variables)
+  return [
+    ...resolved.missing.map((name) => ({ name, kind: 'missing' as const })),
+    ...resolved.empty.map((name) => ({ name, kind: 'empty' as const })),
+  ]
+}

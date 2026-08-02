@@ -194,6 +194,7 @@ function confirmDeleteEnvironment() {
       :default-name="defaultName"
       :resolves="false"
       allow-secrets
+      reorderable
     />
 
     <p v-if="shadowed.length" class="notice">

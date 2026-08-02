@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
+  activeEnvironment,
   addCollection,
+  buildVariableSet,
   deleteCollection,
   deleteRequest,
   duplicateRequest,
@@ -12,9 +14,28 @@ import {
   selectRequest,
   state,
 } from '../lib/store'
+import { describeIssues, requestVariableIssues } from '../lib/vars'
+import { useReorderList } from '../composables/useReorderList'
 import type { EditableScope } from '../types'
+import { featureFlags } from '../lib/featureFlags'
 
 const emit = defineEmits<{ manageVariables: [scope?: EditableScope] }>()
+
+/** Saved requests whose referenced variables are missing or empty for the active environment. */
+const unconfigured = computed(() => {
+  const environment = activeEnvironment.value
+  const out = new Map<string, string>()
+  for (const collection of state.collections) {
+    for (const request of collection.requests) {
+      const issues = requestVariableIssues(
+        request,
+        buildVariableSet(request, collection, environment).values,
+      )
+      if (issues.length) out.set(request.id, describeIssues(issues))
+    }
+  }
+  return out
+})
 
 const collapsed = ref(new Set<string>())
 const renamingId = ref<string | null>(null)
@@ -168,86 +189,19 @@ function confirmDeleteCollection(id: string, name: string) {
   }
 }
 
-const dragging = ref<{ collectionId: string; fromIndex: number } | null>(null)
-const dropTarget = ref<{ collectionId: string; index: number } | null>(null)
-
-function startDrag(collectionId: string, fromIndex: number, event: DragEvent) {
-  dragging.value = { collectionId, fromIndex }
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(fromIndex))
-  }
-}
-
-function endDrag() {
-  dragging.value = null
-  dropTarget.value = null
-}
-
-function dragOverRequest(collectionId: string, index: number, event: DragEvent) {
-  if (!dragging.value || dragging.value.collectionId !== collectionId) return
-  event.preventDefault()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-  const row = event.currentTarget
-  if (!(row instanceof HTMLElement)) return
-  const after = event.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2
-  dropTarget.value = { collectionId, index: after ? index + 1 : index }
-}
-
-function dropOnRequests(collectionId: string, event: DragEvent) {
-  event.preventDefault()
-  if (!dragging.value || dragging.value.collectionId !== collectionId) return
-  const toIndex = dropTarget.value?.index ?? dragging.value.fromIndex
-  reorderRequest(collectionId, dragging.value.fromIndex, toIndex)
-  endDrag()
-}
-
-function dropIndicator(
-  collectionId: string,
-  index: number,
-  length: number,
-): 'before' | 'after' | null {
-  if (!dropTarget.value || dropTarget.value.collectionId !== collectionId) return null
-  const insert = dropTarget.value.index
-  if (insert === index) return 'before'
-  if (insert === length && index === length - 1) return 'after'
-  return null
-}
-
-function reorderByKeyboard(
-  collectionId: string,
-  index: number,
-  direction: -1 | 1,
-  event: KeyboardEvent,
-) {
-  event.preventDefault()
-  const collection = state.collections.find((item) => item.id === collectionId)
-  if (!collection) return
-  const requestId = collection.requests[index]?.id
-  if (!requestId) return
-  const { length } = collection.requests
-  let moved = false
-  if (direction === -1 && index > 0) {
-    reorderRequest(collectionId, index, index - 1)
-    moved = true
-  } else if (direction === 1 && index < length - 1) {
-    reorderRequest(collectionId, index, index + 2)
-    moved = true
-  }
-  if (moved) void refocusDragHandle(requestId)
-}
-
-async function refocusDragHandle(requestId: string) {
-  await nextTick()
-  root.value
-    ?.querySelector<HTMLButtonElement>(`.drag-handle[data-request-id="${requestId}"]`)
-    ?.focus()
-}
-
-function onHandleKeydown(collectionId: string, index: number, event: KeyboardEvent) {
-  if (event.key === 'ArrowUp') reorderByKeyboard(collectionId, index, -1, event)
-  else if (event.key === 'ArrowDown') reorderByKeyboard(collectionId, index, 1, event)
-}
+const {
+  dragging,
+  startDrag,
+  endDrag,
+  dragOver: dragOverRequest,
+  drop: dropOnRequests,
+  dropIndicator,
+  onHandleKeydown,
+} = useReorderList({
+  reorder: reorderRequest,
+  root,
+  handleSelector: (requestId) => `.drag-handle[data-request-id="${requestId}"]`,
+})
 </script>
 
 <template>
@@ -370,12 +324,14 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
               class="request-item"
               :class="{
                 active: state.activeRequestId === request.id,
-                dragging: dragging?.fromIndex === index && dragging?.collectionId === collection.id,
+                unconfigured: unconfigured.has(request.id),
+                dragging: dragging?.fromIndex === index && dragging?.groupId === collection.id,
                 'drop-before':
                   dropIndicator(collection.id, index, collection.requests.length) === 'before',
                 'drop-after':
                   dropIndicator(collection.id, index, collection.requests.length) === 'after',
               }"
+              :title="unconfigured.get(request.id)"
               @click="selectRequest(request.id)"
               @dragover="dragOverRequest(collection.id, index, $event)"
             >
@@ -389,7 +345,15 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
                 @click.stop
                 @dragstart="startDrag(collection.id, index, $event)"
                 @dragend="endDrag"
-                @keydown="onHandleKeydown(collection.id, index, $event)"
+                @keydown="
+                  onHandleKeydown(
+                    collection.id,
+                    index,
+                    request.id,
+                    collection.requests.length,
+                    $event,
+                  )
+                "
               >
                 <span class="material-icons sm">drag_indicator</span>
               </button>
@@ -418,11 +382,13 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
                 class="request-name"
                 :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
                 @dblclick.stop="startRename(request.id, request.name)"
+                @keydown.shift.enter="startRename(request.id, request.name)"
               >
                 {{ request.name }}
               </button>
               <span class="row-actions">
                 <button
+                  v-if="featureFlags.showRequestEditIcons"
                   class="ghost tiny"
                   title="Rename"
                   @click.stop="startRename(request.id, request.name)"
@@ -738,6 +704,15 @@ function onHandleKeydown(collectionId: string, index: number, event: KeyboardEve
 
 .request-item.active {
   background: var(--accent-dim);
+}
+
+/* Dim requests that still have missing or empty vars for this environment. */
+.request-item.unconfigured:not(.active) {
+  opacity: 0.5;
+}
+
+.request-item.unconfigured:not(.active):hover {
+  opacity: 0.75;
 }
 
 .method {

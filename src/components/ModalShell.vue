@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useId } from 'vue'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 defineProps<{ title: string; width?: string }>()
 const emit = defineEmits<{ close: [] }>()
+
+const titleId = useId()
+const modal = ref<HTMLElement>()
+
+useFocusTrap(modal, {
+  boundary: 'close',
+  onLeave: () => emit('close'),
+})
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') emit('close')
@@ -15,9 +24,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 <template>
   <Teleport to="body">
     <div class="backdrop" @mousedown.self="emit('close')">
-      <div class="modal" :style="{ width: width ?? '620px' }">
+      <div
+        ref="modal"
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
+        :style="{ width: width ?? '620px' }"
+      >
         <header>
-          <h2>{{ title }}</h2>
+          <h2 :id="titleId">{{ title }}</h2>
           <button class="ghost close" title="Close" @click="emit('close')">
             <span class="material-icons">close</span>
           </button>

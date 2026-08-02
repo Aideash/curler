@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue } from '../types'
 import {
@@ -10,6 +10,7 @@ import {
   secretCache,
 } from '../lib/store'
 import { braceBareReferences, inspect } from '../lib/vars'
+import { reorderItems, useReorderList } from '../composables/useReorderList'
 
 const rows = defineModel<KeyValue[]>('rows', { required: true })
 
@@ -36,6 +37,8 @@ const props = withDefaults(
     resolves?: boolean
     /** Offer the OS keychain toggle for variable definitions. */
     allowSecrets?: boolean
+    /** Drag handles and arrow keys reorder rows in the backing array. */
+    reorderable?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -47,8 +50,28 @@ const props = withDefaults(
     defaultName: '',
     resolves: true,
     allowSecrets: false,
+    reorderable: false,
   },
 )
+
+const root = ref<HTMLElement | null>(null)
+const LIST = 'list' as const
+
+/** The trailing blank row stays put; only rows above it move. */
+const reorderableLength = computed(() => {
+  const last = rows.value[rows.value.length - 1]
+  return last && isBlank(last) ? rows.value.length - 1 : rows.value.length
+})
+
+const { dragging, startDrag, endDrag, dragOver, drop, dropIndicator, onHandleKeydown } =
+  useReorderList({
+    reorder: (_group, from, to) => {
+      if (!props.reorderable) return
+      reorderItems(rows.value, from, to)
+    },
+    root,
+    handleSelector: (rowId) => `.drag-handle[data-row-id="${rowId}"]`,
+  })
 
 function valueOf(row: KeyValue): string {
   return props.allowSecrets && row.secret ? (secretCache[row.id] ?? '') : row.value
@@ -151,88 +174,128 @@ function braceRowReference(row: KeyValue, name: string) {
   row.value = braceBareReferences(row.value, name)
 }
 
+function onListDrop(event: DragEvent) {
+  if (props.reorderable) drop(LIST, event)
+}
+
+function onRowDragOver(index: number, event: DragEvent) {
+  if (props.reorderable && index < reorderableLength.value) dragOver(LIST, index, event)
+}
+
 ensureTrailingRow()
 </script>
 
 <template>
-  <div class="kv" :class="{ 'with-secrets': allowSecrets }">
+  <div ref="root" class="kv" :class="{ 'with-secrets': allowSecrets, reorderable }">
     <datalist :id="listId">
       <option v-for="option in nameOptions" :key="option" :value="option" />
     </datalist>
 
-    <div
-      v-for="(row, index) in rows"
-      :key="row.id"
-      class="kv-row"
-      :class="{ blank: isBlank(row), partial: isPartial(row), secret: row.secret }"
+    <TransitionGroup
+      tag="div"
+      name="kv-row"
+      class="kv-rows"
+      :class="{ 'is-reordering': !!dragging }"
+      @dragover.prevent
+      @drop="onListDrop"
     >
-      <input
-        :id="`${idPrefix}-${index}-enabled`"
-        v-model="row.enabled"
-        type="checkbox"
-        class="kv-toggle"
-        :disabled="!isUsable(row)"
-        :title="
-          isUsable(row)
-            ? row.enabled
-              ? 'Enabled'
-              : 'Disabled'
-            : isBlank(row)
-              ? 'Nothing to enable yet'
-              : row.name.trim() === ''
-                ? 'Needs a name before it can be used'
-                : 'Needs a value before it can be used'
-        "
-      />
-      <input
-        :id="`${idPrefix}-${index}-name`"
-        v-model="row.name"
-        class="mono"
-        :list="listId"
-        :placeholder="namePlaceholder"
-        spellcheck="false"
-        :class="{ warn: isPartial(row) && row.name.trim() === '' }"
-        @focus="selectDefaultName(row, $event)"
-        @input="ensureTrailingRow"
-      />
-      <div class="kv-value">
+      <div
+        v-for="(row, index) in rows"
+        :key="row.id"
+        class="kv-row"
+        :class="{
+          blank: isBlank(row),
+          partial: isPartial(row),
+          secret: row.secret,
+          dragging: reorderable && dragging?.fromIndex === index,
+          'drop-before': reorderable && dropIndicator(LIST, index, reorderableLength) === 'before',
+          'drop-after': reorderable && dropIndicator(LIST, index, reorderableLength) === 'after',
+        }"
+        @dragover="onRowDragOver(index, $event)"
+      >
+        <button
+          v-if="reorderable && index < reorderableLength"
+          class="ghost drag-handle"
+          draggable="true"
+          :data-row-id="row.id"
+          title="Drag to reorder"
+          aria-label="Drag to reorder, or press arrow up or down"
+          aria-keyshortcuts="ArrowUp ArrowDown"
+          @dragstart="startDrag(LIST, index, $event)"
+          @dragend="endDrag"
+          @keydown="onHandleKeydown(LIST, index, row.id, reorderableLength, $event)"
+        >
+          <span class="material-icons sm">drag_indicator</span>
+        </button>
+        <span v-else-if="reorderable" class="drag-spacer" aria-hidden="true" />
         <input
-          :id="`${idPrefix}-${index}-value`"
-          :value="valueOf(row)"
+          :id="`${idPrefix}-${index}-enabled`"
+          v-model="row.enabled"
+          type="checkbox"
+          class="kv-toggle"
+          :disabled="!isUsable(row)"
+          :title="
+            isUsable(row)
+              ? row.enabled
+                ? 'Enabled'
+                : 'Disabled'
+              : isBlank(row)
+                ? 'Nothing to enable yet'
+                : row.name.trim() === ''
+                  ? 'Needs a name before it can be used'
+                  : 'Needs a value before it can be used'
+          "
+        />
+        <input
+          :id="`${idPrefix}-${index}-name`"
+          v-model="row.name"
           class="mono"
-          :type="allowSecrets && row.secret ? 'password' : 'text'"
-          :placeholder="valuePlaceholder"
+          :list="listId"
+          :placeholder="namePlaceholder"
           spellcheck="false"
-          :class="{
-            warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
-          }"
-          @input="onValueInput(row, $event)"
+          :class="{ warn: isPartial(row) && row.name.trim() === '' }"
+          @focus="selectDefaultName(row, $event)"
+          @input="ensureTrailingRow"
         />
-        <VariableIssues
-          class="kv-warn"
-          :issues="issues.get(row.id) ?? []"
-          @fix="(name) => braceRowReference(row, name)"
-        />
+        <div class="kv-value">
+          <input
+            :id="`${idPrefix}-${index}-value`"
+            :value="valueOf(row)"
+            class="mono"
+            :type="allowSecrets && row.secret ? 'password' : 'text'"
+            :placeholder="valuePlaceholder"
+            spellcheck="false"
+            :class="{
+              warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
+            }"
+            @input="onValueInput(row, $event)"
+          />
+          <VariableIssues
+            class="kv-warn"
+            :issues="issues.get(row.id) ?? []"
+            @fix="(name) => braceRowReference(row, name)"
+          />
+        </div>
+        <button
+          v-if="allowSecrets"
+          class="ghost kv-secret"
+          :class="{ active: row.secret }"
+          title="Secure secret"
+          :disabled="isBlank(row) && !row.secret"
+          @click="toggleSecret(row)"
+        >
+          <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
+        </button>
+        <button
+          class="ghost kv-remove"
+          title="Remove"
+          :disabled="index === rows.length - 1 && isBlank(row)"
+          @click="remove(index)"
+        >
+          <span class="material-icons sm">close</span>
+        </button>
       </div>
-      <button
-        v-if="allowSecrets"
-        class="ghost kv-secret"
-        :class="{ active: row.secret }"
-        title="Secure secret"
-        :disabled="isBlank(row) && !row.secret"
-        @click="toggleSecret(row)"
-      >
-        <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
-      </button>
-      <button
-        class="ghost kv-remove"
-        title="Remove"
-        :disabled="index === rows.length - 1 && isBlank(row)"
-        @click="remove(index)"
-      >
-        <span class="material-icons sm">close</span>
-      </button>
-    </div>
+    </TransitionGroup>
 
     <p v-if="rows.some(isPartial)" class="kv-notice">
       A row needs both a name and a value to be used. Half-filled rows are ignored.
@@ -247,6 +310,12 @@ ensureTrailingRow()
   gap: 4px;
 }
 
+.kv-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .kv-row {
   display: grid;
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
@@ -254,8 +323,59 @@ ensureTrailingRow()
   align-items: center;
 }
 
+.kv.reorderable .kv-row {
+  grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
+}
+
 .kv.with-secrets .kv-row {
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
+.kv.reorderable.with-secrets .kv-row {
+  grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
+.drag-handle {
+  opacity: 0;
+  padding: 0 1px;
+  color: var(--text-faint);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-spacer {
+  width: 22px;
+}
+
+.kv-row:hover .drag-handle,
+.kv-row:has(:focus-visible) .drag-handle {
+  opacity: 1;
+}
+
+.kv-row.dragging {
+  opacity: 0.45;
+}
+
+.kv-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.kv-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.kv-row-move {
+  transition: transform 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kv-row-move {
+    transition: none;
+  }
 }
 
 .kv-toggle {
@@ -287,6 +407,14 @@ ensureTrailingRow()
 
 .kv.with-secrets .kv-notice {
   margin-left: 58px;
+}
+
+.kv.reorderable .kv-notice {
+  margin-left: 52px;
+}
+
+.kv.reorderable.with-secrets .kv-notice {
+  margin-left: 80px;
 }
 
 .kv-value {

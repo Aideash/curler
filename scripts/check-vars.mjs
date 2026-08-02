@@ -10,6 +10,7 @@ const { modules, close } = await loadModules([
 
 const {
   resolveRequest,
+  requestVariableIssues,
   resolveUrl,
   environmentMap,
   mergeScopes,
@@ -157,7 +158,12 @@ group('literal $ in a body')
   const mixed = newRequest({
     method: 'POST',
     url: 'https://api.example.com/graphql',
-    body: { mode: 'json', text: '{"token":"${API_KEY}","q":"$id"}', form: [], graphql: { query: '', variables: [] } },
+    body: {
+      mode: 'json',
+      text: '{"token":"${API_KEY}","q":"$id"}',
+      form: [],
+      graphql: { query: '', variables: [] },
+    },
   })
   // A real reference alongside forces double quotes, where the literal `$`
   // has to be escaped or the reader's shell would eat it.
@@ -192,7 +198,12 @@ group('bringing an older workspace forward')
     url: '$BASE_URL/things/$id',
     headers: [row('x-$part', '$API_KEY'), row('x-braced', '${API_KEY}')],
     variables: [row('API_KEY', 'literal-$dollar')],
-    body: { mode: 'json', text: '{"q":"query Hero($id: ID!)"}', form: [], graphql: { query: '', variables: [] } },
+    body: {
+      mode: 'json',
+      text: '{"q":"query Hero($id: ID!)"}',
+      form: [],
+      graphql: { query: '', variables: [] },
+    },
   })
   braceRequestReferences(older)
 
@@ -640,6 +651,44 @@ group('buildVariableSet')
 
   state.globals = []
   state.builtins = {}
+}
+
+group('request readiness for an environment')
+
+{
+  const ready = newRequest({
+    url: '${BASE_URL}/ping',
+    headers: [{ id: uid(), name: 'x-api-key', value: '${API_KEY}', enabled: true }],
+  })
+  const configured = environmentMap(
+    env([
+      ['BASE_URL', 'https://api.test'],
+      ['API_KEY', 'secret'],
+    ]),
+  )
+  expect('all referenced vars resolve', requestVariableIssues(ready, configured), [])
+
+  const sparse = environmentMap(env([['BASE_URL', 'https://api.test']]))
+  expect(
+    'a missing referenced var is reported',
+    requestVariableIssues(ready, sparse).map((issue) => issue.name),
+    ['API_KEY'],
+  )
+
+  const blank = environmentMap(
+    env([
+      ['BASE_URL', 'https://api.test'],
+      ['API_KEY', ''],
+    ]),
+  )
+  expect(
+    'an empty referenced var is reported',
+    requestVariableIssues(ready, blank).map((issue) => issue.kind),
+    ['empty'],
+  )
+
+  const literal = newRequest({ url: 'https://api.test/ping' })
+  expect('no references means ready', requestVariableIssues(literal, {}), [])
 }
 
 const failures = summary()

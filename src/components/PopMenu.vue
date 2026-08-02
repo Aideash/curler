@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useFocusTrap } from '../composables/useFocusTrap'
 
 const props = withDefaults(
   defineProps<{
@@ -62,6 +63,12 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
 }
 
+useFocusTrap(panel, {
+  boundary: 'loop',
+  active: open,
+  restoreTo: trigger,
+})
+
 function onScroll(event: Event) {
   if (!open.value) return
   const target = event.target as Node
@@ -93,6 +100,7 @@ defineExpose({ close })
     :class="{ 'icon-only': icon && !label }"
     :title="title || undefined"
     :aria-label="title || undefined"
+    aria-haspopup="menu"
     :aria-expanded="open"
     @click="toggle"
   >
@@ -102,7 +110,7 @@ defineExpose({ close })
   </button>
 
   <Teleport to="body">
-    <div v-if="open" ref="panel" class="pop-menu" :style="style">
+    <div v-if="open" ref="panel" class="pop-menu" role="menu" :style="style">
       <slot :close="close" />
     </div>
   </Teleport>
