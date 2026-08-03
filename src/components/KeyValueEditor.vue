@@ -272,6 +272,7 @@ ensureTrailingRow()
               warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
             }"
             @input="onValueInput(row, $event)"
+            @keydown.enter="onValueInput(row, $event)"
           />
           <VariableIssues
             class="kv-warn"
@@ -302,6 +303,9 @@ ensureTrailingRow()
 
     <p v-if="rows.some(isPartial)" class="kv-notice">
       A row needs both a name and a value to be used. Half-filled rows are ignored.
+      <span v-if="rows.every((row) => !!row.name || !row.defined)"
+        >Press Enter in the value input to accept empty values.</span
+      >
     </p>
   </div>
 </template>
