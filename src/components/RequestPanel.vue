@@ -592,56 +592,61 @@ const flagPreview = computed(() =>
             Flags that contradict each other cannot both be picked.
           </p>
 
-          <div v-for="group in TERMINAL_GROUPS" :key="group.id" class="flag-group">
-            <div class="flag-group-label">{{ group.label }}</div>
-            <div
-              v-for="flag in flagsIn(group.id)"
-              :key="flag.id"
-              class="flag"
-              :class="{ blocked: blockedBy(request.terminalFlags, flag.id).length }"
-            >
-              <label class="flag-main">
-                <input
-                  v-if="flag.kind === 'boolean'"
-                  :id="`flag-${flag.id}`"
-                  type="checkbox"
-                  :checked="isActive(request.terminalFlags, flag.id)"
-                  :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
-                  @change="toggleFlag(flag.id, ($event.target as HTMLInputElement).checked)"
-                />
-                <input
-                  v-else
-                  :id="`flag-${flag.id}`"
-                  class="mono flag-value"
-                  :value="
-                    typeof request.terminalFlags[flag.id] === 'string'
-                      ? request.terminalFlags[flag.id]
-                      : ''
-                  "
-                  :placeholder="flag.placeholder"
-                  :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
-                  spellcheck="false"
-                  @input="setFlagValue(flag.id, ($event.target as HTMLInputElement).value)"
-                />
-                <span class="flag-text">
-                  <span class="flag-title">
-                    {{ flag.label }}
-                    <code class="mono">{{ flag.short ?? flag.flag }}</code>
+          <div class="terminal-groups">
+            <div v-for="group in TERMINAL_GROUPS" :key="group.id" class="flag-group">
+              <div class="flag-group-label">{{ group.label }}</div>
+              <div
+                v-for="flag in flagsIn(group.id)"
+                :key="flag.id"
+                class="flag"
+                :class="{ blocked: blockedBy(request.terminalFlags, flag.id).length }"
+              >
+                <label class="flag-main">
+                  <input
+                    v-if="flag.kind === 'boolean'"
+                    :id="`flag-${flag.id}`"
+                    type="checkbox"
+                    :checked="isActive(request.terminalFlags, flag.id)"
+                    :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
+                    @change="toggleFlag(flag.id, ($event.target as HTMLInputElement).checked)"
+                  />
+                  <input
+                    v-else
+                    :id="`flag-${flag.id}`"
+                    class="mono flag-value"
+                    :value="
+                      typeof request.terminalFlags[flag.id] === 'string'
+                        ? request.terminalFlags[flag.id]
+                        : ''
+                    "
+                    :placeholder="flag.placeholder"
+                    :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
+                    spellcheck="false"
+                    @input="setFlagValue(flag.id, ($event.target as HTMLInputElement).value)"
+                  />
+                  <span class="flag-text">
+                    <span class="flag-title">
+                      {{ flag.label }}
+                      <code class="mono">{{ flag.short ?? flag.flag }}</code>
+                    </span>
+                    <em class="faint">{{ flag.description }}</em>
+                    <em
+                      v-if="blockedBy(request.terminalFlags, flag.id).length"
+                      class="blocked-note"
+                    >
+                      Unavailable while
+                      {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is on.
+                    </em>
+                    <em
+                      v-else-if="ineffective(request.terminalFlags, flag.id).length"
+                      class="blocked-note"
+                    >
+                      Does nothing without
+                      {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
+                    </em>
                   </span>
-                  <em class="faint">{{ flag.description }}</em>
-                  <em v-if="blockedBy(request.terminalFlags, flag.id).length" class="blocked-note">
-                    Unavailable while {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is
-                    on.
-                  </em>
-                  <em
-                    v-else-if="ineffective(request.terminalFlags, flag.id).length"
-                    class="blocked-note"
-                  >
-                    Does nothing without
-                    {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
-                  </em>
-                </span>
-              </label>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -1020,7 +1025,26 @@ const flagPreview = computed(() =>
 .terminal {
   margin-top: 6px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  padding-left: 10px;
+  border-top: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border-strong);
+}
+
+.terminal-groups {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media screen and (max-width: 1960px) and (min-width: 980px) {
+  .terminal-groups {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media screen and (max-width: 980px) {
+  .terminal-groups {
+    grid-template-columns: repeat(1, 1fr);
+  }
 }
 
 .terminal h3 {
