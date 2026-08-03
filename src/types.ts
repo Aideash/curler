@@ -49,7 +49,10 @@ export interface RequestOptions {
   maxResponseMb: number
 }
 
-export const DEFAULT_MAX_RESPONSE_MB = 10
+export const DEFAULT_MAX_RESPONSE_MB = 1
+export const DEFAULT_TIMEOUT_SECS = 30
+export const DEFAULT_FOLLOW_REDIRECTS = true
+export const DEFAULT_INSECURE = false
 
 /**
  * Flags that only mean something to the curl binary in a terminal. They are
@@ -214,9 +217,9 @@ export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
     headers: [],
     body: { mode: 'none', text: '', form: [], graphql: { query: '', variables: [] } },
     options: {
-      followRedirects: true,
-      insecure: false,
-      timeoutSecs: 30,
+      followRedirects: DEFAULT_FOLLOW_REDIRECTS,
+      insecure: DEFAULT_INSECURE,
+      timeoutSecs: DEFAULT_TIMEOUT_SECS,
       maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
     },
     variables: [],
