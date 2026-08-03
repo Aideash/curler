@@ -82,7 +82,9 @@ function valueOf(row: KeyValue): string {
  * tracks. Anything short of it is inert.
  */
 function isUsable(row: KeyValue): boolean {
-  return row.name.trim() !== '' && valueOf(row).trim() !== ''
+  if (row.name.trim() === '') return false
+  if (valueOf(row).trim() !== '') return true
+  return row.defined === true
 }
 
 /**
@@ -126,6 +128,7 @@ async function remove(index: number) {
 
 function onValueInput(row: KeyValue, event: Event) {
   const next = (event.target as HTMLInputElement).value
+  row.defined = true
   if (props.allowSecrets && row.secret) queueSecretSave(row.id, next)
   else row.value = next
   ensureTrailingRow()

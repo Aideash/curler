@@ -45,6 +45,14 @@ export interface VariableSet {
 
 export const EMPTY_VARIABLE_SET: VariableSet = { values: {}, origins: {}, secretNames: new Set() }
 
+/** Whether a row is a committed definition rather than a placeholder or half-typed name. */
+export function rowContributes(row: KeyValue, secretValues: Record<string, string> = {}): boolean {
+  if (!row.enabled) return false
+  if (!row.name.trim()) return false
+  const resolved = row.secret ? (secretValues[row.id] ?? '') : row.value
+  return row.defined === true || resolved !== ''
+}
+
 /**
  * Folds the scopes into one lookup table. Sources are supplied narrowest
  * first, and the first definition of a name wins, so a request-level value
@@ -65,24 +73,10 @@ export function mergeScopes(
     if (row.secret) secretNames.add(name)
   }
 
-  // Rows carrying an actual value are considered first, across every scope.
-  // The editor keeps a blank trailing row at the bottom of each list, and a
-  // half-typed name in one of those must not blank out a real value further
-  // out. Blank rows only get to define a name nothing else defines, where
-  // they still serve a purpose: reporting it as empty rather than missing.
-  // Secret rows count as filled when the keychain holds a value, even though
-  // the persisted `value` field is empty.
-  for (const pass of [1, 2]) {
-    for (const { scope, rows } of sources) {
-      for (const row of rows) {
-        if (!row.enabled) continue
-        const name = row.name.trim()
-        if (!name) continue
-        const resolved = row.secret ? (secretValues[row.id] ?? '') : row.value
-        const blank = resolved === ''
-        if (blank === (pass === 1)) continue
-        claim(scope, name, row)
-      }
+  for (const { scope, rows } of sources) {
+    for (const row of rows) {
+      if (!rowContributes(row, secretValues)) continue
+      claim(scope, row.name.trim(), row)
     }
   }
 

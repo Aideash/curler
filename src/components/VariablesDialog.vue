@@ -8,11 +8,12 @@ import {
   currentRequest,
   deleteEnvironment,
   isScratch,
-  resolvedRowValue,
+  secretCache,
   state,
   variableSet,
 } from '../lib/store'
 import { DEFAULT_VARIABLE_NAME } from '../lib/presets'
+import { rowContributes } from '../lib/vars'
 import { SCOPE_LABELS, type EditableScope, type KeyValue } from '../types'
 
 const emit = defineEmits<{ close: [] }>()
@@ -90,7 +91,7 @@ const editorRows = computed<KeyValue[]>({
 /** How many rows in a scope are actually usable, for the tab counts. */
 function usableCount(rows: KeyValue[] | null): number {
   if (!rows) return 0
-  return rows.filter((row) => row.enabled && row.name.trim() && resolvedRowValue(row).trim()).length
+  return rows.filter((row) => rowContributes(row, secretCache)).length
 }
 
 /**
@@ -102,7 +103,7 @@ const shadowed = computed(() => {
   const names = new Set<string>()
   for (const row of rows) {
     const name = row.name.trim()
-    if (!row.enabled || !name || !resolvedRowValue(row).trim()) continue
+    if (!row.enabled || !name || !rowContributes(row, secretCache)) continue
     const winner = variableSet.value.origins[name]
     if (winner && winner !== scope.value) names.add(`${name} (${SCOPE_LABELS[winner]})`)
   }

@@ -332,6 +332,7 @@ export async function enableRowSecret(row: KeyValue): Promise<void> {
   await writeSecret(row.id, value)
   row.secret = true
   row.value = ''
+  row.defined = true
   secretCache[row.id] = value
 }
 

@@ -15,11 +15,11 @@ import {
   terminalFlagArgs,
   type TerminalGroup,
 } from '../lib/terminalFlags'
-import { braceBareReferences, inspect, type VariableSet } from '../lib/vars'
+import { secretCache } from '../lib/store'
+import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
 import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
-import { resolvedRowValue } from '../lib/store'
 import { type CurlCopyMode } from '../lib/curl'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
 import type { GraphQLSchema } from 'graphql'
@@ -124,6 +124,9 @@ const enabledHeaderCount = computed(
   () => request.value.headers.filter((h) => h.enabled && h.name.trim()).length,
 )
 
+/** Remount row editors when the backing request is swapped (sidebar switch). */
+const editorKey = computed(() => request.value.id)
+
 // Path parameters only mean anything in a URL, so only the URL is checked
 // for them.
 const urlIssues = computed(() => inspect(request.value.url, props.variables, true))
@@ -133,9 +136,7 @@ function braceUrlReference(name: string) {
 }
 
 const requestVarCount = computed(
-  () =>
-    request.value.variables.filter((v) => v.enabled && v.name.trim() && resolvedRowValue(v).trim())
-      .length,
+  () => request.value.variables.filter((v) => rowContributes(v, secretCache)).length,
 )
 
 const canSend = computed(() => request.value.url.trim().length > 0 && !props.sending)
@@ -342,6 +343,7 @@ const flagPreview = computed(() =>
           </PopMenu>
         </div>
         <KeyValueEditor
+          :key="editorKey"
           v-model:rows="request.headers"
           :name-options="HEADER_NAMES"
           :variables="variables"
@@ -452,6 +454,7 @@ const flagPreview = computed(() =>
 
         <div v-else-if="request.body.mode === 'form'" class="form-body">
           <KeyValueEditor
+            :key="editorKey"
             v-model:rows="request.body.form"
             :variables="variables"
             list-id="form-names"
@@ -474,6 +477,7 @@ const flagPreview = computed(() =>
           </div>
           <p class="section-label">Variables</p>
           <KeyValueEditor
+            :key="editorKey"
             v-model:rows="request.body.graphql.variables"
             :variables="variables"
             list-id="graphql-variable-names"
@@ -514,6 +518,7 @@ const flagPreview = computed(() =>
           <code>:id</code> path parameter with a few candidates.
         </p>
         <KeyValueEditor
+          :key="editorKey"
           v-model:rows="request.variables"
           list-id="request-variable-names"
           id-prefix="request-var"

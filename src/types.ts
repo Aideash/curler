@@ -20,6 +20,8 @@ export interface KeyValue {
   enabled: boolean
   /** Value lives in the OS keychain; `value` is not persisted. */
   secret?: boolean
+  /** Row is a real definition, including when the value is intentionally empty. */
+  defined?: boolean
 }
 
 export interface GraphqlBody {

@@ -32,16 +32,17 @@ const {
 const { group, expect, detail, summary } = createHarness('variables')
 
 function rows(pairs) {
-  return pairs.map(([name, value, enabled = true]) => ({
-    id: uid(),
-    name,
-    value,
-    enabled,
-  }))
+  return pairs.map(([name, value, enabled = true, defined]) => {
+    const row = { id: uid(), name, value, enabled }
+    if (defined !== undefined) row.defined = defined
+    return row
+  })
 }
 
-function row(name, value, enabled = true) {
-  return { id: uid(), name, value, enabled }
+function row(name, value, enabled = true, defined) {
+  const item = { id: uid(), name, value, enabled }
+  if (defined !== undefined) item.defined = defined
+  return item
 }
 
 function env(pairs) {
@@ -228,7 +229,7 @@ group('bringing an older workspace forward')
 
 group('warnings for values that would silently break the request')
 {
-  const emptyMap = environmentMap(env([['API_KEY', '']]))
+  const emptyMap = environmentMap(env([['API_KEY', '', true, true]]))
   const resolved = resolveRequest(request('${API_KEY}'), emptyMap)
   expect('empty value is reported', resolved.empty, ['API_KEY'])
   expect('empty value is not reported as missing', resolved.missing, [])
@@ -314,7 +315,8 @@ group('the pre-filled trailing row must not shadow a real value')
     API_KEY: 'secret-abc',
   })
 
-  expect('a lone blank is still reported as empty', environmentMap(env([['API_KEY', '']])), {
+  expect('a lone blank placeholder is not a definition', environmentMap(env([['API_KEY', '']])), {})
+  expect('a committed empty value is still defined', environmentMap(env([['API_KEY', '', true, true]])), {
     API_KEY: '',
   })
 }
@@ -393,8 +395,16 @@ group('scope precedence: narrowest wins')
   expect('a blank narrow row does not shadow a real wide one', trailing.values.API_KEY, 'real-key')
   expect('and the origin follows the value', trailing.origins.API_KEY, 'global')
 
-  const onlyBlank = mergeScopes([{ scope: 'request', rows: rows([['API_KEY', '']]) }])
+  const onlyBlank = mergeScopes([{ scope: 'request', rows: rows([['API_KEY', '', true, true]]) }])
   expect('a name defined only blank is still defined', 'API_KEY' in onlyBlank.values, true)
+  expect('and keeps the empty value', onlyBlank.values.API_KEY, '')
+
+  const overrideEmpty = mergeScopes([
+    { scope: 'request', rows: rows([['API_KEY', '', true, true]]) },
+    { scope: 'global', rows: rows([['API_KEY', 'real-key']]) },
+  ])
+  expect('a committed empty narrow row beats a real wide one', overrideEmpty.values.API_KEY, '')
+  expect('and the origin follows the winner', overrideEmpty.origins.API_KEY, 'request')
 
   const disabled = mergeScopes([
     { scope: 'request', rows: rows([['ID', '1', false]]) },
@@ -561,7 +571,7 @@ group('build trace')
   const set = mergeScopes([
     { scope: 'request', rows: [row('TOKEN', 'req-token')] },
     { scope: 'environment', rows: [row('TOKEN', 'env-token'), row('HOST', 'example.com')] },
-    { scope: 'global', rows: [row('EMPTY', '')] },
+    { scope: 'global', rows: [row('EMPTY', '', true, true)] },
   ])
 
   const model = newRequest({
@@ -678,7 +688,7 @@ group('request readiness for an environment')
   const blank = environmentMap(
     env([
       ['BASE_URL', 'https://api.test'],
-      ['API_KEY', ''],
+      ['API_KEY', '', true, true],
     ]),
   )
   expect(
