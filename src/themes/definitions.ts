@@ -390,6 +390,55 @@ export const themes: Record<string, Theme> = {
       'syntax-comment': '#6f8b76',
     },
   },
+
+  fireside: {
+    id: 'fireside',
+    name: 'Fireside',
+    description: 'Warm ember glow on dark hearth',
+    colorScheme: 'dark',
+    tokens: {
+      ...dark,
+      bg: '#150e0b',
+      'bg-raised': '#221812',
+      'bg-input': '#2a1e16',
+      'bg-hover': '#342820',
+      border: '#5e1b0b',
+      'border-strong': '#b01800',
+      text: '#fdf0e4',
+      'text-dim': '#d3b77f',
+      'text-faint': '#a89480',
+      accent: '#ff9a4d',
+      'accent-hover': '#ffb574',
+      'accent-dim': '#8a4518',
+      'on-accent': '#1a0e08',
+      green: '#8fd07a',
+      amber: '#ffc857',
+      // Kept lighter and pinker than the ember accent so DELETE and POST stay
+      // readable in the same column as the copper accent and wheat amber.
+      red: '#ff7a6e',
+      purple: '#c995c7',
+      // Pulled towards blue so OPTIONS reads apart from this theme's greens.
+      cyan: '#6ec5e0',
+      // Dusty rose, well below the bright ember accent POST already wears.
+      pink: '#e07ab8',
+      'green-border': '#3d5c32',
+      'amber-border': '#6b5520',
+      'red-border': '#6e3830',
+      'purple-border': '#5a3f6b',
+      scrollbar: '#523028',
+      'scrollbar-hover': '#6a3830',
+      selection: '#8a4518',
+      backdrop: 'rgba(18, 10, 6, 0.68)',
+      shadow: 'rgba(255, 120, 40, 0.1)',
+      'shadow-strong': 'rgba(12, 6, 4, 0.65)',
+      'syntax-key': '#f0c060',
+      'syntax-string': '#8fd07a',
+      'syntax-number': '#ff9f5a',
+      'syntax-literal': '#c9a0ff',
+      'syntax-punctuation': '#b8a090',
+      'syntax-comment': '#8a7565',
+    },
+  },
 }
 
 export function getThemeById(id: string): Theme | undefined {
