@@ -18,8 +18,11 @@ import { describeIssues, requestVariableIssues } from '../lib/vars'
 import { useReorderList } from '../composables/useReorderList'
 import type { EditableScope } from '../types'
 import { featureFlags } from '../lib/featureFlags'
+import RestoreBackupDialog from './RestoreBackupDialog.vue'
 
 const emit = defineEmits<{ manageVariables: [scope?: EditableScope] }>()
+
+const showRestore = ref(false)
 
 /** Saved requests whose referenced variables are missing or empty for the active environment. */
 const unconfigured = computed(() => {
@@ -429,10 +432,20 @@ const {
           state.error ? 'Error: ' + state.error : 'Workspace being saved at: ' + state.workspacePath
         "
       >
-        {{ state.error ? state.error : state.workspacePath }}
+        <span class="footer-path">{{ state.error ? state.error : state.workspacePath }}</span>
+        <button
+          v-if="!state.error"
+          class="ghost tiny restore"
+          title="Restore from backup"
+          @click="showRestore = true"
+        >
+          <span class="material-icons sm">restore</span>
+        </button>
       </footer>
     </div>
   </aside>
+
+  <RestoreBackupDialog v-if="showRestore" @close="showRestore = false" />
 
   <!-- Dims the covered content and catches the press that closes the panel. -->
   <div class="scrim" :class="{ show: !railed }" aria-hidden="true" />
@@ -804,11 +817,30 @@ const {
 }
 
 .footer {
-  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 8px 16px;
   border-top: 1px solid var(--border);
   font-size: 10.5px;
+}
+
+.footer-path {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.footer .restore {
+  opacity: 0;
+  flex-shrink: 0;
+  padding: 2px 4px;
+}
+
+.footer:hover .restore,
+.footer:has(:focus-visible) .restore {
+  opacity: 1;
 }
 </style>

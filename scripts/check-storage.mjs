@@ -15,7 +15,7 @@ const h = createHarness('storage')
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'curler-home-'))
 process.env.CURLER_HOME = home
 
-const { readWorkspace, writeWorkspace, WORKSPACE_FILE, BACKUP_DIR } =
+const { readWorkspace, writeWorkspace, listBackups, restoreBackup, WORKSPACE_FILE, BACKUP_DIR } =
   await import('../server/storage.mjs')
 
 const workspaceWith = (names) =>
@@ -125,6 +125,36 @@ for (let i = 0; i < 45; i += 1) {
 const pruned = await backups()
 h.expect('history is capped', pruned.length <= 40, true)
 h.expect('and the newest are the ones kept', pruned.at(-1) > pruned[0], true)
+
+// -- Restore ----------------------------------------------------------------
+
+h.group('restore')
+
+await fs.rm(home, { recursive: true, force: true })
+await fs.mkdir(path.dirname(WORKSPACE_FILE), { recursive: true })
+
+await writeWorkspace(workspaceWith(['alpha', 'beta']))
+await writeWorkspace(workspaceWith(['alpha']))
+const beforeRestore = await backups()
+h.expect('restore lists backups newest first', (await listBackups())[0].name, beforeRestore.at(-1))
+
+const target = beforeRestore.at(-1)
+await restoreBackup(target)
+h.expect(
+  'restore replaces the live workspace',
+  JSON.parse(await readWorkspace()).collections[0].requests.map((request) => request.id),
+  ['alpha', 'beta'],
+)
+h.expect(
+  'restore keeps newer backups on disk',
+  (await backups()).includes(beforeRestore.at(-1)),
+  true,
+)
+h.expect(
+  'restore snapshots the pre-restore workspace first',
+  (await backups()).length >= beforeRestore.length + 1,
+  true,
+)
 
 await fs.rm(home, { recursive: true, force: true })
 process.exit(h.summary() === 0 ? 0 : 1)

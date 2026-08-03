@@ -13,7 +13,7 @@ import {
   requireWorkspaceId,
   setSecret,
 } from './secrets.mjs'
-import { readWorkspace, writeWorkspace, WORKSPACE_FILE } from './storage.mjs'
+import { readWorkspace, writeWorkspace, listBackups, restoreBackup, WORKSPACE_FILE } from './storage.mjs'
 import { debugEnabled, debugLog } from './debug.mjs'
 import { resolvePorts } from '../config.mjs'
 
@@ -176,6 +176,19 @@ const server = http.createServer(async (request, response) => {
     if (url === '/api/workspace' && request.method === 'PUT') {
       const { contents } = JSON.parse(await readBody(request))
       await writeWorkspace(contents)
+      sendJson(response, 200, { ok: true })
+      return
+    }
+
+    if (url === '/api/backups' && request.method === 'GET') {
+      sendJson(response, 200, { backups: await listBackups() })
+      return
+    }
+
+    const restoreMatch = url.match(/^\/api\/backups\/([^/]+)\/restore$/)
+    if (restoreMatch && request.method === 'POST') {
+      const name = decodeURIComponent(restoreMatch[1])
+      await restoreBackup(name)
       sendJson(response, 200, { ok: true })
       return
     }

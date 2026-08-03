@@ -11,6 +11,10 @@ export const BACKUP_DIR = path.join(WORKSPACE_DIR, 'backups')
 const MAX_BACKUPS = 40
 const BACKUP_INTERVAL_MS = 5 * 60 * 1000
 
+/** Matches `workspace-2026-08-03T13-24-05-123Z[-shrunk].json` — no path segments. */
+const BACKUP_NAME =
+  /^workspace-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(-shrunk)?\.json$/
+
 /** Returns null when there is no workspace yet, which is not an error. */
 export async function readWorkspace() {
   try {
@@ -30,6 +34,40 @@ function countRequests(contents) {
     )
   } catch {
     return null
+  }
+}
+
+function workspaceStats(contents) {
+  try {
+    const parsed = JSON.parse(contents)
+    const collections = parsed.collections ?? []
+    return {
+      collectionCount: collections.length,
+      requestCount: collections.reduce(
+        (total, collection) => total + (collection.requests?.length ?? 0),
+        0,
+      ),
+    }
+  } catch {
+    return { collectionCount: null, requestCount: null }
+  }
+}
+
+async function writeSnapshot(contents, suffix = '') {
+  await fs.mkdir(BACKUP_DIR, { recursive: true })
+
+  for (;;) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    try {
+      await fs.writeFile(path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`), contents, {
+        encoding: 'utf8',
+        flag: 'wx',
+      })
+      break
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
   }
 }
 
@@ -82,32 +120,87 @@ async function backup(incoming) {
 
   if (!losingRequests && (await newestBackupAge()) < BACKUP_INTERVAL_MS) return
 
-  const suffix = losingRequests ? '-shrunk' : ''
-  await fs.mkdir(BACKUP_DIR, { recursive: true })
+  await writeSnapshot(current, losingRequests ? '-shrunk' : '')
+  await prune()
+}
 
-  /*
-   * The name carries a millisecond-resolution timestamp, so two snapshots taken
-   * inside one millisecond would resolve to the same path and the second would
-   * overwrite the first. Only shrinking saves can arrive that fast, since they
-   * bypass the interval -- which makes the lost one exactly the snapshot worth
-   * keeping. `wx` refuses to clobber, and waiting for the clock to move keeps
-   * the names both unique and sortable, which is what prune() orders by.
-   */
-  for (;;) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-    try {
-      await fs.writeFile(path.join(BACKUP_DIR, `workspace-${stamp}${suffix}.json`), current, {
-        encoding: 'utf8',
-        flag: 'wx',
-      })
-      break
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error
-      await new Promise((resolve) => setTimeout(resolve, 1))
+/**
+ * Snapshots the live workspace before a restore so the user can undo. Skips when
+ * the newest backup already holds the same contents.
+ */
+async function ensureCurrentBackedUp() {
+  let current
+  try {
+    current = await fs.readFile(WORKSPACE_FILE, 'utf8')
+  } catch {
+    return
+  }
+  if (!current.trim()) return
+
+  try {
+    const names = (await fs.readdir(BACKUP_DIR))
+      .filter((name) => name.startsWith('workspace-'))
+      .sort()
+    if (names.length) {
+      const newest = await fs.readFile(path.join(BACKUP_DIR, names.at(-1)), 'utf8')
+      if (newest === current) return
     }
+  } catch {
+    // If listing fails, snapshot anyway — restore should stay safe.
   }
 
+  await writeSnapshot(current)
   await prune()
+}
+
+export async function listBackups() {
+  try {
+    const names = (await fs.readdir(BACKUP_DIR))
+      .filter((name) => BACKUP_NAME.test(name))
+      .sort()
+      .reverse()
+
+    return Promise.all(
+      names.map(async (name) => {
+        const file = path.join(BACKUP_DIR, name)
+        const [stat, contents] = await Promise.all([
+          fs.stat(file),
+          fs.readFile(file, 'utf8'),
+        ])
+        const stats = workspaceStats(contents)
+        return {
+          name,
+          createdAt: stat.mtime.toISOString(),
+          shrunk: name.includes('-shrunk'),
+          ...stats,
+        }
+      }),
+    )
+  } catch {
+    return []
+  }
+}
+
+export async function restoreBackup(name) {
+  if (!BACKUP_NAME.test(name)) {
+    throw new Error(`Not a workspace backup: ${name}`)
+  }
+
+  const backupPath = path.join(BACKUP_DIR, name)
+  let restored
+  try {
+    restored = await fs.readFile(backupPath, 'utf8')
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new Error(`Backup not found: ${name}`)
+    throw error
+  }
+  if (!restored.trim()) throw new Error(`Backup is empty: ${name}`)
+
+  await ensureCurrentBackedUp()
+
+  const temporary = `${WORKSPACE_FILE}.tmp`
+  await fs.writeFile(temporary, restored, 'utf8')
+  await fs.rename(temporary, WORKSPACE_FILE)
 }
 
 export async function writeWorkspace(contents) {

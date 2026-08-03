@@ -279,6 +279,21 @@ export async function initStore() {
   }
 }
 
+/** Reload from disk after an out-of-band change such as restoring a backup. */
+export async function reloadWorkspace() {
+  clearTimeout(saveTimer)
+  const { contents, path } = await readWorkspace()
+  state.workspacePath = path
+  if (contents) migrate(JSON.parse(contents))
+  else defaultWorkspace()
+  ensureWorkspaceId()
+  state.activeRequestId = null
+  state.scratch = newRequest()
+  await loadSecretCache()
+  state.error = null
+  state.persistable = true
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 
 function workspaceSnapshot() {

@@ -56,6 +56,23 @@ export async function writeWorkspace(contents: string): Promise<void> {
   })
 }
 
+export interface BackupEntry {
+  name: string
+  createdAt: string
+  shrunk: boolean
+  requestCount: number | null
+  collectionCount: number | null
+}
+
+export async function listBackups(): Promise<BackupEntry[]> {
+  const { backups } = await api<{ backups: BackupEntry[] }>('/backups')
+  return backups
+}
+
+export async function restoreBackup(name: string): Promise<void> {
+  await api(`/backups/${encodeURIComponent(name)}/restore`, { method: 'POST' })
+}
+
 export async function readSecrets(rowIds?: string[]): Promise<Record<string, string | null>> {
   const query = rowIds?.length ? `?ids=${encodeURIComponent(rowIds.join(','))}` : ''
   const { values } = await api<{ values: Record<string, string | null> }>(`/secrets${query}`)
