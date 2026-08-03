@@ -26,7 +26,7 @@ const isHex = (value) => typeof value === 'string' && /^#[0-9a-f]{3,8}$/i.test(v
 
 /**
  * The whole point of the exercise: no token may end up as a near-invisible
- * smudge on the surface it is painted on. Syntax colours sit on the editor
+ * smudge on the surface it is painted on. Syntax colors sit on the editor
  * background, everything else on the page background.
  */
 const RULES = [
@@ -42,6 +42,8 @@ const RULES = [
   ['pink', 'bg', 3],
   ['on-accent', 'accent', 4],
   ['syntax-key', 'bg-input', 4],
+  ['syntax-variable', 'bg-input', 4],
+  ['syntax-argument', 'bg-input', 4],
   ['syntax-string', 'bg-input', 4],
   ['syntax-number', 'bg-input', 4],
   ['syntax-literal', 'bg-input', 4],
@@ -79,6 +81,14 @@ for (const theme of getThemeList()) {
   // rather than merely legible.
   const { 'syntax-literal': literal, 'syntax-string': string } = theme.tokens
   expect('booleans are not painted as strings', literal === string, false)
+
+  const {
+    'syntax-key': key,
+    'syntax-argument': argument,
+    'syntax-variable': variable,
+  } = theme.tokens
+  expect('arguments are not painted as fields', argument === key, false)
+  expect('variables are not painted as fields', variable === key, false)
 }
 
 const failures = summary()

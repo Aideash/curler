@@ -64,10 +64,11 @@ function buildTheme(dark: boolean): Extension {
  * repaints with the rest of the page.
  */
 const highlighting = HighlightStyle.define([
-  {
-    tag: [tags.propertyName, tags.attributeName, tags.variableName],
-    color: 'var(--syntax-key)',
-  },
+  { tag: tags.propertyName, color: 'var(--syntax-key)' },
+  // GraphQL variables like $id (cm6-graphql tags these as variableName).
+  { tag: tags.variableName, color: 'var(--syntax-variable)' },
+  // GraphQL argument names (cm6-graphql tags these as attributeName).
+  { tag: tags.attributeName, color: 'var(--syntax-argument)' },
   { tag: tags.string, color: 'var(--syntax-string)' },
   { tag: [tags.number, tags.integer, tags.float], color: 'var(--syntax-number)' },
   {
