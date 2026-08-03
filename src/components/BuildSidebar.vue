@@ -423,7 +423,12 @@ const {
         </button>
       </div>
 
-      <footer class="footer faint mono" :title="state.workspacePath">
+      <footer
+        class="footer faint mono"
+        :title="
+          state.error ? 'Error: ' + state.error : 'Workspace being saved at: ' + state.workspacePath
+        "
+      >
         {{ state.error ? state.error : state.workspacePath }}
       </footer>
     </div>

@@ -70,3 +70,7 @@ export function resolveWorkspaceHome(env = process.env) {
 
   return path.resolve(expanded)
 }
+
+export function resolveDomain(env = process.env) {
+  return env.DOMAIN?.trim()
+}
