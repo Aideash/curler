@@ -820,9 +820,10 @@ const {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 10px 8px 16px;
+  padding: 2px 10px 2px 16px;
   border-top: 1px solid var(--border);
   font-size: 10.5px;
+  line-height: 22px; /* larger than button */
 }
 
 .footer-path {
@@ -834,6 +835,7 @@ const {
 }
 
 .footer .restore {
+  position: absolute;
   opacity: 0;
   flex-shrink: 0;
   padding: 2px 4px;
@@ -841,6 +843,7 @@ const {
 
 .footer:hover .restore,
 .footer:has(:focus-visible) .restore {
+  position: relative;
   opacity: 1;
 }
 </style>
