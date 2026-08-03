@@ -74,6 +74,11 @@ const scopes = computed<ScopeInfo[]>(() => [
 
 const current = computed(() => scopes.value.find((item) => item.id === scope.value)!)
 
+/** Remount the editor when the backing list is swapped wholesale (env switch). */
+const editorKey = computed(() =>
+  scope.value === 'environment' ? `environment-${state.activeEnvironmentId}` : scope.value,
+)
+
 const editorRows = computed<KeyValue[]>({
   get: () => current.value.rows ?? [],
   set: (value) => {
@@ -185,7 +190,7 @@ function confirmDeleteEnvironment() {
 
     <KeyValueEditor
       v-else-if="current.rows"
-      :key="scope"
+      :key="editorKey"
       v-model:rows="editorRows"
       list-id="variable-names"
       :id-prefix="`variable-${scope}`"
