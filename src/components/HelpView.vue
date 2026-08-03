@@ -57,6 +57,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
     <div class="content">
       <nav class="toc" aria-label="On this page">
         <img src="/public/android-chrome-512x512.png" alt="curler" class="logo" />
+        <h3 class="site-name mono">curler</h3>
         <p class="toc-label faint">On this page</p>
         <ul>
           <li v-for="item in toc" :key="item.id">
@@ -368,7 +369,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: minmax(140px, 200px) minmax(0, 720px);
+  grid-template-columns: minmax(140px, 200px) minmax(0, 1240px);
   gap: 32px;
   padding: 24px 32px 48px;
   align-content: start;
@@ -415,6 +416,13 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 .logo {
   width: 100%;
   padding: 0px 40px 20px 0px;
+}
+
+.site-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
 }
 
 .prose {
@@ -480,6 +488,10 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   border-radius: 4px;
   padding: 1px 6px;
   box-shadow: 0 1px 0 var(--border);
+}
+
+h2 {
+  color: var(--accent);
 }
 
 table {
