@@ -10,13 +10,28 @@ import TitleBar from './TitleBar.vue'
 import TitleBarButton from './TitleBarButton.vue'
 import { navigate } from '../composables/useRoute'
 import { applyDraft, cancelDraft, graphqlBuilder, updateDraftGraphql } from '../lib/graphqlBuilder'
-import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
-import { insertField, type FieldClickTarget } from '../lib/graphqlQueryBuilder'
+import {
+  fetchSchema,
+  getCachedSchema,
+  invalidateSchema,
+  schemaCacheKey,
+} from '../lib/graphqlSchema'
+import {
+  insertArgument,
+  insertField,
+  loadArgInsertMode,
+  resolveVariableEnumOptions,
+  type ArgClickTarget,
+  type ArgInsertMode,
+  type FieldClickTarget,
+} from '../lib/graphqlQueryBuilder'
 import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { activeEnvironment, currentRequest, variables, variableSet } from '../lib/store'
 
 const schema = shallowRef<GraphQLSchema | null>(null)
 const schemaFilter = ref('')
+const showArguments = ref(false)
+const argInsertMode = ref<ArgInsertMode>(loadArgInsertMode())
 const syntaxValidity = ref({ valid: true, message: '' })
 const schemaValidity = ref({ valid: true, message: '', checked: false })
 const builderError = ref('')
@@ -34,6 +49,11 @@ const draftVariables = computed({
 
 const cacheKey = computed(() => schemaCacheKey(currentRequest.value, variableSet.value))
 
+const variableEnumOptions = computed(() => {
+  if (!schema.value || !draft.value) return {}
+  return resolveVariableEnumOptions(draft.value.graphql.query, schema.value)
+})
+
 onMounted(async () => {
   if (!draft.value) {
     navigate('build')
@@ -46,13 +66,15 @@ watch(cacheKey, () => {
   schema.value = getCachedSchema(cacheKey.value) ?? null
 })
 
-async function loadSchema() {
+async function loadSchema(force = false) {
   graphqlBuilder.schemaLoading = true
   graphqlBuilder.schemaError = null
   builderError.value = ''
 
+  if (force) invalidateSchema(cacheKey.value)
+
   const cached = getCachedSchema(cacheKey.value)
-  if (cached) {
+  if (cached && !force) {
     schema.value = cached
     graphqlBuilder.schemaCacheKey = cacheKey.value
     graphqlBuilder.schemaLoading = false
@@ -97,7 +119,20 @@ function onFieldClick(target: FieldClickTarget) {
   builderError.value = ''
 
   try {
-    const result = insertField(draft.value.graphql, schema.value, target)
+    const result = insertField(draft.value.graphql, schema.value, target, argInsertMode.value)
+    updateDraftGraphql({ query: result.query, variables: result.variables })
+    schemaValidity.value = { valid: true, message: '', checked: false }
+  } catch (error) {
+    builderError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+function onArgClick(target: ArgClickTarget) {
+  if (!draft.value || !schema.value) return
+  builderError.value = ''
+
+  try {
+    const result = insertArgument(draft.value.graphql, schema.value, target, argInsertMode.value)
     updateDraftGraphql({ query: result.query, variables: result.variables })
     schemaValidity.value = { valid: true, message: '', checked: false }
   } catch (error) {
@@ -139,9 +174,9 @@ function cancel() {
 
       <TitleBarButton
         :icon="loading ? 'hourglass_top' : 'cloud_download'"
-        :label="loading ? 'Fetching…' : 'Fetch schema'"
+        :label="loading ? 'Fetching…' : schema ? 'Refresh schema' : 'Fetch schema'"
         :disabled="loading || !currentRequest.url.trim()"
-        @click="loadSchema"
+        @click="loadSchema(true)"
       />
       <TitleBarButton icon="rule" label="Validate" :disabled="!schema" @click="validateDraft" />
       <button class="primary" title="Done" @click="done">Done</button>
@@ -166,16 +201,20 @@ function cancel() {
             v-model="schemaFilter"
             class="filter"
             type="search"
-            placeholder="Filter fields…"
+            :placeholder="showArguments ? 'Filter fields and arguments…' : 'Filter fields…'"
             :disabled="!schema"
           />
         </div>
         <div v-if="loading" class="placeholder faint">Fetching schema…</div>
         <GraphqlSchemaExplorer
           v-else-if="schema"
+          v-model:show-args="showArguments"
+          v-model:arg-insert-mode="argInsertMode"
           :schema="schema"
+          :query="draft.graphql.query"
           :filter="schemaFilter"
           @field-click="onFieldClick"
+          @arg-click="onArgClick"
         />
         <div v-else class="placeholder faint">
           Set a URL on the request and fetch the schema to explore it here.
@@ -221,6 +260,7 @@ function cancel() {
           v-model:rows="draftVariables"
           class="variables-editor"
           :variables="variables"
+          :enum-options="variableEnumOptions"
           list-id="builder-graphql-vars"
           id-prefix="builder-gql-var"
           name-placeholder="Name"
@@ -328,6 +368,7 @@ function cancel() {
 
 .variables-editor {
   max-height: 40%;
+  padding-bottom: 40px;
 }
 
 .editor-wrap {

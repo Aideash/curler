@@ -4,25 +4,45 @@ import type { GraphQLSchema } from 'graphql'
 import SchemaTreeLevel from './SchemaTreeLevel.vue'
 import {
   availableOperations,
+  buildQueryPresence,
   listFields,
+  loadArgInsertMode,
+  saveArgInsertMode,
+  type ArgClickTarget,
+  type ArgInsertMode,
   type FieldClickTarget,
   type RootOperation,
+  type SchemaArgNode,
   type SchemaFieldNode,
+  type SchemaInputFieldNode,
 } from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
   schema: GraphQLSchema
   filter: string
+  query: string
 }>()
+
+const showArgsOn = defineModel<boolean>('showArgs', { default: false })
+const argInsertMode = defineModel<ArgInsertMode>('argInsertMode', {
+  default: loadArgInsertMode,
+})
+
+const showExplorerControls = ref(false)
 
 const emit = defineEmits<{
   fieldClick: [target: FieldClickTarget]
+  argClick: [target: ArgClickTarget]
 }>()
 
 const operations = computed(() => availableOperations(props.schema))
 const activeOp = ref<RootOperation>('query')
 const expanded = ref<Set<string>>(new Set())
+const expandedArgs = ref<Set<string>>(new Set())
+const expandedInput = ref<Set<string>>(new Set())
 const insertModeOn = ref(true)
+
+const presence = computed(() => buildQueryPresence(props.query, activeOp.value))
 
 watch(
   operations,
@@ -31,6 +51,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch(argInsertMode, (mode) => {
+  saveArgInsertMode(mode)
+})
 
 function pathKey(operation: RootOperation, path: string[]) {
   return `${operation}:${path.join('.')}`
@@ -48,10 +72,51 @@ function toggleExpand(operation: RootOperation, path: string[]) {
   expanded.value = next
 }
 
+function toggleArgExpand(key: string) {
+  const next = new Set(expandedArgs.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedArgs.value = next
+}
+
+function toggleInputExpand(key: string) {
+  const next = new Set(expandedInput.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedInput.value = next
+}
+
+function inputFieldsMatch(fields: SchemaInputFieldNode[], needle: string): boolean {
+  return fields.some(
+    (field) =>
+      `${field.name} ${field.typeLabel}`.toLowerCase().includes(needle) ||
+      field.enumValues.some((value) => value.name.toLowerCase().includes(needle)) ||
+      inputFieldsMatch(field.inputFields, needle),
+  )
+}
+
+function enumValuesMatch(values: SchemaArgNode['enumValues'], needle: string): boolean {
+  return values.some((value) => value.name.toLowerCase().includes(needle))
+}
+
+function argMatchesFilter(arg: SchemaArgNode, needle: string): boolean {
+  if (`${arg.name} ${arg.typeLabel}`.toLowerCase().includes(needle)) return true
+  if (enumValuesMatch(arg.enumValues, needle)) return true
+  return inputFieldsMatch(arg.inputFields, needle)
+}
+
 function matchesFilter(field: SchemaFieldNode, needle: string) {
   if (!needle) return true
-  const hay = `${field.name} ${field.typeLabel} ${field.argsSummary}`.toLowerCase()
-  return hay.includes(needle)
+  if (`${field.name} ${field.typeLabel} ${field.argsSummary}`.toLowerCase().includes(needle)) {
+    return true
+  }
+  return field.args.some((arg) => argMatchesFilter(arg, needle))
+}
+
+function visibleArgs(field: SchemaFieldNode, needle: string): SchemaArgNode[] {
+  if (!showArgsOn.value || !field.args.length) return []
+  if (!needle) return field.args
+  return field.args.filter((arg) => argMatchesFilter(arg, needle))
 }
 
 function visibleFields(operation: RootOperation, parentPath: string[]): SchemaFieldNode[] {
@@ -63,6 +128,15 @@ function visibleFields(operation: RootOperation, parentPath: string[]): SchemaFi
 
 function onInsert(operation: RootOperation, parentPath: string[], fieldName: string) {
   emit('fieldClick', { operation, parentPath, fieldName })
+}
+
+function onArgInsert(
+  operation: RootOperation,
+  parentPath: string[],
+  fieldName: string,
+  argName: string,
+) {
+  emit('argClick', { operation, parentPath, fieldName, argName })
 }
 </script>
 
@@ -78,11 +152,54 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
       >
         {{ op }}
       </button>
-      <label for="insert-mode" class="toggle">
-        <span class="faint">Insert mode</span>
-        <input id="insert-mode" v-model="insertModeOn" type="checkbox" />
-      </label>
+      <button
+        v-if="operations.length"
+        class="ghost show-more-button"
+        :class="{ expanded: showExplorerControls }"
+        :title="showExplorerControls ? 'Hide options' : 'Show options'"
+        @click="showExplorerControls = !showExplorerControls"
+      >
+        <span class="material-icons sm"> expand_more </span>
+      </button>
     </div>
+
+    <transition name="fade-shrink">
+      <div v-show="operations.length && showExplorerControls" class="explorer-controls-wrap">
+        <div class="explorer-controls">
+          <label for="show-args" class="toggle">
+            <span class="faint">Show arguments</span>
+            <input
+              id="show-args"
+              v-model="showArgsOn"
+              type="checkbox"
+              :title="showArgsOn ? 'Showing arguments' : 'Hiding arguments'"
+            />
+          </label>
+          <label for="insert-mode" class="toggle">
+            <span class="faint">Insert mode</span>
+            <input
+              id="insert-mode"
+              v-model="insertModeOn"
+              type="checkbox"
+              :title="insertModeOn ? 'Turn off Insert mode' : 'Turn on Insert Mode'"
+            />
+          </label>
+          <label class="insert-as" for="arg-insert-mode">
+            <span class="faint">Insert as</span>
+            <select
+              id="arg-insert-mode"
+              v-model="argInsertMode"
+              class="mode-select"
+              title="How argument values are added to the query"
+            >
+              <option value="placeholder">Placeholders</option>
+              <option value="required-vars">Required vars</option>
+              <option value="variables-only">Variables only</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </transition>
 
     <div v-if="!operations.length" class="empty faint">Schema has no root operations.</div>
 
@@ -92,11 +209,20 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
         :parent-path="[]"
         :depth="0"
         :expanded="expanded"
+        :expanded-args="expandedArgs"
+        :expanded-input="expandedInput"
         :visible-fields="visibleFields"
+        :visible-args="visibleArgs"
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
+        :show-args-on="showArgsOn"
+        :filter="filter"
+        :presence="presence"
         @toggle="toggleExpand"
+        @toggle-arg="toggleArgExpand"
+        @toggle-input="toggleInputExpand"
         @insert="onInsert"
+        @insert-arg="onArgInsert"
       />
     </div>
   </div>
@@ -108,10 +234,15 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
   flex-direction: column;
   min-height: 0;
   height: 100%;
+
+  --toggle-height: 16px;
+  --toggle-margin-top-bottom: 3px;
+  --explorer-control-padding-top: 8px;
 }
 
 .op-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 8px 8px 0;
   flex-shrink: 0;
@@ -138,15 +269,61 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
   font-size: 13px;
 }
 
-.op-tabs .toggle {
+.op-tabs .tab:last-of-type {
+  margin-right: auto;
+}
+
+.show-more-button {
   margin-left: auto;
+}
+
+.show-more-button.expanded {
+  transform: rotate(180deg);
+}
+
+.explorer-controls-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  flex-shrink: 0;
+}
+
+.explorer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: var(--explorer-control-padding-top) 8px 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.explorer-controls label:first-of-type {
+  margin-right: auto;
+}
+
+.insert-as {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.mode-select {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  max-width: 118px;
 }
 
 .toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 0px;
+  font-size: 10px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -157,9 +334,11 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
   position: relative;
   flex-shrink: 0;
   width: 30px;
-  height: 16px;
+  height: var(--toggle-height);
   min-width: 0;
   padding: 0;
+  margin-top: var(--toggle-margin-top-bottom);
+  margin-bottom: var(--toggle-margin-top-bottom);
   border-radius: 999px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -198,7 +377,37 @@ function onInsert(operation: RootOperation, parentPath: string[], fieldName: str
   outline-offset: 2px;
 }
 
+.fade-shrink-enter-active,
+.fade-shrink-leave-active {
+  transition:
+    grid-template-rows 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.fade-shrink-enter-active .explorer-controls,
+.fade-shrink-leave-active .explorer-controls {
+  transition: padding-top 0.2s ease;
+}
+
+.fade-shrink-enter-from,
+.fade-shrink-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.fade-shrink-enter-from .explorer-controls,
+.fade-shrink-leave-to .explorer-controls {
+  padding-top: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .fade-shrink-enter-active,
+  .fade-shrink-leave-active,
+  .fade-shrink-enter-active .explorer-controls,
+  .fade-shrink-leave-active .explorer-controls {
+    transition: none;
+  }
+
   .toggle input[type='checkbox'],
   .toggle input[type='checkbox']::before {
     transition: none;

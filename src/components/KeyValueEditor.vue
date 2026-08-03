@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, TransitionGroup } from 'vue'
 import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue } from '../types'
 import {
@@ -39,6 +39,8 @@ const props = withDefaults(
     allowSecrets?: boolean
     /** Drag handles and arrow keys reorder rows in the backing array. */
     reorderable?: boolean
+    /** When set, rows whose name matches a key render a select of enum values. */
+    enumOptions?: Record<string, string[]>
   }>(),
   {
     nameOptions: () => [],
@@ -51,11 +53,14 @@ const props = withDefaults(
     resolves: true,
     allowSecrets: false,
     reorderable: false,
+    enumOptions: () => ({}),
   },
 )
 
 const root = ref<HTMLElement | null>(null)
 const LIST = 'list' as const
+
+const listRoot = computed(() => (props.reorderable ? TransitionGroup : 'div'))
 
 /** The trailing blank row stays put; only rows above it move. */
 const reorderableLength = computed(() => {
@@ -107,11 +112,26 @@ function newRow(): KeyValue {
   return { ...emptyKeyValue(), name: props.defaultName }
 }
 
-/** Keeps a blank row at the bottom so there is always somewhere to type. */
+/** Keeps exactly one blank row at the bottom; drops blank rows inserted above real rows. */
 function ensureTrailingRow() {
-  const last = rows.value[rows.value.length - 1]
-  if (!last || !isBlank(last)) rows.value.push(newRow())
+  const nonBlank = rows.value.filter((row) => !isBlank(row))
+  const trailing = rows.value.find((row) => isBlank(row)) ?? newRow()
+  const next = [...nonBlank, trailing]
+
+  if (next.length === rows.value.length && next.every((row, index) => row === rows.value[index])) {
+    return
+  }
+
+  rows.value = next
 }
+
+watch(
+  rows,
+  () => {
+    ensureTrailingRow()
+  },
+  { deep: true, flush: 'sync' },
+)
 
 async function remove(index: number) {
   const row = rows.value[index]
@@ -177,6 +197,31 @@ function braceRowReference(row: KeyValue, name: string) {
   row.value = braceBareReferences(row.value, name)
 }
 
+function enumChoices(row: KeyValue): string[] | undefined {
+  const name = row.name.trim()
+  if (!name) return undefined
+  return props.enumOptions[name]
+}
+
+function enumSelection(row: KeyValue): string {
+  const raw = valueOf(row).trim()
+  if (!raw) return ''
+  try {
+    const parsed = JSON.parse(raw)
+    if (typeof parsed === 'string') return parsed
+  } catch {
+    return raw.replace(/^"|"$/g, '')
+  }
+  return ''
+}
+
+function onEnumSelect(row: KeyValue, event: Event) {
+  const selected = (event.target as HTMLSelectElement).value
+  row.defined = true
+  row.value = selected ? JSON.stringify(selected) : 'null'
+  ensureTrailingRow()
+}
+
 function onListDrop(event: DragEvent) {
   if (props.reorderable) drop(LIST, event)
 }
@@ -194,11 +239,12 @@ ensureTrailingRow()
       <option v-for="option in nameOptions" :key="option" :value="option" />
     </datalist>
 
-    <TransitionGroup
+    <component
+      :is="listRoot"
       tag="div"
-      name="kv-row"
+      :name="reorderable ? 'kv-row' : undefined"
       class="kv-rows"
-      :class="{ 'is-reordering': !!dragging }"
+      :class="{ 'is-reordering': reorderable && !!dragging }"
       @dragover.prevent
       @drop="onListDrop"
     >
@@ -261,7 +307,21 @@ ensureTrailingRow()
           @input="ensureTrailingRow"
         />
         <div class="kv-value">
+          <select
+            v-if="enumChoices(row)"
+            :id="`${idPrefix}-${index}-value`"
+            class="mono kv-enum"
+            :value="enumSelection(row)"
+            :class="{ warn: isPartial(row) && !enumSelection(row) }"
+            @change="onEnumSelect(row, $event)"
+          >
+            <option value="" disabled>Select…</option>
+            <option v-for="choice in enumChoices(row)" :key="choice" :value="choice">
+              {{ choice }}
+            </option>
+          </select>
           <input
+            v-else
             :id="`${idPrefix}-${index}-value`"
             :value="valueOf(row)"
             class="mono"
@@ -275,6 +335,7 @@ ensureTrailingRow()
             @keydown.enter="onValueInput(row, $event)"
           />
           <VariableIssues
+            v-if="!enumChoices(row)"
             class="kv-warn"
             :issues="issues.get(row.id) ?? []"
             @fix="(name) => braceRowReference(row, name)"
@@ -299,7 +360,7 @@ ensureTrailingRow()
           <span class="material-icons sm">close</span>
         </button>
       </div>
-    </TransitionGroup>
+    </component>
 
     <p v-if="rows.some(isPartial)" class="kv-notice">
       A row needs both a name and a value to be used. Half-filled rows are ignored.
@@ -329,6 +390,7 @@ ensureTrailingRow()
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
   gap: 6px;
   align-items: center;
+  max-height: 28.5px; /* font-size 12.5, padding 6px + border 1px top and bottom */
 }
 
 .kv.reorderable .kv-row {
@@ -435,6 +497,20 @@ ensureTrailingRow()
   width: 100%;
 }
 
+.kv-enum {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.kv-enum.warn {
+  border-color: var(--amber-border);
+}
+
 .kv-value input.warn {
   border-color: var(--amber-border);
 }
@@ -474,4 +550,22 @@ ensureTrailingRow()
 .kv-secret .material-icons {
   vertical-align: 0;
 }
+
+/* .kv-row-move,
+.kv-row-enter-active,
+.kv-row-leave-active {
+  transition: all 0.5s ease;
+} */
+
+/* .kv-row-enter-from,
+.kv-row-leave-to {
+  opacity: 0;
+  max-height: 0;
+} */
+
+/* ensure leaving items are taken out of layout flow so that moving
+   animations can be calculated correctly. */
+/* .kv-row-leave-active {
+  position: absolute;
+} */
 </style>
