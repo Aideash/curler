@@ -28,7 +28,7 @@ const argInsertMode = defineModel<ArgInsertMode>('argInsertMode', {
   default: loadArgInsertMode,
 })
 
-const showExplorerControls = ref(false)
+const showExplorerControls = ref(true)
 
 const emit = defineEmits<{
   fieldClick: [target: FieldClickTarget]
@@ -277,7 +277,11 @@ function onArgInsert(
   margin-left: auto;
 }
 
-.show-more-button.expanded {
+.show-more-button span {
+  transition-property: transform;
+}
+
+.show-more-button.expanded span {
   transform: rotate(180deg);
 }
 

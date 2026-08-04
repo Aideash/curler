@@ -140,6 +140,12 @@ function onArgClick(target: ArgClickTarget) {
   }
 }
 
+function clearPanel() {
+  if (!draft.value) return
+  updateDraftGraphql({ query: '', variables: [] })
+  schemaValidity.value = { valid: true, message: '', checked: false }
+}
+
 function done() {
   applyDraft()
   navigate('build')
@@ -242,6 +248,10 @@ function cancel() {
               <span class="material-icons sm">check_circle_outline</span>
               Valid query
             </span>
+            <button class="ghost clear-button" title="Clear Panel" @click="clearPanel">
+              <span class="material-icons sm">clear</span>
+              <span class="label">Clear</span>
+            </button>
           </div>
         </div>
         <div class="editor-wrap">
@@ -355,6 +365,10 @@ function cancel() {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+.clear-button {
+  white-space: nowrap;
 }
 
 .section-label {
