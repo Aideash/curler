@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed, inject } from 'vue'
 import SchemaInputFieldList from './SchemaInputFieldList.vue'
 import SchemaEnumValueList from './SchemaEnumValueList.vue'
 import SchemaTreeLevel from './SchemaTreeLevel.vue'
+import { INSERT_BLOCKED_HINT_KEY } from '../composables/useRapidClickHint'
 import {
   pathSegmentField,
   pathSegmentInlineFragment,
+  explorerNodeTitle,
   presenceArgKey,
   presenceFieldKey,
   presenceFragmentKey,
@@ -14,6 +17,7 @@ import {
   type SchemaArgNode,
   type SchemaFieldNode,
   type SchemaFragmentTypeNode,
+  type SchemaExplorerSortMode,
 } from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
@@ -29,6 +33,7 @@ const props = defineProps<{
   expandedFragments: Set<string>
   insertModeOn: boolean
   showArgsOn: boolean
+  sortMode: SchemaExplorerSortMode
   filter: string
   presence: QueryPresence
   expandedArgs: Set<string>
@@ -54,6 +59,9 @@ const emit = defineEmits<{
   ]
   insertFragment: [operation: RootOperation, fieldPath: PathSegment[], typeName: string]
 }>()
+
+const insertBlockedHint = inject(INSERT_BLOCKED_HINT_KEY, null)
+const insertBlocked = computed(() => insertBlockedHint?.insertBlocked.value ?? false)
 
 function fragmentKey(typeName: string) {
   return `${props.pathPrefix}::fragment::${typeName}`
@@ -127,17 +135,30 @@ function argInQuery(fragmentTypeName: string, field: SchemaFieldNode, arg: Schem
   )
 }
 
-function onFieldClick(fragmentTypeName: string, field: SchemaFieldNode) {
+function handleInsertBlocked(event: MouseEvent): boolean {
+  if (!insertBlocked.value) return false
+  insertBlockedHint?.recordBlockedClick(event)
+  return true
+}
+
+function onFieldClick(event: MouseEvent, fragmentTypeName: string, field: SchemaFieldNode) {
   if (canExpandField(field) && !isFieldSectionExpanded(fragmentTypeName, field)) {
     toggleFieldSection(fragmentTypeName, field)
   }
   if (props.insertModeOn) {
+    if (handleInsertBlocked(event)) return
     emit('insert', props.operation, fragmentParentPath(fragmentTypeName), field.name)
   }
 }
 
-function onArgClick(fragmentTypeName: string, field: SchemaFieldNode, arg: SchemaArgNode) {
+function onArgClick(
+  event: MouseEvent,
+  fragmentTypeName: string,
+  field: SchemaFieldNode,
+  arg: SchemaArgNode,
+) {
   if (!props.insertModeOn || argInQuery(fragmentTypeName, field, arg)) return
+  if (handleInsertBlocked(event)) return
   emit('insertArg', props.operation, fragmentParentPath(fragmentTypeName), field.name, arg.name)
 }
 
@@ -157,11 +178,12 @@ function fragmentIsPlaceholder(typeName: string) {
   return props.presence.placeholderFragments.has(fragmentPresenceKey(typeName))
 }
 
-function onFragmentTypeClick(typeName: string) {
+function onFragmentTypeClick(event: MouseEvent, typeName: string) {
   if (!isFragmentExpanded(typeName)) {
     emit('toggleFragment', fragmentKey(typeName))
   }
   if (props.insertModeOn) {
+    if (handleInsertBlocked(event)) return
     emit('insertFragment', props.operation, props.fieldPath, typeName)
   }
 }
@@ -188,13 +210,14 @@ function onFragmentTypeClick(typeName: string) {
             'in-query':
               fragmentInQuery(fragment.typeName) && !fragmentIsPlaceholder(fragment.typeName),
             'placeholder-only': fragmentIsPlaceholder(fragment.typeName),
+            'error-uninsertable': insertBlocked,
           }"
           :title="
             fragmentIsPlaceholder(fragment.typeName)
               ? `Inline fragment on ${fragment.typeName} (placeholder)`
               : fragment.description || `Inline fragment on ${fragment.typeName}`
           "
-          @click="onFragmentTypeClick(fragment.typeName)"
+          @click="onFragmentTypeClick($event, fragment.typeName)"
         >
           <span class="fragment-type-name">... on {{ fragment.typeName }}</span>
         </button>
@@ -222,18 +245,24 @@ function onFragmentTypeClick(typeName: string) {
             <button
               type="button"
               class="ghost fragment-field-btn"
-              :class="{ 'in-query': fieldInQuery(fragment.typeName, field) }"
+              :class="{
+                'in-query': fieldInQuery(fragment.typeName, field),
+                deprecated: field.deprecated,
+                'error-uninsertable': insertBlocked,
+              }"
               :title="
-                fieldInQuery(fragment.typeName, field)
-                  ? `${field.description || field.name} (in query)`
-                  : field.description || field.name
+                explorerNodeTitle(
+                  field,
+                  fieldInQuery(fragment.typeName, field) ? '(in query)' : undefined,
+                )
               "
-              @click="onFieldClick(fragment.typeName, field)"
+              @click="onFieldClick($event, fragment.typeName, field)"
             >
               <span class="fragment-field-name">{{ field.name }}</span>
               <span class="fragment-field-meta faint">
                 {{ field.argsSummary }}<template v-if="field.argsSummary">: </template
-                >{{ field.typeLabel }}<template v-if="field.cyclicReturn"> (cyclic)</template>
+                >{{ field.typeLabel }}<template v-if="field.cyclicReturn"> (cyclic)</template
+                ><template v-if="field.deprecated"> · deprecated</template>
               </span>
             </button>
           </div>
@@ -269,16 +298,25 @@ function onFragmentTypeClick(typeName: string) {
                   :class="{
                     'insert-disabled': !insertModeOn || argInQuery(fragment.typeName, field, arg),
                     'in-query': argInQuery(fragment.typeName, field, arg),
+                    deprecated: arg.deprecated,
+                    'error-uninsertable':
+                      insertBlocked && !argInQuery(fragment.typeName, field, arg),
                   }"
                   :title="
-                    argInQuery(fragment.typeName, field, arg)
-                      ? `${field.name}.${arg.name} (in query)`
-                      : arg.description || `${field.name}.${arg.name}`
+                    explorerNodeTitle(
+                      arg,
+                      argInQuery(fragment.typeName, field, arg)
+                        ? `${field.name}.${arg.name} (in query)`
+                        : `${field.name}.${arg.name}`,
+                    )
                   "
-                  @click="onArgClick(fragment.typeName, field, arg)"
+                  @click="onArgClick($event, fragment.typeName, field, arg)"
                 >
                   <span class="arg-name">{{ arg.name }}</span>
-                  <span class="arg-meta faint">{{ arg.typeLabel }}</span>
+                  <span class="arg-meta faint"
+                    >{{ arg.typeLabel
+                    }}<template v-if="arg.deprecated"> · deprecated</template></span
+                  >
                 </button>
               </li>
               <li
@@ -292,12 +330,14 @@ function onFragmentTypeClick(typeName: string) {
                   :depth="depth + 3"
                   :expanded="expandedInput"
                   :path-prefix="argExpandKey(fragment.typeName, field, arg)"
+                  :sort-mode="sortMode"
                   @toggle="(key) => emit('toggleInput', key)"
                 />
                 <SchemaEnumValueList
                   v-else-if="argNestingKind(arg) === 'enum'"
                   :values="arg.enumValues"
                   :depth="depth + 3"
+                  :sort-mode="sortMode"
                 />
               </li>
             </template>
@@ -326,6 +366,7 @@ function onFragmentTypeClick(typeName: string) {
             :is-expanded="isExpanded"
             :insert-mode-on="insertModeOn"
             :show-args-on="showArgsOn"
+            :sort-mode="sortMode"
             :filter="filter"
             :presence="presence"
             @toggle="(op, path) => emit('toggle', op, path)"
@@ -357,6 +398,7 @@ function onFragmentTypeClick(typeName: string) {
             :expanded-fragments="expandedFragments"
             :insert-mode-on="insertModeOn"
             :show-args-on="showArgsOn"
+            :sort-mode="sortMode"
             :filter="filter"
             :presence="presence"
             :expanded-args="expandedArgs"
@@ -398,6 +440,7 @@ function onFragmentTypeClick(typeName: string) {
             :is-expanded="isExpanded"
             :insert-mode-on="insertModeOn"
             :show-args-on="showArgsOn"
+            :sort-mode="sortMode"
             :filter="filter"
             :presence="presence"
             @toggle="(op, path) => emit('toggle', op, path)"
@@ -465,6 +508,11 @@ function onFragmentTypeClick(typeName: string) {
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
+.fragment-type-label.error-uninsertable:active {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  border-color: var(--red-border);
+}
+
 .fragment-type-name {
   font-family: var(--mono);
   font-size: 12px;
@@ -488,6 +536,16 @@ function onFragmentTypeClick(typeName: string) {
 
 .fragment-field-btn.in-query {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.fragment-field-btn.error-uninsertable:active {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  border-left-color: var(--red-border);
+}
+
+.fragment-field-btn.deprecated,
+.arg-btn.deprecated:not(.in-query) {
+  opacity: 0.65;
 }
 
 .fragment-field-name,
@@ -532,6 +590,11 @@ function onFragmentTypeClick(typeName: string) {
 .arg-btn.in-query {
   opacity: 0.55;
   border-left-color: var(--accent-dim);
+}
+
+.arg-btn.error-uninsertable:active {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  border-left-color: var(--red-border);
 }
 
 .arg-nesting {

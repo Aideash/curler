@@ -57,6 +57,59 @@ export function saveArgInsertMode(mode: ArgInsertMode) {
   }
 }
 
+/** How fields and related schema nodes are ordered in the explorer tree. */
+export type SchemaExplorerSortMode = 'schema' | 'alphabetical'
+
+const SCHEMA_EXPLORER_SORT_STORAGE_KEY = 'curler.graphqlBuilder.schemaExplorerSort'
+
+export function loadSchemaExplorerSortMode(): SchemaExplorerSortMode {
+  try {
+    const stored = sessionStorage.getItem(SCHEMA_EXPLORER_SORT_STORAGE_KEY)
+    if (stored === 'schema' || stored === 'alphabetical') return stored
+  } catch {
+    // sessionStorage unavailable
+  }
+  return 'schema'
+}
+
+export function saveSchemaExplorerSortMode(mode: SchemaExplorerSortMode) {
+  try {
+    sessionStorage.setItem(SCHEMA_EXPLORER_SORT_STORAGE_KEY, mode)
+  } catch {
+    // ignore
+  }
+}
+
+export function sortExplorerList<T>(
+  items: readonly T[],
+  mode: SchemaExplorerSortMode,
+  label: (item: T) => string,
+): T[] {
+  if (mode === 'schema') return [...items]
+  return [...items].sort((a, b) =>
+    label(a).localeCompare(label(b), undefined, { sensitivity: 'base' }),
+  )
+}
+
+export function explorerNodeTitle(
+  node: {
+    name: string
+    description?: string
+    deprecated?: boolean
+    deprecationReason?: string
+  },
+  suffix?: string,
+): string {
+  const parts: string[] = []
+  if (node.deprecated) {
+    parts.push(node.deprecationReason ? `Deprecated: ${node.deprecationReason}` : 'Deprecated')
+  }
+  if (node.description) parts.push(node.description)
+  if (!parts.length) parts.push(node.name)
+  if (suffix) parts.push(suffix)
+  return parts.join(' — ')
+}
+
 export interface FieldClickTarget {
   operation: RootOperation
   /** Path from the operation root to the parent selection set of the clicked field. */
@@ -119,6 +172,8 @@ export interface SchemaFragmentTypeNode {
 export interface SchemaFieldNode {
   name: string
   description?: string
+  deprecated: boolean
+  deprecationReason?: string
   typeLabel: string
   /** Named GraphQL type of this field's return value. */
   returnTypeName: string
@@ -1013,6 +1068,8 @@ function describeInputField(field: GraphQLInputField): SchemaInputFieldNode {
   return {
     name: field.name,
     description: field.description ?? undefined,
+    deprecated: field.deprecationReason != null,
+    deprecationReason: field.deprecationReason ?? undefined,
     typeLabel: typeLabel(field.type),
     required: isNonNullType(field.type) && field.defaultValue === undefined,
     hasDefault: field.defaultValue !== undefined,
@@ -1030,6 +1087,7 @@ function describeEnumValues(type: GraphQLInputType): SchemaEnumValueNode[] {
     name: value.name,
     description: value.description ?? undefined,
     deprecated: value.deprecationReason != null,
+    deprecationReason: value.deprecationReason ?? undefined,
   }))
 }
 
@@ -1044,12 +1102,15 @@ export interface SchemaEnumValueNode {
   name: string
   description?: string
   deprecated: boolean
+  deprecationReason?: string
 }
 
 /** Describe an input object field for browse-only explorer nesting. */
 export interface SchemaInputFieldNode {
   name: string
   description?: string
+  deprecated: boolean
+  deprecationReason?: string
   typeLabel: string
   required: boolean
   hasDefault: boolean
@@ -1063,6 +1124,8 @@ export interface SchemaInputFieldNode {
 export interface SchemaArgNode {
   name: string
   description?: string
+  deprecated: boolean
+  deprecationReason?: string
   typeLabel: string
   required: boolean
   hasDefault: boolean
@@ -1079,6 +1142,8 @@ function describeArg(arg: GraphQLArgument): SchemaArgNode {
   return {
     name: arg.name,
     description: arg.description ?? undefined,
+    deprecated: arg.deprecationReason != null,
+    deprecationReason: arg.deprecationReason ?? undefined,
     typeLabel: typeLabel(arg.type),
     required: isNonNullType(arg.type) && arg.defaultValue === undefined,
     hasDefault: arg.defaultValue !== undefined,
@@ -1156,6 +1221,8 @@ function describeSchemaField(
   return {
     name: field.name,
     description: field.description ?? undefined,
+    deprecated: field.deprecationReason != null,
+    deprecationReason: field.deprecationReason ?? undefined,
     typeLabel: typeLabel(field.type),
     returnTypeName: typeName,
     composite,
@@ -1270,4 +1337,15 @@ export function resolveVariableEnumOptions(
   }
 
   return result
+}
+
+export function isQueryParsable(query: string): boolean {
+  const trimmed = query.trim()
+  if (!trimmed) return true
+  try {
+    parse(trimmed)
+    return true
+  } catch {
+    return false
+  }
 }

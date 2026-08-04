@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import SchemaInputFieldList from './SchemaInputFieldList.vue'
 import SchemaEnumValueList from './SchemaEnumValueList.vue'
 import SchemaFragmentTypeList from './SchemaFragmentTypeList.vue'
+import { INSERT_BLOCKED_HINT_KEY } from '../composables/useRapidClickHint'
 import {
   fieldPathFromSegments,
+  explorerNodeTitle,
   pathSegmentField,
   presenceArgKey,
   presenceFieldKey,
@@ -14,6 +16,7 @@ import {
   type SchemaArgNode,
   type SchemaFieldNode,
   type SchemaFragmentTypeNode,
+  type SchemaExplorerSortMode,
 } from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
@@ -26,8 +29,10 @@ const props = defineProps<{
   expandedFragments: Set<string>
   insertModeOn: boolean
   showArgsOn: boolean
+  sortMode: SchemaExplorerSortMode
   filter: string
   presence: QueryPresence
+  queryIsParsable?: boolean
   fields?: SchemaFieldNode[]
   visibleFields: (op: RootOperation, path: PathSegment[]) => SchemaFieldNode[]
   visibleArgs: (field: SchemaFieldNode, needle: string) => SchemaArgNode[]
@@ -51,6 +56,14 @@ const emit = defineEmits<{
   ]
   insertFragment: [operation: RootOperation, fieldPath: PathSegment[], typeName: string]
 }>()
+
+const insertBlockedHint = inject(INSERT_BLOCKED_HINT_KEY, null)
+
+const insertBlocked = computed(
+  () =>
+    insertBlockedHint?.insertBlocked.value ??
+    (props.insertModeOn && props.queryIsParsable === false),
+)
 
 const fields = computed(
   () => props.fields ?? props.visibleFields(props.operation, props.parentPath),
@@ -113,22 +126,36 @@ function inputPathPrefix(field: SchemaFieldNode, arg: SchemaArgNode) {
   return argExpandKey(field, arg)
 }
 
-function mainHandler(operation: RootOperation, parentPath: PathSegment[], field: SchemaFieldNode) {
+function handleInsertBlocked(event: MouseEvent): boolean {
+  if (!insertBlocked.value) return false
+  insertBlockedHint?.recordBlockedClick(event)
+  return true
+}
+
+function mainHandler(
+  event: MouseEvent,
+  operation: RootOperation,
+  parentPath: PathSegment[],
+  field: SchemaFieldNode,
+) {
   if (canExpand(field) && !isFieldExpanded(field)) {
     emit('toggle', operation, childPath(field.name))
   }
   if (props.insertModeOn) {
+    if (handleInsertBlocked(event)) return
     emit('insert', operation, parentPath, field.name)
   }
 }
 
 function onArgClick(
+  event: MouseEvent,
   operation: RootOperation,
   parentPath: PathSegment[],
   field: SchemaFieldNode,
   arg: SchemaArgNode,
 ) {
   if (!props.insertModeOn || argInQuery(field, arg)) return
+  if (handleInsertBlocked(event)) return
   emit('insertArg', operation, parentPath, field.name, arg.name)
 }
 </script>
@@ -152,18 +179,19 @@ function onArgClick(
         <button
           type="button"
           class="ghost field-btn"
-          :class="{ 'in-query': fieldInQuery(field) }"
-          :title="
-            fieldInQuery(field)
-              ? `${field.description || field.name} (in query)`
-              : field.description || field.name
-          "
-          @click="mainHandler(operation, parentPath, field)"
+          :class="{
+            'in-query': fieldInQuery(field),
+            deprecated: field.deprecated,
+            'error-uninsertable': insertBlocked,
+          }"
+          :title="explorerNodeTitle(field, fieldInQuery(field) ? '(in query)' : undefined)"
+          @click="mainHandler($event, operation, parentPath, field)"
         >
           <span class="field-name">{{ field.name }}</span>
           <span class="field-meta faint">
             {{ field.argsSummary }}<template v-if="field.argsSummary">: </template
-            >{{ field.typeLabel }}<template v-if="field.cyclicReturn"> (cyclic)</template>
+            >{{ field.typeLabel }}<template v-if="field.cyclicReturn"> (cyclic)</template
+            ><template v-if="field.deprecated"> · deprecated</template>
           </span>
         </button>
       </div>
@@ -192,16 +220,23 @@ function onArgClick(
               :class="{
                 'insert-disabled': !insertModeOn || argInQuery(field, arg),
                 'in-query': argInQuery(field, arg),
+                deprecated: arg.deprecated,
+                'error-uninsertable': insertBlocked && !argInQuery(field, arg),
               }"
               :title="
-                argInQuery(field, arg)
-                  ? `${field.name}.${arg.name} (in query)`
-                  : arg.description || `${field.name}.${arg.name}`
+                explorerNodeTitle(
+                  arg,
+                  argInQuery(field, arg)
+                    ? `${field.name}.${arg.name} (in query)`
+                    : `${field.name}.${arg.name}`,
+                )
               "
-              @click="onArgClick(operation, parentPath, field, arg)"
+              @click="onArgClick($event, operation, parentPath, field, arg)"
             >
               <span class="arg-name">{{ arg.name }}</span>
-              <span class="arg-meta faint">{{ arg.typeLabel }}</span>
+              <span class="arg-meta faint"
+                >{{ arg.typeLabel }}<template v-if="arg.deprecated"> · deprecated</template></span
+              >
             </button>
           </li>
           <li
@@ -215,12 +250,14 @@ function onArgClick(
               :depth="depth + 2"
               :expanded="expandedInput"
               :path-prefix="inputPathPrefix(field, arg)"
+              :sort-mode="sortMode"
               @toggle="(key) => emit('toggleInput', key)"
             />
             <SchemaEnumValueList
               v-else-if="argNestingKind(arg) === 'enum'"
               :values="arg.enumValues"
               :depth="depth + 2"
+              :sort-mode="sortMode"
             />
           </li>
         </template>
@@ -248,8 +285,10 @@ function onArgClick(
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
+        :sort-mode="sortMode"
         :filter="filter"
         :presence="presence"
+        :query-is-parsable="queryIsParsable"
         @toggle="(op, path) => emit('toggle', op, path)"
         @toggle-arg="(key) => emit('toggleArg', key)"
         @toggle-input="(key) => emit('toggleInput', key)"
@@ -279,6 +318,7 @@ function onArgClick(
         :expanded-fragments="expandedFragments"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
+        :sort-mode="sortMode"
         :expanded-args="expandedArgs"
         :expanded-input="expandedInput"
         :filter="filter"
@@ -316,8 +356,10 @@ function onArgClick(
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
+        :sort-mode="sortMode"
         :filter="filter"
         :presence="presence"
+        :query-is-parsable="queryIsParsable"
         @toggle="(op, path) => emit('toggle', op, path)"
         @toggle-arg="(key) => emit('toggleArg', key)"
         @toggle-input="(key) => emit('toggleInput', key)"
@@ -371,6 +413,21 @@ function onArgClick(
 
 .field-btn.in-query {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.field-btn.deprecated,
+.arg-btn.deprecated:not(.in-query) {
+  opacity: 0.65;
+}
+
+.field-btn.error-uninsertable:active {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  border: 1px solid var(--red-border);
+}
+
+.arg-btn.error-uninsertable:active:not(.insert-disabled) {
+  background: color-mix(in srgb, var(--red) 30%, transparent);
+  border-left-color: var(--red-border);
 }
 
 .field-name {

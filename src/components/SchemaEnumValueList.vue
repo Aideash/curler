@@ -1,21 +1,32 @@
 <script setup lang="ts">
-import type { SchemaEnumValueNode } from '../lib/graphqlQueryBuilder'
+import { computed } from 'vue'
+import {
+  explorerNodeTitle,
+  sortExplorerList,
+  type SchemaEnumValueNode,
+  type SchemaExplorerSortMode,
+} from '../lib/graphqlQueryBuilder'
 
-defineProps<{
+const props = defineProps<{
   values: SchemaEnumValueNode[]
   depth: number
+  sortMode: SchemaExplorerSortMode
 }>()
+
+const sortedValues = computed(() =>
+  sortExplorerList(props.values, props.sortMode, (value) => value.name),
+)
 </script>
 
 <template>
   <ul class="enum-values-list">
-    <li v-for="value in values" :key="value.name" class="enum-value-row">
+    <li v-for="value in sortedValues" :key="value.name" class="enum-value-row">
       <div class="row" :style="{ '--depth': depth }">
         <span class="expand-spacer" />
         <div
           class="enum-value-label"
           :class="{ deprecated: value.deprecated }"
-          :title="value.description || value.name"
+          :title="explorerNodeTitle(value)"
         >
           <span class="enum-value-name">{{ value.name }}</span>
           <span v-if="value.deprecated" class="enum-value-meta faint">deprecated</span>

@@ -1,17 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import SchemaEnumValueList from './SchemaEnumValueList.vue'
-import type { SchemaInputFieldNode } from '../lib/graphqlQueryBuilder'
+import {
+  explorerNodeTitle,
+  sortExplorerList,
+  type SchemaExplorerSortMode,
+  type SchemaInputFieldNode,
+} from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
   fields: SchemaInputFieldNode[]
   depth: number
   expanded: Set<string>
   pathPrefix: string
+  sortMode: SchemaExplorerSortMode
 }>()
 
 const emit = defineEmits<{
   toggle: [key: string]
 }>()
+
+const sortedFields = computed(() =>
+  sortExplorerList(props.fields, props.sortMode, (field) => field.name),
+)
 
 function fieldKey(name: string) {
   return `${props.pathPrefix}::${name}`
@@ -37,7 +48,7 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
 
 <template>
   <ul class="input-fields-list">
-    <li v-for="field in fields" :key="field.name" class="input-field-row">
+    <li v-for="field in sortedFields" :key="field.name" class="input-field-row">
       <div class="row" :style="{ '--depth': depth }">
         <button
           v-if="canExpand(field)"
@@ -51,9 +62,16 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
           }}</span>
         </button>
         <span v-else class="expand-spacer" />
-        <div class="input-field-label" :title="field.description || field.name">
+        <div
+          class="input-field-label"
+          :class="{ deprecated: field.deprecated }"
+          :title="explorerNodeTitle(field)"
+        >
           <span class="input-field-name">{{ field.name }}</span>
-          <span class="input-field-meta faint">{{ field.typeLabel }}</span>
+          <span class="input-field-meta faint"
+            >{{ field.typeLabel
+            }}<template v-if="field.deprecated"> · deprecated</template></span
+          >
         </div>
       </div>
       <SchemaInputFieldList
@@ -62,12 +80,14 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
         :depth="depth + 1"
         :expanded="expanded"
         :path-prefix="fieldKey(field.name)"
+        :sort-mode="sortMode"
         @toggle="(key) => emit('toggle', key)"
       />
       <SchemaEnumValueList
         v-else-if="nestingKind(field) === 'enum' && isExpanded(field.name)"
         :values="field.enumValues"
         :depth="depth + 1"
+        :sort-mode="sortMode"
       />
     </li>
   </ul>
@@ -103,6 +123,10 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
   align-items: flex-start;
   padding: 2px 6px;
   border-left: 2px solid var(--accent-dim);
+}
+
+.input-field-label.deprecated {
+  opacity: 0.65;
 }
 
 .input-field-name {

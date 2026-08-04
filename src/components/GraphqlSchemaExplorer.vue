@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import type { GraphQLSchema } from 'graphql'
 import SchemaTreeLevel from './SchemaTreeLevel.vue'
+import {
+  INSERT_BLOCKED_HINT_KEY,
+  INSERT_BLOCKED_MESSAGE,
+  useRapidClickHint,
+} from '../composables/useRapidClickHint'
 import {
   availableOperations,
   buildQueryPresence,
   fieldPathFromSegments,
+  isQueryParsable,
   listFields,
   listFragmentMemberFields,
   listInterfaceFieldsForType,
   loadArgInsertMode,
+  loadSchemaExplorerSortMode,
   saveArgInsertMode,
+  saveSchemaExplorerSortMode,
+  sortExplorerList,
   type ArgClickTarget,
   type ArgInsertMode,
   type FieldClickTarget,
@@ -21,6 +30,7 @@ import {
   type SchemaFieldNode,
   type SchemaFragmentTypeNode,
   type SchemaInputFieldNode,
+  type SchemaExplorerSortMode,
 } from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
@@ -49,9 +59,23 @@ const expandedArgs = ref<Set<string>>(new Set())
 const expandedInput = ref<Set<string>>(new Set())
 const expandedFragments = ref<Set<string>>(new Set())
 const insertModeOn = ref(true)
+const sortMode = ref<SchemaExplorerSortMode>(loadSchemaExplorerSortMode())
 const schemaExplorerError = ref<string | null>(null)
 
 const presence = computed(() => buildQueryPresence(props.query, activeOp.value))
+const queryIsParsable = computed(() => isQueryParsable(props.query))
+const insertBlocked = computed(() => insertModeOn.value && !queryIsParsable.value)
+
+const { hint: insertHint, recordBlockedClick, reset: resetInsertHint } = useRapidClickHint()
+
+provide(INSERT_BLOCKED_HINT_KEY, {
+  insertBlocked,
+  recordBlockedClick: (event: MouseEvent) => recordBlockedClick(event, INSERT_BLOCKED_MESSAGE),
+})
+
+watch(queryIsParsable, (parsable) => {
+  if (parsable) resetInsertHint()
+})
 
 watch(
   operations,
@@ -63,6 +87,10 @@ watch(
 
 watch(argInsertMode, (mode) => {
   saveArgInsertMode(mode)
+})
+
+watch(sortMode, (mode) => {
+  saveSchemaExplorerSortMode(mode)
 })
 
 watch(
@@ -145,19 +173,32 @@ function matchesFilter(field: SchemaFieldNode, needle: string) {
   return fieldMatchesFilterDeep(field, needle)
 }
 
+function sortFields(fields: SchemaFieldNode[]) {
+  return sortExplorerList(fields, sortMode.value, (field) => field.name)
+}
+
+function sortArgs(args: SchemaArgNode[]) {
+  return sortExplorerList(args, sortMode.value, (arg) => arg.name)
+}
+
+function sortFragmentTypes(fragments: SchemaFragmentTypeNode[]) {
+  return sortExplorerList(fragments, sortMode.value, (fragment) => fragment.typeName)
+}
+
 function visibleArgs(field: SchemaFieldNode, needle: string): SchemaArgNode[] {
   if (!showArgsOn.value || !field.args.length) return []
-  if (!needle) return field.args
-  return field.args.filter((arg) => argMatchesFilter(arg, needle))
+  const args = !needle ? field.args : field.args.filter((arg) => argMatchesFilter(arg, needle))
+  return sortArgs(args)
 }
 
 function visibleFields(operation: RootOperation, parentPath: PathSegment[]): SchemaFieldNode[] {
   const needle = props.filter.trim().toLowerCase()
   try {
     schemaExplorerError.value = null
-    return listFields(props.schema, operation, parentPath).filter((field) =>
+    const fields = listFields(props.schema, operation, parentPath).filter((field) =>
       matchesFilter(field, needle),
     )
+    return sortFields(fields)
   } catch (error) {
     console.error('Schema explorer failed to list fields', error)
     schemaExplorerError.value =
@@ -171,7 +212,7 @@ function loadFragmentMemberFields(
   concreteTypeName: string,
 ): SchemaFieldNode[] {
   try {
-    return listFragmentMemberFields(props.schema, ownerTypeName, concreteTypeName)
+    return sortFields(listFragmentMemberFields(props.schema, ownerTypeName, concreteTypeName))
   } catch (error) {
     console.error('Failed to load fragment member fields', error)
     return []
@@ -181,14 +222,18 @@ function loadFragmentMemberFields(
 function visibleInterfaceFields(field: SchemaFieldNode, needle: string): SchemaFieldNode[] {
   if (field.abstractReturn !== 'interface' || field.cyclicReturn) return []
   const fields = listInterfaceFieldsForType(props.schema, field.returnTypeName)
-  if (!needle) return fields
-  return fields.filter((ifaceField) => fieldMatchesFilterDeep(ifaceField, needle))
+  const filtered = !needle
+    ? fields
+    : fields.filter((ifaceField) => fieldMatchesFilterDeep(ifaceField, needle))
+  return sortFields(filtered)
 }
 
 function visibleFragmentTypes(field: SchemaFieldNode, needle: string): SchemaFragmentTypeNode[] {
   if (!field.fragmentTypes.length || field.cyclicReturn) return []
-  if (!needle) return field.fragmentTypes
-  return field.fragmentTypes.filter((fragment) => fragment.typeName.toLowerCase().includes(needle))
+  const fragments = !needle
+    ? field.fragmentTypes
+    : field.fragmentTypes.filter((fragment) => fragment.typeName.toLowerCase().includes(needle))
+  return sortFragmentTypes(fragments)
 }
 
 function onInsert(operation: RootOperation, parentPath: PathSegment[], fieldName: string) {
@@ -235,6 +280,17 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
     <transition name="fade-shrink">
       <div v-show="operations.length && showExplorerControls" class="explorer-controls-wrap">
         <div class="explorer-controls">
+          <button
+            type="button"
+            class="ghost sort-toggle"
+            :class="{ active: sortMode === 'alphabetical' }"
+            :title="sortMode === 'alphabetical' ? 'Sort by schema order' : 'Sort alphabetically'"
+            @click="sortMode = sortMode === 'schema' ? 'alphabetical' : 'schema'"
+          >
+            <span class="material-icons sm">{{
+              sortMode === 'alphabetical' ? 'sort_by_alpha' : 'sort'
+            }}</span>
+          </button>
           <label for="show-args" class="toggle">
             <span class="faint">Show arguments</span>
             <input
@@ -291,8 +347,10 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
+        :sort-mode="sortMode"
         :filter="filter"
         :presence="presence"
+        :query-is-parsable="queryIsParsable"
         @toggle="toggleExpand"
         @toggle-arg="toggleArgExpand"
         @toggle-input="toggleInputExpand"
@@ -302,10 +360,35 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
         @insert-fragment="onFragmentInsert"
       />
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="insertHint"
+        class="insert-hint"
+        :style="{ left: `${insertHint.x + 12}px`, top: `${insertHint.y + 12}px` }"
+      >
+        {{ insertHint.message }}
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
+.insert-hint {
+  position: fixed;
+  z-index: 1000;
+  max-width: 220px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  background: var(--bg-elevated, var(--bg-input));
+  border: 1px solid var(--red-border, var(--border-strong));
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text) 12%, transparent);
+  pointer-events: none;
+}
+
 .schema-explorer {
   display: flex;
   flex-direction: column;
@@ -385,6 +468,17 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
   padding: var(--explorer-control-padding-top) 8px 0;
   overflow: hidden;
   min-height: 0;
+}
+
+.sort-toggle {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.sort-toggle.active {
+  color: var(--accent);
 }
 
 .explorer-controls label:first-of-type {
