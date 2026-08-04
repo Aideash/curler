@@ -69,8 +69,7 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
         >
           <span class="input-field-name">{{ field.name }}</span>
           <span class="input-field-meta faint"
-            >{{ field.typeLabel
-            }}<template v-if="field.deprecated"> · deprecated</template></span
+            >{{ field.typeLabel }}<template v-if="field.deprecated"> · deprecated</template></span
           >
         </div>
       </div>

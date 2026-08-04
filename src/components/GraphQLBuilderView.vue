@@ -188,6 +188,7 @@ function cancel() {
       ]"
     />
     <TitleBar>
+      <!-- <img class="logo" src="/android-chrome-192x192.png" alt="curler" width="32" height="32" /> -->
       <TitleBarButton
         back
         icon="arrow_back"
@@ -315,6 +316,10 @@ function cancel() {
   background: var(--bg);
   color: var(--text);
 }
+
+/* image.logo {
+  margin-right: -8px;
+} */
 
 .banner {
   margin: 0;
@@ -445,5 +450,9 @@ function cancel() {
   button.primary {
     padding: 2px 4px;
   }
+
+  /* img.logo {
+    display: none;
+  } */
 }
 </style>
