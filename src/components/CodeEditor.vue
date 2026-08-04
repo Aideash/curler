@@ -2,14 +2,20 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from '../composables/useTheme'
 import { editorTabIndentExtensions } from '../lib/editorTabIndent'
-import { Compartment, EditorState, Prec, type Extension } from '@codemirror/state'
-import { EditorView, placeholder as placeholderExt } from '@codemirror/view'
+import { Compartment, EditorState, StateField, Prec, type Extension } from '@codemirror/state'
+import {
+  Decoration,
+  EditorView,
+  placeholder as placeholderExt,
+  type DecorationSet,
+} from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
 import { graphql, graphqlLanguageSupport, updateSchema } from 'cm6-graphql'
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint'
 import type { GraphQLSchema } from 'graphql'
 import { firstErrorMessage, validateSyntax } from '../lib/graphqlValidate'
+import { findPlaceholderTypenameRanges, type RootOperation } from '../lib/graphqlQueryBuilder'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 
@@ -23,8 +29,17 @@ const props = withDefaults(
     indentWithTab?: boolean
     /** When set, GraphQL mode uses schema-aware lint and completion. */
     schema?: GraphQLSchema | null
+    /** When set with GraphQL, lone __typename placeholders are dimmed in the editor. */
+    graphqlOperation?: RootOperation | null
   }>(),
-  { language: 'text', readonly: false, placeholder: '', indentWithTab: true, schema: null },
+  {
+    language: 'text',
+    readonly: false,
+    placeholder: '',
+    indentWithTab: true,
+    schema: null,
+    graphqlOperation: null,
+  },
 )
 
 const emit = defineEmits<{
@@ -38,6 +53,7 @@ const languageCompartment = new Compartment()
 const readonlyCompartment = new Compartment()
 const themeCompartment = new Compartment()
 const tabIndentCompartment = new Compartment()
+const placeholderTypenameCompartment = new Compartment()
 
 const { isDark } = useTheme()
 
@@ -54,6 +70,10 @@ function buildTheme(dark: boolean): Extension {
       },
       '.cm-line': { padding: '0 10px' },
       '.cm-placeholder': { color: 'var(--text-faint)' },
+      '.cm-typename-placeholder': {
+        opacity: '0.55',
+        color: 'var(--text-faint)',
+      },
     },
     { dark },
   )
@@ -82,6 +102,36 @@ const highlighting = HighlightStyle.define([
   { tag: [tags.comment, tags.lineComment], color: 'var(--syntax-comment)', fontStyle: 'italic' },
   { tag: tags.invalid, color: 'var(--red)' },
 ])
+
+function buildPlaceholderTypenameDecorations(doc: string, operation: RootOperation): DecorationSet {
+  const ranges = findPlaceholderTypenameRanges(doc, operation)
+  if (!ranges.length) return Decoration.none
+  return Decoration.set(
+    ranges.map(({ from, to }) =>
+      Decoration.mark({ class: 'cm-typename-placeholder' }).range(from, to),
+    ),
+  )
+}
+
+function placeholderTypenameExtension(operation: RootOperation): Extension {
+  return StateField.define<DecorationSet>({
+    create(state) {
+      return buildPlaceholderTypenameDecorations(state.doc.toString(), operation)
+    },
+    update(decorations, tr) {
+      if (tr.docChanged) {
+        return buildPlaceholderTypenameDecorations(tr.state.doc.toString(), operation)
+      }
+      return decorations.map(tr.changes)
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  })
+}
+
+function placeholderTypenameExtensionConfig(): Extension {
+  if (props.language !== 'graphql' || !props.graphqlOperation) return []
+  return placeholderTypenameExtension(props.graphqlOperation)
+}
 
 function graphqlSyntaxLinter() {
   return linter((view): Diagnostic[] => {
@@ -168,6 +218,7 @@ onMounted(() => {
         languageCompartment.of(languageExtensions()),
         readonlyCompartment.of(EditorState.readOnly.of(props.readonly)),
         tabIndentCompartment.of(tabIndentExtensions()),
+        placeholderTypenameCompartment.of(placeholderTypenameExtensionConfig()),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return
@@ -227,6 +278,15 @@ watch(
 watch(tabIndentEnabled, () => {
   view?.dispatch({ effects: tabIndentCompartment.reconfigure(tabIndentExtensions()) })
 })
+
+watch(
+  () => [props.language, props.graphqlOperation] as const,
+  () => {
+    view?.dispatch({
+      effects: placeholderTypenameCompartment.reconfigure(placeholderTypenameExtensionConfig()),
+    })
+  },
+)
 
 watch(isDark, (dark) => {
   view?.dispatch({ effects: themeCompartment.reconfigure(buildTheme(dark)) })

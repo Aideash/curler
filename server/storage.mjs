@@ -12,8 +12,7 @@ const MAX_BACKUPS = 40
 const BACKUP_INTERVAL_MS = 5 * 60 * 1000
 
 /** Matches `workspace-2026-08-03T13-24-05-123Z[-shrunk].json` — no path segments. */
-const BACKUP_NAME =
-  /^workspace-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(-shrunk)?\.json$/
+const BACKUP_NAME = /^workspace-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(-shrunk)?\.json$/
 
 /** Returns null when there is no workspace yet, which is not an error. */
 export async function readWorkspace() {
@@ -163,10 +162,7 @@ export async function listBackups() {
     return Promise.all(
       names.map(async (name) => {
         const file = path.join(BACKUP_DIR, name)
-        const [stat, contents] = await Promise.all([
-          fs.stat(file),
-          fs.readFile(file, 'utf8'),
-        ])
+        const [stat, contents] = await Promise.all([fs.stat(file), fs.readFile(file, 'utf8')])
         const stats = workspaceStats(contents)
         return {
           name,
@@ -191,6 +187,7 @@ export async function restoreBackup(name) {
   try {
     restored = await fs.readFile(backupPath, 'utf8')
   } catch (error) {
+    // eslint-disable-next-line preserve-caught-error
     if (error.code === 'ENOENT') throw new Error(`Backup not found: ${name}`)
     throw error
   }

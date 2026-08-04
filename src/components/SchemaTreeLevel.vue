@@ -2,48 +2,79 @@
 import { computed } from 'vue'
 import SchemaInputFieldList from './SchemaInputFieldList.vue'
 import SchemaEnumValueList from './SchemaEnumValueList.vue'
+import SchemaFragmentTypeList from './SchemaFragmentTypeList.vue'
 import {
+  fieldPathFromSegments,
+  pathSegmentField,
   presenceArgKey,
   presenceFieldKey,
+  type PathSegment,
   type QueryPresence,
   type RootOperation,
   type SchemaArgNode,
   type SchemaFieldNode,
+  type SchemaFragmentTypeNode,
 } from '../lib/graphqlQueryBuilder'
 
 const props = defineProps<{
   operation: RootOperation
-  parentPath: string[]
+  parentPath: PathSegment[]
   depth: number
   expanded: Set<string>
   expandedArgs: Set<string>
   expandedInput: Set<string>
+  expandedFragments: Set<string>
   insertModeOn: boolean
   showArgsOn: boolean
   filter: string
   presence: QueryPresence
-  visibleFields: (op: RootOperation, path: string[]) => SchemaFieldNode[]
+  fields?: SchemaFieldNode[]
+  visibleFields: (op: RootOperation, path: PathSegment[]) => SchemaFieldNode[]
   visibleArgs: (field: SchemaFieldNode, needle: string) => SchemaArgNode[]
-  isExpanded: (op: RootOperation, path: string[]) => boolean
+  visibleInterfaceFields: (field: SchemaFieldNode, needle: string) => SchemaFieldNode[]
+  visibleFragmentTypes: (field: SchemaFieldNode, needle: string) => SchemaFragmentTypeNode[]
+  loadFragmentMemberFields: (ownerTypeName: string, concreteTypeName: string) => SchemaFieldNode[]
+  isExpanded: (op: RootOperation, path: PathSegment[]) => boolean
 }>()
 
 const emit = defineEmits<{
-  toggle: [operation: RootOperation, path: string[]]
+  toggle: [operation: RootOperation, path: PathSegment[]]
   toggleArg: [key: string]
   toggleInput: [key: string]
-  insert: [operation: RootOperation, parentPath: string[], fieldName: string]
-  insertArg: [operation: RootOperation, parentPath: string[], fieldName: string, argName: string]
+  toggleFragment: [key: string]
+  insert: [operation: RootOperation, parentPath: PathSegment[], fieldName: string]
+  insertArg: [
+    operation: RootOperation,
+    parentPath: PathSegment[],
+    fieldName: string,
+    argName: string,
+  ]
+  insertFragment: [operation: RootOperation, fieldPath: PathSegment[], typeName: string]
 }>()
 
-const fields = computed(() => props.visibleFields(props.operation, props.parentPath))
+const fields = computed(
+  () => props.fields ?? props.visibleFields(props.operation, props.parentPath),
+)
 const filterNeedle = computed(() => props.filter.trim().toLowerCase())
 
-function childPath(fieldName: string) {
-  return [...props.parentPath, fieldName]
+function childPath(fieldName: string): PathSegment[] {
+  return [...props.parentPath, pathSegmentField(fieldName)]
+}
+
+function fragmentPathPrefix(field: SchemaFieldNode) {
+  const fieldOnly = fieldPathFromSegments(props.parentPath)
+  return `${props.operation}:${[...fieldOnly, field.name].join('.')}`
 }
 
 function canExpand(field: SchemaFieldNode) {
-  return field.composite || (props.showArgsOn && field.args.length > 0)
+  if (field.cyclicReturn) {
+    return props.showArgsOn && field.args.length > 0
+  }
+  return (
+    field.composite ||
+    field.abstractReturn !== 'none' ||
+    (props.showArgsOn && field.args.length > 0)
+  )
 }
 
 function isFieldExpanded(field: SchemaFieldNode) {
@@ -82,7 +113,7 @@ function inputPathPrefix(field: SchemaFieldNode, arg: SchemaArgNode) {
   return argExpandKey(field, arg)
 }
 
-function mainHandler(operation: RootOperation, parentPath: string[], field: SchemaFieldNode) {
+function mainHandler(operation: RootOperation, parentPath: PathSegment[], field: SchemaFieldNode) {
   if (canExpand(field) && !isFieldExpanded(field)) {
     emit('toggle', operation, childPath(field.name))
   }
@@ -93,7 +124,7 @@ function mainHandler(operation: RootOperation, parentPath: string[], field: Sche
 
 function onArgClick(
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
   field: SchemaFieldNode,
   arg: SchemaArgNode,
 ) {
@@ -130,7 +161,10 @@ function onArgClick(
           @click="mainHandler(operation, parentPath, field)"
         >
           <span class="field-name">{{ field.name }}</span>
-          <span class="field-meta faint">{{ field.argsSummary }}: {{ field.typeLabel }}</span>
+          <span class="field-meta faint">
+            {{ field.argsSummary }}<template v-if="field.argsSummary">: </template
+            >{{ field.typeLabel }}<template v-if="field.cyclicReturn"> (cyclic)</template>
+          </span>
         </button>
       </div>
 
@@ -193,15 +227,24 @@ function onArgClick(
       </ul>
 
       <SchemaTreeLevel
-        v-if="field.composite && isFieldExpanded(field)"
+        v-if="
+          field.abstractReturn === 'interface' &&
+          isFieldExpanded(field) &&
+          visibleInterfaceFields(field, filterNeedle).length
+        "
         :operation="operation"
         :parent-path="childPath(field.name)"
         :depth="depth + 1"
+        :fields="visibleInterfaceFields(field, filterNeedle)"
         :expanded="expanded"
         :expanded-args="expandedArgs"
         :expanded-input="expandedInput"
+        :expanded-fragments="expandedFragments"
         :visible-fields="visibleFields"
         :visible-args="visibleArgs"
+        :visible-interface-fields="visibleInterfaceFields"
+        :visible-fragment-types="visibleFragmentTypes"
+        :load-fragment-member-fields="loadFragmentMemberFields"
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
@@ -210,10 +253,80 @@ function onArgClick(
         @toggle="(op, path) => emit('toggle', op, path)"
         @toggle-arg="(key) => emit('toggleArg', key)"
         @toggle-input="(key) => emit('toggleInput', key)"
+        @toggle-fragment="(key) => emit('toggleFragment', key)"
         @insert="(op, path, name) => emit('insert', op, path, name)"
         @insert-arg="
           (op, path, fieldName, argName) => emit('insertArg', op, path, fieldName, argName)
         "
+        @insert-fragment="(op, path, typeName) => emit('insertFragment', op, path, typeName)"
+      />
+
+      <SchemaFragmentTypeList
+        v-if="
+          isFieldExpanded(field) &&
+          field.abstractReturn !== 'none' &&
+          !field.cyclicReturn &&
+          visibleFragmentTypes(field, filterNeedle).length
+        "
+        :fragment-types="visibleFragmentTypes(field, filterNeedle)"
+        :field-path="childPath(field.name)"
+        :owner-type-name="field.returnTypeName"
+        :load-fragment-member-fields="loadFragmentMemberFields"
+        :depth="depth + 1"
+        :path-prefix="fragmentPathPrefix(field)"
+        :operation="operation"
+        :expanded="expanded"
+        :expanded-fragments="expandedFragments"
+        :insert-mode-on="insertModeOn"
+        :show-args-on="showArgsOn"
+        :expanded-args="expandedArgs"
+        :expanded-input="expandedInput"
+        :filter="filter"
+        :presence="presence"
+        :visible-fields="visibleFields"
+        :visible-args="visibleArgs"
+        :visible-interface-fields="visibleInterfaceFields"
+        :visible-fragment-types="visibleFragmentTypes"
+        :is-expanded="isExpanded"
+        @toggle-fragment="(key) => emit('toggleFragment', key)"
+        @toggle-arg="(key) => emit('toggleArg', key)"
+        @toggle-input="(key) => emit('toggleInput', key)"
+        @toggle="(op, path) => emit('toggle', op, path)"
+        @insert="(op, path, name) => emit('insert', op, path, name)"
+        @insert-arg="
+          (op, path, fieldName, argName) => emit('insertArg', op, path, fieldName, argName)
+        "
+        @insert-fragment="(op, path, typeName) => emit('insertFragment', op, path, typeName)"
+      />
+
+      <SchemaTreeLevel
+        v-if="field.composite && field.abstractReturn === 'none' && isFieldExpanded(field)"
+        :operation="operation"
+        :parent-path="childPath(field.name)"
+        :depth="depth + 1"
+        :expanded="expanded"
+        :expanded-args="expandedArgs"
+        :expanded-input="expandedInput"
+        :expanded-fragments="expandedFragments"
+        :visible-fields="visibleFields"
+        :visible-args="visibleArgs"
+        :visible-interface-fields="visibleInterfaceFields"
+        :visible-fragment-types="visibleFragmentTypes"
+        :load-fragment-member-fields="loadFragmentMemberFields"
+        :is-expanded="isExpanded"
+        :insert-mode-on="insertModeOn"
+        :show-args-on="showArgsOn"
+        :filter="filter"
+        :presence="presence"
+        @toggle="(op, path) => emit('toggle', op, path)"
+        @toggle-arg="(key) => emit('toggleArg', key)"
+        @toggle-input="(key) => emit('toggleInput', key)"
+        @toggle-fragment="(key) => emit('toggleFragment', key)"
+        @insert="(op, path, name) => emit('insert', op, path, name)"
+        @insert-arg="
+          (op, path, fieldName, argName) => emit('insertArg', op, path, fieldName, argName)
+        "
+        @insert-fragment="(op, path, typeName) => emit('insertFragment', op, path, typeName)"
       />
     </li>
   </ul>

@@ -19,11 +19,14 @@ import {
 import {
   insertArgument,
   insertField,
+  insertInlineFragment,
   loadArgInsertMode,
   resolveVariableEnumOptions,
   type ArgClickTarget,
   type ArgInsertMode,
   type FieldClickTarget,
+  type FragmentClickTarget,
+  type RootOperation,
 } from '../lib/graphqlQueryBuilder'
 import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { activeEnvironment, currentRequest, variables, variableSet } from '../lib/store'
@@ -35,6 +38,7 @@ const argInsertMode = ref<ArgInsertMode>(loadArgInsertMode())
 const syntaxValidity = ref({ valid: true, message: '' })
 const schemaValidity = ref({ valid: true, message: '', checked: false })
 const builderError = ref('')
+const activeOperation = ref<RootOperation>('query')
 
 const draft = computed(() => graphqlBuilder.draft)
 const loading = computed(() => graphqlBuilder.schemaLoading)
@@ -120,6 +124,24 @@ function onFieldClick(target: FieldClickTarget) {
 
   try {
     const result = insertField(draft.value.graphql, schema.value, target, argInsertMode.value)
+    updateDraftGraphql({ query: result.query, variables: result.variables })
+    schemaValidity.value = { valid: true, message: '', checked: false }
+  } catch (error) {
+    builderError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+function onFragmentClick(target: FragmentClickTarget) {
+  if (!draft.value || !schema.value) return
+  builderError.value = ''
+
+  try {
+    const result = insertInlineFragment(
+      draft.value.graphql,
+      schema.value,
+      target,
+      argInsertMode.value,
+    )
     updateDraftGraphql({ query: result.query, variables: result.variables })
     schemaValidity.value = { valid: true, message: '', checked: false }
   } catch (error) {
@@ -216,11 +238,13 @@ function cancel() {
           v-else-if="schema"
           v-model:show-args="showArguments"
           v-model:arg-insert-mode="argInsertMode"
+          v-model:active-operation="activeOperation"
           :schema="schema"
           :query="draft.graphql.query"
           :filter="schemaFilter"
           @field-click="onFieldClick"
           @arg-click="onArgClick"
+          @fragment-click="onFragmentClick"
         />
         <div v-else class="placeholder faint">
           Set a URL on the request and fetch the schema to explore it here.
@@ -259,6 +283,7 @@ function cancel() {
             :model-value="draft.graphql.query"
             language="graphql"
             :schema="schema"
+            :graphql-operation="activeOperation"
             placeholder="query { }"
             @update:model-value="onQueryUpdate"
             @validity="syntaxValidity = $event"

@@ -7,6 +7,7 @@ import {
   isListType,
   isNonNullType,
   isObjectType,
+  isUnionType,
   parse,
   print,
   type DocumentNode,
@@ -19,6 +20,8 @@ import {
   type GraphQLObjectType,
   type GraphQLSchema,
   type GraphQLType,
+  type GraphQLUnionType,
+  type InlineFragmentNode,
   type OperationDefinitionNode,
   type OperationTypeNode,
   type SelectionSetNode,
@@ -56,16 +59,44 @@ export function saveArgInsertMode(mode: ArgInsertMode) {
 
 export interface FieldClickTarget {
   operation: RootOperation
-  /** Field names from the root type down to the parent of the clicked field. */
-  parentPath: string[]
+  /** Path from the operation root to the parent selection set of the clicked field. */
+  parentPath: PathSegment[]
   fieldName: string
 }
 
 export interface ArgClickTarget {
   operation: RootOperation
-  parentPath: string[]
+  parentPath: PathSegment[]
   fieldName: string
   argName: string
+}
+
+/** One step in a schema/query path — either a field or an inline fragment branch. */
+export type PathSegment =
+  { kind: 'field'; name: string } | { kind: 'inlineFragment'; typeName: string }
+
+export function pathSegmentField(name: string): PathSegment {
+  return { kind: 'field', name }
+}
+
+export function pathSegmentInlineFragment(typeName: string): PathSegment {
+  return { kind: 'inlineFragment', typeName }
+}
+
+/** Field-name segments only (for expand keys and legacy string paths). */
+export function fieldPathFromSegments(segments: PathSegment[]): string[] {
+  return segments.filter((segment) => segment.kind === 'field').map((segment) => segment.name)
+}
+
+function pathSegmentKey(segment: PathSegment): string {
+  return segment.kind === 'field' ? segment.name : `...on${segment.typeName}`
+}
+
+export interface FragmentClickTarget {
+  operation: RootOperation
+  /** Path to the abstract field (including it). */
+  fieldPath: PathSegment[]
+  typeName: string
 }
 
 export interface InsertFieldResult {
@@ -74,6 +105,31 @@ export interface InsertFieldResult {
 }
 
 type CompositeType = GraphQLObjectType | GraphQLInterfaceType
+type SelectionHost = GraphQLObjectType | GraphQLInterfaceType | GraphQLUnionType
+
+export type AbstractReturnKind = 'none' | 'interface' | 'union'
+
+/** A concrete type branch under a union or interface field (... on Type). */
+export interface SchemaFragmentTypeNode {
+  typeName: string
+  description?: string
+}
+
+/** Describe a field for the schema explorer tree. */
+export interface SchemaFieldNode {
+  name: string
+  description?: string
+  typeLabel: string
+  /** Named GraphQL type of this field's return value. */
+  returnTypeName: string
+  composite: boolean
+  abstractReturn: AbstractReturnKind
+  /** True when this field's return type is already being expanded (e.g. Node.parent: Node). */
+  cyclicReturn: boolean
+  fragmentTypes: SchemaFragmentTypeNode[]
+  argsSummary: string
+  args: SchemaArgNode[]
+}
 
 type FieldBuildMeta = {
   node: FieldNode
@@ -364,8 +420,12 @@ function buildFieldMeta(
   }
 }
 
+type MutableInlineFragmentNode = InlineFragmentNode & {
+  selectionSet: MutableSelectionSet
+}
+
 type MutableSelectionSet = SelectionSetNode & {
-  selections: MutableFieldNode[]
+  selections: Array<MutableFieldNode | MutableInlineFragmentNode>
 }
 
 type MutableFieldNode = FieldNode & {
@@ -442,50 +502,130 @@ function mergeVariableDefinitions(op: MutableOperation, defs: VariableDefinition
   }
 }
 
-function resolveCompositeType(type: GraphQLType): CompositeType | null {
+function resolveSelectionHostType(type: GraphQLType): SelectionHost | null {
   const named = getNamedType(type)
-  if (isObjectType(named) || isInterfaceType(named)) return named
+  if (isObjectType(named) || isInterfaceType(named) || isUnionType(named)) return named
   return null
+}
+
+function isConcretePossibleType(
+  schema: GraphQLSchema,
+  abstractType: GraphQLInterfaceType | GraphQLUnionType,
+  concrete: GraphQLObjectType,
+): boolean {
+  return schema.getPossibleTypes(abstractType).some((type) => type.name === concrete.name)
+}
+
+function resolveHostType(
+  schema: GraphQLSchema,
+  operation: RootOperation,
+  parentPath: PathSegment[],
+): CompositeType | null {
+  const root = rootType(schema, operation)
+  if (!root) return null
+
+  let host: SelectionHost = root
+  for (const segment of parentPath) {
+    if (segment.kind === 'field') {
+      if (isUnionType(host)) return null
+      const fieldDef = host.getFields()[segment.name]
+      if (!fieldDef) return null
+      const next = resolveSelectionHostType(fieldDef.type)
+      if (!next) return null
+      host = next
+    } else {
+      if (!isInterfaceType(host) && !isUnionType(host)) return null
+      const concrete = schema.getType(segment.typeName)
+      if (!concrete || !isObjectType(concrete)) return null
+      if (!isConcretePossibleType(schema, host, concrete)) return null
+      host = concrete
+    }
+  }
+
+  if (isUnionType(host)) return null
+  return host
 }
 
 function findSelectionSet(
   op: MutableOperation,
   schema: GraphQLSchema,
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
   mode: ArgInsertMode,
   variables: KeyValue[],
 ): MutableSelectionSet {
   const root = rootType(schema, operation)
   if (!root) throw new Error(`Schema has no ${operation} root type`)
 
-  let parentType: CompositeType = root
+  let host: SelectionHost = root
   let currentSet = op.selectionSet
 
   for (const segment of parentPath) {
-    const fieldDef = parentType.getFields()[segment]
-    if (!fieldDef) throw new Error(`Unknown field "${segment}" on ${parentType.name}`)
+    if (segment.kind === 'field') {
+      if (isUnionType(host)) {
+        throw new Error(`Cannot select field "${segment.name}" on union type ${host.name}`)
+      }
+      const fieldDef = host.getFields()[segment.name]
+      if (!fieldDef) throw new Error(`Unknown field "${segment.name}" on ${host.name}`)
 
-    let fieldNode = currentSet.selections.find(
-      (sel): sel is MutableFieldNode => sel.kind === Kind.FIELD && sel.name.value === segment,
-    )
+      let fieldNode = currentSet.selections.find(
+        (sel): sel is MutableFieldNode =>
+          sel.kind === Kind.FIELD && sel.name.value === segment.name,
+      )
 
-    if (!fieldNode) {
-      const variableNames = collectVariableNames({ kind: Kind.DOCUMENT, definitions: [op] })
-      const built = buildFieldMeta(fieldDef, variableNames, variables, mode)
-      fieldNode = built.node as MutableFieldNode
-      currentSet.selections.push(fieldNode)
-      mergeVariableDefinitions(op, built.variableDefinitions)
+      if (!fieldNode) {
+        const variableNames = collectVariableNames({ kind: Kind.DOCUMENT, definitions: [op] })
+        const built = buildFieldMeta(fieldDef, variableNames, variables, mode)
+        fieldNode = built.node as MutableFieldNode
+        currentSet.selections.push(fieldNode)
+        mergeVariableDefinitions(op, built.variableDefinitions)
+      }
+
+      if (!fieldNode.selectionSet) {
+        fieldNode.selectionSet = { kind: Kind.SELECTION_SET, selections: [] }
+      }
+
+      const nextHost = resolveSelectionHostType(fieldDef.type)
+      if (!nextHost) throw new Error(`"${segment.name}" is not a composite type`)
+      host = nextHost
+      currentSet = fieldNode.selectionSet
+    } else {
+      if (!isInterfaceType(host) && !isUnionType(host)) {
+        throw new Error(`Inline fragment on ${segment.typeName} is not valid on ${host.name}`)
+      }
+
+      const concrete = schema.getType(segment.typeName)
+      if (!concrete || !isObjectType(concrete)) {
+        throw new Error(`Unknown type "${segment.typeName}"`)
+      }
+      if (!isConcretePossibleType(schema, host, concrete)) {
+        throw new Error(`"${segment.typeName}" is not a possible type of ${host.name}`)
+      }
+
+      let fragNode = currentSet.selections.find(
+        (sel): sel is MutableInlineFragmentNode =>
+          sel.kind === Kind.INLINE_FRAGMENT && sel.typeCondition?.name.value === segment.typeName,
+      )
+
+      if (!fragNode) {
+        fragNode = {
+          kind: Kind.INLINE_FRAGMENT,
+          typeCondition: {
+            kind: Kind.NAMED_TYPE,
+            name: { kind: Kind.NAME, value: segment.typeName },
+          },
+          selectionSet: { kind: Kind.SELECTION_SET, selections: [] },
+        }
+        currentSet.selections.push(fragNode)
+      }
+
+      if (!fragNode.selectionSet) {
+        fragNode.selectionSet = { kind: Kind.SELECTION_SET, selections: [] }
+      }
+
+      host = concrete
+      currentSet = fragNode.selectionSet
     }
-
-    if (!fieldNode.selectionSet) {
-      fieldNode.selectionSet = { kind: Kind.SELECTION_SET, selections: [] }
-    }
-
-    const nextType = resolveCompositeType(fieldDef.type)
-    if (!nextType) throw new Error(`"${segment}" is not an object type`)
-    parentType = nextType
-    currentSet = fieldNode.selectionSet
   }
 
   return currentSet
@@ -494,31 +634,50 @@ function findSelectionSet(
 function resolveFieldDef(
   schema: GraphQLSchema,
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
   fieldName: string,
 ): { host: CompositeType; fieldDef: GraphQLField<unknown, unknown> } {
-  const root = rootType(schema, operation)
-  if (!root) throw new Error(`Schema has no ${operation} root type`)
-
-  let host: CompositeType = root
-  for (const segment of parentPath) {
-    const field = host.getFields()[segment]
-    if (!field) throw new Error(`Unknown field "${segment}"`)
-    const next = resolveCompositeType(field.type)
-    if (!next) throw new Error(`"${segment}" is not an object type`)
-    host = next
-  }
+  const host = resolveHostType(schema, operation, parentPath)
+  if (!host) throw new Error('Invalid field path')
 
   const fieldDef = host.getFields()[fieldName]
-  if (!fieldDef) throw new Error(`Unknown field "${fieldName}"`)
+  if (!fieldDef) throw new Error(`Unknown field "${fieldName}" on ${host.name}`)
   return { host, fieldDef }
+}
+
+function makeTypenameField(): MutableFieldNode {
+  return {
+    kind: Kind.FIELD,
+    name: { kind: Kind.NAME, value: '__typename' },
+  }
+}
+
+/** Remove a lone __typename placeholder after a real field is inserted beside it. */
+function stripPlaceholderTypenameIfLonely(
+  selectionSet: MutableSelectionSet,
+  insertedFieldName: string,
+) {
+  if (insertedFieldName === '__typename') return
+
+  const fieldNodes = selectionSet.selections.filter(
+    (sel): sel is MutableFieldNode => sel.kind === Kind.FIELD,
+  )
+  if (fieldNodes.length !== 2) return
+
+  const hasTypename = fieldNodes.some((node) => node.name.value === '__typename')
+  const hasInserted = fieldNodes.some((node) => node.name.value === insertedFieldName)
+  if (!hasTypename || !hasInserted) return
+
+  selectionSet.selections = selectionSet.selections.filter(
+    (sel) => sel.kind !== Kind.FIELD || sel.name.value !== '__typename',
+  ) as MutableSelectionSet['selections']
 }
 
 function getOrCreateFieldNode(
   op: MutableOperation,
   schema: GraphQLSchema,
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
   fieldName: string,
   fieldDef: GraphQLField<unknown, unknown>,
   variableNames: Set<string>,
@@ -535,6 +694,7 @@ function getOrCreateFieldNode(
     fieldNode = built.node as MutableFieldNode
     selectionSet.selections.push(fieldNode)
     mergeVariableDefinitions(op, built.variableDefinitions)
+    stripPlaceholderTypenameIfLonely(selectionSet, fieldName)
   }
 
   return fieldNode
@@ -586,6 +746,37 @@ export function insertField(
   const built = buildFieldMeta(fieldDef, variableNames, variables, mode)
   selectionSet.selections.push(built.node as MutableFieldNode)
   mergeVariableDefinitions(op, built.variableDefinitions)
+  stripPlaceholderTypenameIfLonely(selectionSet, target.fieldName)
+
+  return { query: print(doc), variables }
+}
+
+/**
+ * Opens an inline fragment branch with a __typename placeholder so the query
+ * stays valid until a real field is inserted.
+ */
+export function insertInlineFragment(
+  graphql: GraphqlBody,
+  schema: GraphQLSchema,
+  target: FragmentClickTarget,
+  mode: ArgInsertMode = 'required-vars',
+): InsertFieldResult {
+  const variables = cloneVariables(graphql.variables)
+  const doc = parseMutable(graphql.query, target.operation)
+  const op = ensureOperation(doc, target.operation)
+
+  const fragmentPath: PathSegment[] = [
+    ...target.fieldPath,
+    pathSegmentInlineFragment(target.typeName),
+  ]
+  const selectionSet = findSelectionSet(op, schema, target.operation, fragmentPath, mode, variables)
+
+  const hasTypename = selectionSet.selections.some(
+    (sel) => sel.kind === Kind.FIELD && sel.name.value === '__typename',
+  )
+  if (!hasTypename) {
+    selectionSet.selections.push(makeTypenameField())
+  }
 
   return { query: print(doc), variables }
 }
@@ -644,13 +835,25 @@ export function insertArgument(
 export interface QueryPresence {
   fields: Set<string>
   args: Set<string>
+  /** Inline fragment paths present (e.g. search...onIssue). */
+  fragments: Set<string>
+  /** Fragments whose only selected field is a __typename placeholder. */
+  placeholderFragments: Set<string>
 }
 
-export function presenceFieldKey(parentPath: string[], fieldName: string): string {
-  return [...parentPath, fieldName].join('.')
+export function presenceFragmentKey(fieldPath: PathSegment[], typeName: string): string {
+  return [...fieldPath.map(pathSegmentKey), `...on${typeName}`].join('.')
 }
 
-export function presenceArgKey(parentPath: string[], fieldName: string, argName: string): string {
+export function presenceFieldKey(parentPath: PathSegment[], fieldName: string): string {
+  return [...parentPath.map(pathSegmentKey), fieldName].join('.')
+}
+
+export function presenceArgKey(
+  parentPath: PathSegment[],
+  fieldName: string,
+  argName: string,
+): string {
   return `${presenceFieldKey(parentPath, fieldName)}::${argName}`
 }
 
@@ -668,25 +871,64 @@ function findOperation(
 
 function walkSelectionPresence(
   selectionSet: SelectionSetNode,
-  parentPath: string[],
+  parentPath: PathSegment[],
   fields: Set<string>,
   args: Set<string>,
+  fragments: Set<string>,
+  placeholderFragments: Set<string>,
 ) {
   for (const sel of selectionSet.selections) {
-    if (sel.kind !== Kind.FIELD) continue
+    if (sel.kind === Kind.FIELD) {
+      const fieldName = sel.name.value
+      const fieldKey = presenceFieldKey(parentPath, fieldName)
+      fields.add(fieldKey)
 
-    const fieldName = sel.name.value
-    const fieldKey = presenceFieldKey(parentPath, fieldName)
-    fields.add(fieldKey)
-
-    if (sel.arguments) {
-      for (const arg of sel.arguments) {
-        args.add(presenceArgKey(parentPath, fieldName, arg.name.value))
+      if (sel.arguments) {
+        for (const arg of sel.arguments) {
+          args.add(presenceArgKey(parentPath, fieldName, arg.name.value))
+        }
       }
+
+      if (sel.selectionSet) {
+        walkSelectionPresence(
+          sel.selectionSet,
+          [...parentPath, pathSegmentField(fieldName)],
+          fields,
+          args,
+          fragments,
+          placeholderFragments,
+        )
+      }
+      continue
     }
 
-    if (sel.selectionSet) {
-      walkSelectionPresence(sel.selectionSet, [...parentPath, fieldName], fields, args)
+    if (sel.kind === Kind.INLINE_FRAGMENT && sel.typeCondition) {
+      const typeName = sel.typeCondition.name.value
+      const fragmentPath = [...parentPath, pathSegmentInlineFragment(typeName)]
+      const fragmentKey = fragmentPath.map(pathSegmentKey).join('.')
+      fragments.add(fragmentKey)
+
+      if (sel.selectionSet) {
+        const fieldSelections = sel.selectionSet.selections.filter(
+          (child) => child.kind === Kind.FIELD,
+        )
+        if (
+          fieldSelections.length === 1 &&
+          fieldSelections[0].kind === Kind.FIELD &&
+          fieldSelections[0].name.value === '__typename'
+        ) {
+          placeholderFragments.add(fragmentKey)
+        }
+
+        walkSelectionPresence(
+          sel.selectionSet,
+          fragmentPath,
+          fields,
+          args,
+          fragments,
+          placeholderFragments,
+        )
+      }
     }
   }
 }
@@ -695,20 +937,73 @@ function walkSelectionPresence(
 export function buildQueryPresence(query: string, operation: RootOperation): QueryPresence {
   const fields = new Set<string>()
   const args = new Set<string>()
+  const fragments = new Set<string>()
+  const placeholderFragments = new Set<string>()
   const trimmed = query.trim()
-  if (!trimmed) return { fields, args }
+  if (!trimmed) return { fields, args, fragments, placeholderFragments }
 
   try {
     const doc = parse(trimmed)
     const op = findOperation(doc, operation)
     if (op?.selectionSet) {
-      walkSelectionPresence(op.selectionSet, [], fields, args)
+      walkSelectionPresence(op.selectionSet, [], fields, args, fragments, placeholderFragments)
     }
   } catch {
     // Unparseable query — no presence info
   }
 
-  return { fields, args }
+  return { fields, args, fragments, placeholderFragments }
+}
+
+export interface SourceRange {
+  from: number
+  to: number
+}
+
+function collectPlaceholderTypenameRanges(selectionSet: SelectionSetNode, ranges: SourceRange[]) {
+  for (const sel of selectionSet.selections) {
+    if (sel.kind === Kind.FIELD) {
+      if (sel.selectionSet) {
+        collectPlaceholderTypenameRanges(sel.selectionSet, ranges)
+      }
+      continue
+    }
+
+    if (sel.kind === Kind.INLINE_FRAGMENT && sel.selectionSet) {
+      const fieldSelections = sel.selectionSet.selections.filter(
+        (child) => child.kind === Kind.FIELD,
+      )
+      if (
+        fieldSelections.length === 1 &&
+        fieldSelections[0].kind === Kind.FIELD &&
+        fieldSelections[0].name.value === '__typename'
+      ) {
+        const loc = fieldSelections[0].name.loc
+        if (loc) ranges.push({ from: loc.start, to: loc.end })
+      }
+      collectPlaceholderTypenameRanges(sel.selectionSet, ranges)
+    }
+  }
+}
+
+/** Character ranges of lone __typename placeholders inside inline fragments. */
+export function findPlaceholderTypenameRanges(
+  query: string,
+  operation: RootOperation,
+): SourceRange[] {
+  if (!query.trim()) return []
+
+  try {
+    const doc = parse(query)
+    const op = findOperation(doc, operation)
+    if (!op?.selectionSet) return []
+
+    const ranges: SourceRange[] = []
+    collectPlaceholderTypenameRanges(op.selectionSet, ranges)
+    return ranges
+  } catch {
+    return []
+  }
 }
 
 function describeInputField(field: GraphQLInputField): SchemaInputFieldNode {
@@ -777,70 +1072,161 @@ export interface SchemaArgNode {
   enumValues: SchemaEnumValueNode[]
 }
 
-/** Describe a field for the schema explorer tree. */
-export interface SchemaFieldNode {
-  name: string
-  description?: string
-  typeLabel: string
-  composite: boolean
-  argsSummary: string
-  args: SchemaArgNode[]
+function describeArg(arg: GraphQLArgument): SchemaArgNode {
+  const named = getNamedType(arg.type)
+  const inputObject = isInputObjectType(named)
+  const isEnum = isEnumType(named)
+  return {
+    name: arg.name,
+    description: arg.description ?? undefined,
+    typeLabel: typeLabel(arg.type),
+    required: isNonNullType(arg.type) && arg.defaultValue === undefined,
+    hasDefault: arg.defaultValue !== undefined,
+    inputObject,
+    inputFields: inputObject ? describeInputFields(arg.type) : [],
+    isEnum,
+    enumValues: isEnum ? describeEnumValues(arg.type) : [],
+  }
+}
+
+function describeInterfaceFragmentsShallow(
+  schema: GraphQLSchema,
+  interfaceType: GraphQLInterfaceType,
+): SchemaFragmentTypeNode[] {
+  return schema.getPossibleTypes(interfaceType).map((concrete) => ({
+    typeName: concrete.name,
+    description: concrete.description ?? undefined,
+  }))
+}
+
+function describeUnionFragmentsShallow(
+  schema: GraphQLSchema,
+  unionType: GraphQLUnionType,
+): SchemaFragmentTypeNode[] {
+  return schema.getPossibleTypes(unionType).map((concrete) => ({
+    typeName: concrete.name,
+    description: concrete.description ?? undefined,
+  }))
+}
+
+function describeSchemaField(
+  schema: GraphQLSchema,
+  field: GraphQLField<unknown, unknown>,
+  visiting: Set<string> = new Set(),
+): SchemaFieldNode {
+  const named = getNamedType(field.type)
+  const typeName = named.name
+  const isObject = isObjectType(named)
+  const isInterface = isInterfaceType(named)
+  const isUnion = isUnionType(named)
+
+  let abstractReturn: AbstractReturnKind = 'none'
+  let composite = isObject || isInterface
+  let cyclicReturn = false
+  let fragmentTypes: SchemaFragmentTypeNode[] = []
+
+  if (isUnion) {
+    abstractReturn = 'union'
+    composite = false
+    if (visiting.has(typeName)) {
+      cyclicReturn = true
+    } else {
+      fragmentTypes = describeUnionFragmentsShallow(schema, named)
+    }
+  } else if (isInterface) {
+    abstractReturn = 'interface'
+    composite = false
+    if (visiting.has(typeName)) {
+      cyclicReturn = true
+    } else {
+      fragmentTypes = describeInterfaceFragmentsShallow(schema, named)
+    }
+  }
+
+  const requiredArgs = field.args.filter(
+    (arg) => isNonNullType(arg.type) && arg.defaultValue === undefined,
+  )
+  const argsSummary =
+    field.args.length === 0
+      ? ''
+      : requiredArgs.length
+        ? `(${requiredArgs.map((arg) => `${arg.name}: ${typeLabel(arg.type)}`).join(', ')})`
+        : `(${field.args.map((arg) => arg.name).join(', ')})`
+
+  return {
+    name: field.name,
+    description: field.description ?? undefined,
+    typeLabel: typeLabel(field.type),
+    returnTypeName: typeName,
+    composite,
+    abstractReturn,
+    cyclicReturn,
+    fragmentTypes,
+    argsSummary,
+    args: field.args.map(describeArg),
+  }
+}
+
+/** Common interface fields for an abstract interface return (loaded on expand). */
+export function listInterfaceFieldsForType(
+  schema: GraphQLSchema,
+  interfaceTypeName: string,
+): SchemaFieldNode[] {
+  try {
+    const type = schema.getType(interfaceTypeName)
+    if (!type || !isInterfaceType(type)) return []
+
+    const visiting = new Set([interfaceTypeName])
+    return Object.values(type.getFields()).map((field) =>
+      describeSchemaField(schema, field, visiting),
+    )
+  } catch (error) {
+    console.error('listInterfaceFieldsForType failed', error)
+    return []
+  }
+}
+
+/** Type-specific fields under an inline fragment (... on Type). */
+export function listFragmentMemberFields(
+  schema: GraphQLSchema,
+  ownerTypeName: string,
+  concreteTypeName: string,
+): SchemaFieldNode[] {
+  try {
+    const owner = schema.getType(ownerTypeName)
+    const concrete = schema.getType(concreteTypeName)
+    if (!concrete || !isObjectType(concrete)) return []
+
+    const visiting = new Set([ownerTypeName, concreteTypeName])
+    let fields = Object.values(concrete.getFields())
+
+    if (owner && isInterfaceType(owner)) {
+      const ifaceFieldNames = new Set(Object.keys(owner.getFields()))
+      fields = fields.filter((field) => !ifaceFieldNames.has(field.name))
+    } else if (owner && isUnionType(owner)) {
+      fields = fields.filter((field) => field.name !== '__typename')
+    }
+
+    return fields.map((field) => describeSchemaField(schema, field, visiting))
+  } catch (error) {
+    console.error('listFragmentMemberFields failed', error)
+    return []
+  }
 }
 
 export function listFields(
   schema: GraphQLSchema,
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
 ): SchemaFieldNode[] {
-  const root = rootType(schema, operation)
-  if (!root) return []
-
-  let host: CompositeType = root
-  for (const segment of parentPath) {
-    const field = host.getFields()[segment]
-    if (!field) return []
-    const next = resolveCompositeType(field.type)
-    if (!next) return []
-    host = next
+  try {
+    const host = resolveHostType(schema, operation, parentPath)
+    if (!host) return []
+    return Object.values(host.getFields()).map((field) => describeSchemaField(schema, field))
+  } catch (error) {
+    console.error('listFields failed', error)
+    throw error
   }
-
-  return Object.values(host.getFields()).map((field) => {
-    const named = getNamedType(field.type)
-    const composite = isObjectType(named) || isInterfaceType(named)
-    const requiredArgs = field.args.filter(
-      (arg) => isNonNullType(arg.type) && arg.defaultValue === undefined,
-    )
-    const argsSummary =
-      field.args.length === 0
-        ? ''
-        : requiredArgs.length
-          ? `(${requiredArgs.map((arg) => `${arg.name}: ${typeLabel(arg.type)}`).join(', ')})`
-          : `(${field.args.map((arg) => arg.name).join(', ')})`
-
-    return {
-      name: field.name,
-      description: field.description ?? undefined,
-      typeLabel: typeLabel(field.type),
-      composite,
-      argsSummary,
-      args: field.args.map((arg) => {
-        const named = getNamedType(arg.type)
-        const inputObject = isInputObjectType(named)
-        const isEnum = isEnumType(named)
-        return {
-          name: arg.name,
-          description: arg.description ?? undefined,
-          typeLabel: typeLabel(arg.type),
-          required: isNonNullType(arg.type) && arg.defaultValue === undefined,
-          hasDefault: arg.defaultValue !== undefined,
-          inputObject,
-          inputFields: inputObject ? describeInputFields(arg.type) : [],
-          isEnum,
-          enumValues: isEnum ? describeEnumValues(arg.type) : [],
-        }
-      }),
-    }
-  })
 }
 
 export function availableOperations(schema: GraphQLSchema): RootOperation[] {

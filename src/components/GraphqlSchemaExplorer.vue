@@ -5,15 +5,21 @@ import SchemaTreeLevel from './SchemaTreeLevel.vue'
 import {
   availableOperations,
   buildQueryPresence,
+  fieldPathFromSegments,
   listFields,
+  listFragmentMemberFields,
+  listInterfaceFieldsForType,
   loadArgInsertMode,
   saveArgInsertMode,
   type ArgClickTarget,
   type ArgInsertMode,
   type FieldClickTarget,
+  type FragmentClickTarget,
   type RootOperation,
+  type PathSegment,
   type SchemaArgNode,
   type SchemaFieldNode,
+  type SchemaFragmentTypeNode,
   type SchemaInputFieldNode,
 } from '../lib/graphqlQueryBuilder'
 
@@ -33,14 +39,17 @@ const showExplorerControls = ref(true)
 const emit = defineEmits<{
   fieldClick: [target: FieldClickTarget]
   argClick: [target: ArgClickTarget]
+  fragmentClick: [target: FragmentClickTarget]
 }>()
 
 const operations = computed(() => availableOperations(props.schema))
-const activeOp = ref<RootOperation>('query')
+const activeOp = defineModel<RootOperation>('activeOperation', { default: 'query' })
 const expanded = ref<Set<string>>(new Set())
 const expandedArgs = ref<Set<string>>(new Set())
 const expandedInput = ref<Set<string>>(new Set())
+const expandedFragments = ref<Set<string>>(new Set())
 const insertModeOn = ref(true)
+const schemaExplorerError = ref<string | null>(null)
 
 const presence = computed(() => buildQueryPresence(props.query, activeOp.value))
 
@@ -56,15 +65,22 @@ watch(argInsertMode, (mode) => {
   saveArgInsertMode(mode)
 })
 
-function pathKey(operation: RootOperation, path: string[]) {
-  return `${operation}:${path.join('.')}`
+watch(
+  () => props.schema,
+  () => {
+    schemaExplorerError.value = null
+  },
+)
+
+function pathKey(operation: RootOperation, path: PathSegment[]) {
+  return `${operation}:${fieldPathFromSegments(path).join('.')}`
 }
 
-function isExpanded(operation: RootOperation, path: string[]) {
+function isExpanded(operation: RootOperation, path: PathSegment[]) {
   return expanded.value.has(pathKey(operation, path))
 }
 
-function toggleExpand(operation: RootOperation, path: string[]) {
+function toggleExpand(operation: RootOperation, path: PathSegment[]) {
   const key = pathKey(operation, path)
   const next = new Set(expanded.value)
   if (next.has(key)) next.delete(key)
@@ -86,6 +102,13 @@ function toggleInputExpand(key: string) {
   expandedInput.value = next
 }
 
+function toggleFragmentExpand(key: string) {
+  const next = new Set(expandedFragments.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedFragments.value = next
+}
+
 function inputFieldsMatch(fields: SchemaInputFieldNode[], needle: string): boolean {
   return fields.some(
     (field) =>
@@ -105,12 +128,21 @@ function argMatchesFilter(arg: SchemaArgNode, needle: string): boolean {
   return inputFieldsMatch(arg.inputFields, needle)
 }
 
-function matchesFilter(field: SchemaFieldNode, needle: string) {
-  if (!needle) return true
+function fragmentTypesMatch(fragments: SchemaFragmentTypeNode[], needle: string): boolean {
+  return fragments.some((fragment) => fragment.typeName.toLowerCase().includes(needle))
+}
+
+function fieldMatchesFilterDeep(field: SchemaFieldNode, needle: string): boolean {
   if (`${field.name} ${field.typeLabel} ${field.argsSummary}`.toLowerCase().includes(needle)) {
     return true
   }
-  return field.args.some((arg) => argMatchesFilter(arg, needle))
+  if (field.args.some((arg) => argMatchesFilter(arg, needle))) return true
+  return fragmentTypesMatch(field.fragmentTypes, needle)
+}
+
+function matchesFilter(field: SchemaFieldNode, needle: string) {
+  if (!needle) return true
+  return fieldMatchesFilterDeep(field, needle)
 }
 
 function visibleArgs(field: SchemaFieldNode, needle: string): SchemaArgNode[] {
@@ -119,24 +151,61 @@ function visibleArgs(field: SchemaFieldNode, needle: string): SchemaArgNode[] {
   return field.args.filter((arg) => argMatchesFilter(arg, needle))
 }
 
-function visibleFields(operation: RootOperation, parentPath: string[]): SchemaFieldNode[] {
+function visibleFields(operation: RootOperation, parentPath: PathSegment[]): SchemaFieldNode[] {
   const needle = props.filter.trim().toLowerCase()
-  return listFields(props.schema, operation, parentPath).filter((field) =>
-    matchesFilter(field, needle),
-  )
+  try {
+    schemaExplorerError.value = null
+    return listFields(props.schema, operation, parentPath).filter((field) =>
+      matchesFilter(field, needle),
+    )
+  } catch (error) {
+    console.error('Schema explorer failed to list fields', error)
+    schemaExplorerError.value =
+      'Could not build the schema tree. The schema may be too large or contain unusual type cycles.'
+    return []
+  }
 }
 
-function onInsert(operation: RootOperation, parentPath: string[], fieldName: string) {
+function loadFragmentMemberFields(
+  ownerTypeName: string,
+  concreteTypeName: string,
+): SchemaFieldNode[] {
+  try {
+    return listFragmentMemberFields(props.schema, ownerTypeName, concreteTypeName)
+  } catch (error) {
+    console.error('Failed to load fragment member fields', error)
+    return []
+  }
+}
+
+function visibleInterfaceFields(field: SchemaFieldNode, needle: string): SchemaFieldNode[] {
+  if (field.abstractReturn !== 'interface' || field.cyclicReturn) return []
+  const fields = listInterfaceFieldsForType(props.schema, field.returnTypeName)
+  if (!needle) return fields
+  return fields.filter((ifaceField) => fieldMatchesFilterDeep(ifaceField, needle))
+}
+
+function visibleFragmentTypes(field: SchemaFieldNode, needle: string): SchemaFragmentTypeNode[] {
+  if (!field.fragmentTypes.length || field.cyclicReturn) return []
+  if (!needle) return field.fragmentTypes
+  return field.fragmentTypes.filter((fragment) => fragment.typeName.toLowerCase().includes(needle))
+}
+
+function onInsert(operation: RootOperation, parentPath: PathSegment[], fieldName: string) {
   emit('fieldClick', { operation, parentPath, fieldName })
 }
 
 function onArgInsert(
   operation: RootOperation,
-  parentPath: string[],
+  parentPath: PathSegment[],
   fieldName: string,
   argName: string,
 ) {
   emit('argClick', { operation, parentPath, fieldName, argName })
+}
+
+function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], typeName: string) {
+  emit('fragmentClick', { operation, fieldPath, typeName })
 }
 </script>
 
@@ -201,6 +270,8 @@ function onArgInsert(
       </div>
     </transition>
 
+    <div v-if="schemaExplorerError" class="schema-error faint">{{ schemaExplorerError }}</div>
+
     <div v-if="!operations.length" class="empty faint">Schema has no root operations.</div>
 
     <div v-else class="tree">
@@ -211,8 +282,12 @@ function onArgInsert(
         :expanded="expanded"
         :expanded-args="expandedArgs"
         :expanded-input="expandedInput"
+        :expanded-fragments="expandedFragments"
         :visible-fields="visibleFields"
         :visible-args="visibleArgs"
+        :visible-interface-fields="visibleInterfaceFields"
+        :visible-fragment-types="visibleFragmentTypes"
+        :load-fragment-member-fields="loadFragmentMemberFields"
         :is-expanded="isExpanded"
         :insert-mode-on="insertModeOn"
         :show-args-on="showArgsOn"
@@ -221,8 +296,10 @@ function onArgInsert(
         @toggle="toggleExpand"
         @toggle-arg="toggleArgExpand"
         @toggle-input="toggleInputExpand"
+        @toggle-fragment="toggleFragmentExpand"
         @insert="onInsert"
         @insert-arg="onArgInsert"
+        @insert-fragment="onFragmentInsert"
       />
     </div>
   </div>
@@ -267,6 +344,15 @@ function onArgInsert(
 .empty {
   padding: 16px;
   font-size: 13px;
+}
+
+.schema-error {
+  margin: 8px 8px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger, #c00) 40%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger, #c00) 8%, transparent);
 }
 
 .op-tabs .tab:last-of-type {

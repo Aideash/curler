@@ -316,9 +316,13 @@ group('the pre-filled trailing row must not shadow a real value')
   })
 
   expect('a lone blank placeholder is not a definition', environmentMap(env([['API_KEY', '']])), {})
-  expect('a committed empty value is still defined', environmentMap(env([['API_KEY', '', true, true]])), {
-    API_KEY: '',
-  })
+  expect(
+    'a committed empty value is still defined',
+    environmentMap(env([['API_KEY', '', true, true]])),
+    {
+      API_KEY: '',
+    },
+  )
 }
 
 group('half-filled rows are not sent')
