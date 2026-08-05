@@ -10,7 +10,9 @@ import {
   type DecorationSet,
 } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
+import { javascript } from '@codemirror/lang-javascript'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
+import { sass } from '@codemirror/lang-sass'
 import { graphql, graphqlLanguageSupport, updateSchema } from 'cm6-graphql'
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint'
 import type { GraphQLSchema } from 'graphql'
@@ -22,7 +24,7 @@ import { tags } from '@lezer/highlight'
 const props = withDefaults(
   defineProps<{
     modelValue: string
-    language?: 'json' | 'graphql' | 'text'
+    language?: 'json' | 'graphql' | 'javascript' | 'css' | 'sass' | 'text'
     readonly?: boolean
     placeholder?: string
     /** Tab indents; Esc then Tab leaves the editor. Off when readonly. */
@@ -160,6 +162,9 @@ function graphqlExtensions(): Extension[] {
 function languageExtensions(): Extension[] {
   if (props.language === 'json') return [json(), linter(jsonParseLinter()), lintGutter()]
   if (props.language === 'graphql') return graphqlExtensions()
+  if (props.language === 'javascript') return [javascript()]
+  if (props.language === 'sass') return [sass({ indented: true })]
+  if (props.language === 'css') return [sass()]
   return []
 }
 

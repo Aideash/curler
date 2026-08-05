@@ -13,6 +13,11 @@ export default tseslint.config(
   ...pluginVue.configs['flat/recommended'],
   eslintPluginPrettierRecommended,
   {
+    rules: {
+      'prettier/prettier': ['warn', { endOfLine: 'lf', singleQuote: true }],
+    },
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,

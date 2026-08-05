@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import CodeEditor from './CodeEditor.vue'
 import DiagnosticsView from './DiagnosticsView.vue'
+import ResponseBodyView from './ResponseBodyView.vue'
 import { copyText } from '../lib/clipboard'
 import {
-  formatBytes,
+  canCopyResponseBody,
   isJsonResponse,
   prettyBody,
+  responseByteLabel,
   statusClass as statusClassFor,
 } from '../lib/response'
 import type { BuildTrace } from '../lib/vars'
@@ -34,6 +35,7 @@ const tab = ref<Tab>('body')
 const pretty = ref(true)
 
 const isJson = computed(() => isJsonResponse(props.response))
+const copyEnabled = computed(() => canCopyResponseBody(props.response))
 
 const displayBody = computed(() => {
   const body = props.response?.body ?? ''
@@ -82,7 +84,7 @@ watch(
           <span class="material-icons sm">schedule</span>{{ response.elapsedMs }} ms
         </span>
         <span class="metric">
-          <span class="material-icons sm">data_usage</span>{{ formatBytes(response.bytes) }}
+          <span class="material-icons sm">data_usage</span>{{ responseByteLabel(response) }}
         </span>
         <span v-if="response.redirectChain.length" class="metric">
           <span class="material-icons sm">alt_route</span>
@@ -106,7 +108,7 @@ watch(
           <span class="pretty-label">Pretty</span>
           <span class="alt-icon material-icons sm">format_indent_increase</span>
         </label>
-        <button v-if="tab === 'body'" class="ghost copy" @click="copyBody">
+        <button v-if="tab === 'body' && copyEnabled" class="ghost copy" @click="copyBody">
           <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
           <span class="action-button-text">{{ copied ? 'Copied' : 'Copy' }}</span>
         </button>
@@ -178,14 +180,7 @@ watch(
       </div>
 
       <div v-else class="body-wrap">
-        <p v-if="response.bodyIsBinary" class="placeholder faint">{{ response.body }}</p>
-        <p v-else-if="!response.body" class="placeholder faint">Empty response body.</p>
-        <CodeEditor
-          v-else
-          :model-value="displayBody"
-          :language="isJson ? 'json' : 'text'"
-          readonly
-        />
+        <ResponseBodyView :response="response" :display-body="displayBody" />
       </div>
     </div>
   </section>

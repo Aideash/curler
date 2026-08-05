@@ -100,7 +100,8 @@ function statusTone(status: number): string {
           {{ hop.remoteAddress }}:{{ hop.remotePort }}
         </span>
         <span v-if="hop.reusedConnection" class="fact">reused connection</span>
-        <span class="fact">
+        <span v-if="hop.bodySkipped" class="fact">body not downloaded</span>
+        <span v-else class="fact">
           {{ bytes(hop.wireBytes) }} on the wire
           <template v-if="hop.contentEncoding">
             · {{ bytes(hop.decodedBytes) }} after {{ hop.contentEncoding }}

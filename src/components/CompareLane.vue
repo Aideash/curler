@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import CodeEditor from './CodeEditor.vue'
 import PopMenu from './PopMenu.vue'
+import ResponseBodyView from './ResponseBodyView.vue'
 import { copyText } from '../lib/clipboard'
-import { formatBytes, isJsonResponse, prettyBody, statusClass } from '../lib/response'
+import {
+  canCopyResponseBody,
+  formatBytes,
+  isJsonResponse,
+  prettyBody,
+  statusClass,
+} from '../lib/response'
 import { normalizeJson } from '../lib/diff'
 import {
   compare,
@@ -35,6 +41,7 @@ const idStem = computed(() => `lane-${props.lane.label.toLowerCase()}`)
 const response = computed(() => props.lane.outcome?.response ?? null)
 const error = computed(() => props.lane.outcome?.error ?? null)
 const isJson = computed(() => isJsonResponse(response.value))
+const copyEnabled = computed(() => canCopyResponseBody(response.value))
 const stale = computed(() => laneIsStale(props.lane))
 
 const pretty = ref(true)
@@ -238,7 +245,7 @@ function setUrl(url: string) {
         <input :id="`${idStem}-pretty`" v-model="pretty" type="checkbox" />
         Pretty
       </label>
-      <button v-if="response" class="ghost copy" @click="copyBody">
+      <button v-if="response && copyEnabled" class="ghost copy" @click="copyBody">
         <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
         {{ copied ? 'Copied' : 'Copy' }}
       </button>
@@ -255,11 +262,8 @@ function setUrl(url: string) {
 
       <div v-else-if="!response" class="placeholder faint">Send this lane to see its response.</div>
 
-      <p v-else-if="response.bodyIsBinary" class="placeholder faint">{{ response.body }}</p>
-      <p v-else-if="!response.body" class="placeholder faint">Empty response body.</p>
-
-      <div v-else class="body-wrap">
-        <CodeEditor :model-value="displayBody" :language="isJson ? 'json' : 'text'" readonly />
+      <div v-else-if="response" class="body-wrap">
+        <ResponseBodyView :response="response" :display-body="displayBody" />
       </div>
     </div>
   </section>

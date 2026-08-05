@@ -55,11 +55,55 @@ function selfSignedCertificate() {
 const server = http.createServer((request, response) => {
   const url = new URL(request.url, 'http://localhost')
 
+  if (url.pathname === '/binary') {
+    response.writeHead(200, { 'Content-Type': 'application/octet-stream' })
+    response.end(Buffer.alloc(256, 0xff))
+    return
+  }
+
   if (url.pathname === '/big') {
     const mb = Number(url.searchParams.get('mb') ?? 1)
     response.writeHead(200, { 'Content-Type': 'application/octet-stream' })
     for (let i = 0; i < mb; i += 1) response.write(Buffer.alloc(1024 * 1024, 0x61))
     response.end()
+    return
+  }
+
+  if (url.pathname === '/big-text') {
+    const mb = Number(url.searchParams.get('mb') ?? 1)
+    response.writeHead(200, { 'Content-Type': 'text/plain' })
+    for (let i = 0; i < mb; i += 1) response.write('a'.repeat(1024 * 1024))
+    response.end()
+    return
+  }
+
+  if (url.pathname === '/image') {
+    response.writeHead(200, {
+      'Content-Type': 'image/png',
+      'Content-Length': '8192',
+    })
+    response.end(Buffer.alloc(8192, 0xff))
+    return
+  }
+
+  if (url.pathname === '/script') {
+    response.writeHead(200, { 'Content-Type': 'application/javascript' })
+    response.end('alert("should not run")')
+    return
+  }
+
+  if (url.pathname === '/pdf') {
+    response.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': '4096',
+    })
+    response.end(Buffer.alloc(4096, 0x25))
+    return
+  }
+
+  if (url.pathname === '/zip') {
+    response.writeHead(200, { 'Content-Type': 'application/zip' })
+    response.end(Buffer.from('PK\x03\x04', 'binary'))
     return
   }
 
@@ -148,7 +192,7 @@ h.expect('the 302 is surfaced', notFollowed.status, 302)
 h.group('response cap')
 
 const capped = await performRequest({
-  url: `${base}/big?mb=4`,
+  url: `${base}/big-text?mb=4`,
   method: 'GET',
   headers: [],
   maxResponseMb: 1,
@@ -161,7 +205,7 @@ h.expect('no more than the cap is kept', capped.bytes <= 1024 * 1024, true)
 h.expect('the cap is actually reached', capped.bytes, 1024 * 1024)
 
 const uncapped = await performRequest({
-  url: `${base}/big?mb=2`,
+  url: `${base}/big-text?mb=2`,
   method: 'GET',
   headers: [],
   maxResponseMb: 10,
@@ -171,6 +215,35 @@ h.expect('and arrives whole', uncapped.bytes, 2 * 1024 * 1024)
 
 const defaulted = await performRequest({ url: `${base}/`, method: 'GET', headers: [] })
 h.expect('the cap defaults to 10 MB', defaulted.diagnostics.maxResponseMb, 10)
+
+// -- Body policy -------------------------------------------------------------
+
+h.group('body policy')
+
+const binary = await performRequest({ url: `${base}/binary`, method: 'GET', headers: [] })
+h.expect('octet-stream is buffered', binary.bodySkipped, false)
+h.expect('opaque binary is flagged', binary.bodyIsBinary, true)
+h.expect('the placeholder names the size', /256 bytes of binary data/.test(binary.body), true)
+
+const image = await performRequest({ url: `${base}/image`, method: 'GET', headers: [] })
+h.expect('images are buffered for preview', image.bodySkipped, false)
+h.expect('image preview metadata is present', image.bodyPreview, 'image')
+h.expect('image bytes are base64-encoded', typeof image.bodyBase64, 'string')
+h.expect('base64 is non-empty', (image.bodyBase64 ?? '').length > 0, true)
+
+const script = await performRequest({ url: `${base}/script`, method: 'GET', headers: [] })
+h.expect('javascript is buffered as text', script.bodySkipped, false)
+h.expect('the script source arrives', /alert/.test(script.body), true)
+
+const pdf = await performRequest({ url: `${base}/pdf`, method: 'GET', headers: [] })
+h.expect('pdf is not buffered', pdf.bodySkipped, true)
+h.expect('pdf placeholder names the type', /pdf/i.test(pdf.body), true)
+
+const archive = await performRequest({ url: `${base}/zip`, method: 'GET', headers: [] })
+h.expect('archives are not buffered', archive.bodySkipped, true)
+
+const head = await performRequest({ url: `${base}/`, method: 'HEAD', headers: [] })
+h.expect('HEAD has no body', head.bodySkipped, true)
 
 // -- TLS --------------------------------------------------------------------
 

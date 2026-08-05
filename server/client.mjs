@@ -6,8 +6,104 @@ const MAX_REDIRECTS = 10
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export const DEFAULT_MAX_RESPONSE_MB = 10
+/** Media previews are capped separately to keep JSON transport and UI responsive. */
+export const PREVIEW_MAX_MB = 5
+
+const TOSS_EXACT = new Set([
+  'application/pdf',
+  'application/wasm',
+  'application/zip',
+  'application/gzip',
+  'application/x-gzip',
+  'application/x-tar',
+  'application/x-bzip2',
+  'application/vnd.ms-fontobject',
+  'application/font-woff',
+  'application/font-woff2',
+  'application/java-archive',
+  'application/x-shockwave-flash',
+  'application/x-pkcs12',
+  'application/vnd.apple.pkpass',
+  'application/protobuf',
+  'application/cbor',
+  'application/msgpack',
+  'application/msword',
+])
+
+const TOSS_PREFIXES = ['font/', 'model/']
 
 const now = () => Number(process.hrtime.bigint()) / 1e6
+
+function parseMime(contentType) {
+  if (!contentType) return ''
+  return String(contentType).split(';')[0].trim().toLowerCase()
+}
+
+/**
+ * How to handle a response body once headers arrive.
+ * @returns {'text' | 'preview' | 'opaque' | 'skip'}
+ */
+function bodyDisposition(method, contentType) {
+  if (method === 'HEAD') return 'skip'
+
+  const mime = parseMime(contentType)
+  if (!mime) return 'text'
+
+  if (TOSS_EXACT.has(mime)) return 'skip'
+  if (TOSS_PREFIXES.some((prefix) => mime.startsWith(prefix))) return 'skip'
+  if (mime.startsWith('application/vnd.openxmlformats-')) return 'skip'
+
+  if (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/')) {
+    return 'preview'
+  }
+
+  if (mime === 'application/octet-stream') return 'opaque'
+
+  if (mime.startsWith('text/')) return 'text'
+  if (mime.startsWith('multipart/')) return 'text'
+  if (mime.startsWith('message/')) return 'text'
+
+  if (mime.startsWith('application/')) {
+    if (mime.endsWith('+json') || mime.endsWith('+xml')) return 'text'
+    if (
+      mime === 'application/json' ||
+      mime === 'application/xml' ||
+      mime === 'application/graphql' ||
+      mime === 'application/problem+json' ||
+      mime === 'application/ld+json' ||
+      mime === 'application/x-www-form-urlencoded' ||
+      mime === 'application/javascript' ||
+      mime === 'application/ecmascript' ||
+      mime === 'application/x-javascript'
+    ) {
+      return 'text'
+    }
+    return 'skip'
+  }
+
+  return 'skip'
+}
+
+function previewKind(mime) {
+  if (mime === 'image/svg+xml') return 'svg'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'image'
+}
+
+function formatByteCount(bytes) {
+  if (bytes === null || bytes === undefined || Number.isNaN(bytes)) return 'unknown size'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+function bodySkipMessage(contentType, contentLength) {
+  const mime = parseMime(contentType) || 'unknown type'
+  const length = contentLength !== undefined ? Number(contentLength) : null
+  const size = length !== null && !Number.isNaN(length) ? formatByteCount(length) : 'unknown size'
+  return `<Body not downloaded (${mime}, ${size})>`
+}
 
 /** X.509 names arrive as objects; `CN=api.example.com, O=Example` reads better. */
 function formatName(name) {
@@ -51,6 +147,8 @@ function describeCertificate(socket) {
  * happened, so there is nothing to gain by making the caller ask first.
  */
 function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes }) {
+  const previewMaxBytes = PREVIEW_MAX_MB * 1024 * 1024
+
   return new Promise((resolve, reject) => {
     let target
     try {
@@ -87,25 +185,18 @@ function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes
       (response) => {
         marks.firstByte = now()
 
+        let disposition = bodyDisposition(method, response.headers['content-type'])
+        if (disposition === 'preview') {
+          const declared = Number(response.headers['content-length'])
+          if (!Number.isNaN(declared) && declared > previewMaxBytes) disposition = 'skip'
+        }
+
+        const skipBody = disposition === 'skip'
+        const byteCap = disposition === 'preview' ? Math.min(maxBytes, previewMaxBytes) : maxBytes
+
         const chunks = []
         let received = 0
         let truncated = false
-
-        response.on('data', (chunk) => {
-          if (truncated) return
-          const room = maxBytes - received
-          if (chunk.length >= room) {
-            // Keep exactly up to the cap, then stop pulling bytes off the wire
-            // rather than buffering a response nobody asked to download.
-            if (room > 0) chunks.push(chunk.subarray(0, room))
-            received += room
-            truncated = true
-            request.destroy()
-            return
-          }
-          chunks.push(chunk)
-          received += chunk.length
-        })
 
         const finish = () => {
           if (settled) return
@@ -115,8 +206,10 @@ function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes
             statusText: response.statusMessage ?? '',
             httpVersion: response.httpVersion ?? '',
             headers: response.headers,
-            raw: Buffer.concat(chunks),
-            truncated,
+            raw: skipBody ? Buffer.alloc(0) : Buffer.concat(chunks),
+            truncated: skipBody ? false : truncated,
+            bodySkipped: skipBody,
+            disposition: skipBody ? 'skip' : disposition,
             endedAt: now(),
             startedAt,
             marks,
@@ -125,6 +218,28 @@ function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes
             requestPath: path,
           })
         }
+
+        if (skipBody) {
+          response.resume()
+          response.on('end', finish)
+          response.on('close', finish)
+          response.on('error', (error) => reject(error))
+          return
+        }
+
+        response.on('data', (chunk) => {
+          if (truncated) return
+          const room = byteCap - received
+          if (chunk.length >= room) {
+            if (room > 0) chunks.push(chunk.subarray(0, room))
+            received += room
+            truncated = true
+            request.destroy()
+            return
+          }
+          chunks.push(chunk)
+          received += chunk.length
+        })
 
         response.on('end', finish)
         // A truncated read is closed by us, so `end` never arrives.
@@ -283,7 +398,9 @@ export async function performRequest(spec) {
       maxBytes,
     })
 
-    const decoded = decompress(result.raw, result.headers['content-encoding'])
+    const decoded = result.bodySkipped
+      ? Buffer.alloc(0)
+      : decompress(result.raw, result.headers['content-encoding'])
 
     hops.push({
       index: hop,
@@ -306,6 +423,7 @@ export async function performRequest(spec) {
       decodedBytes: decoded.length,
       contentEncoding: result.headers['content-encoding'] ?? null,
       truncated: result.truncated,
+      bodySkipped: result.bodySkipped,
     })
 
     const location = result.headers.location
@@ -330,9 +448,58 @@ export async function performRequest(spec) {
     }
 
     const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6
+    const contentType = result.headers['content-type']
+    const mime = parseMime(contentType)
+
+    if (result.bodySkipped) {
+      return {
+        status: result.status,
+        statusText: result.statusText,
+        headers: flattenHeaders(result.headers),
+        body: bodySkipMessage(contentType, result.headers['content-length']),
+        bodyIsBinary: true,
+        bodySkipped: true,
+        elapsedMs: Math.round(elapsedMs),
+        bytes: 0,
+        finalUrl: url,
+        redirectChain,
+        truncated: false,
+        diagnostics: {
+          hops,
+          totalMs: Math.round(elapsedMs),
+          maxResponseMb: maxMb,
+          truncated: false,
+        },
+      }
+    }
+
     const text = decoded.toString('utf8')
-    // A round-trip mismatch means the payload was not valid UTF-8 text.
     const bodyIsBinary = Buffer.compare(Buffer.from(text, 'utf8'), decoded) !== 0
+
+    if (result.disposition === 'preview') {
+      return {
+        status: result.status,
+        statusText: result.statusText,
+        headers: flattenHeaders(result.headers),
+        body: '',
+        bodyIsBinary: true,
+        bodySkipped: false,
+        bodyBase64: decoded.toString('base64'),
+        bodyMime: mime || 'application/octet-stream',
+        bodyPreview: previewKind(mime),
+        elapsedMs: Math.round(elapsedMs),
+        bytes: result.raw.length,
+        finalUrl: url,
+        redirectChain,
+        truncated: result.truncated,
+        diagnostics: {
+          hops,
+          totalMs: Math.round(elapsedMs),
+          maxResponseMb: maxMb,
+          truncated: result.truncated,
+        },
+      }
+    }
 
     return {
       status: result.status,
@@ -340,6 +507,7 @@ export async function performRequest(spec) {
       headers: flattenHeaders(result.headers),
       body: bodyIsBinary ? `<${decoded.length} bytes of binary data>` : text,
       bodyIsBinary,
+      bodySkipped: false,
       elapsedMs: Math.round(elapsedMs),
       bytes: result.raw.length,
       finalUrl: url,

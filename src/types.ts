@@ -175,6 +175,8 @@ export interface HopDiagnostics {
   decodedBytes: number
   contentEncoding: string | null
   truncated: boolean
+  /** Response body was drained without buffering (binary, executable, HEAD, etc.). */
+  bodySkipped?: boolean
 }
 
 export interface Diagnostics {
@@ -184,6 +186,8 @@ export interface Diagnostics {
   truncated: boolean
 }
 
+export type BodyPreviewKind = 'image' | 'video' | 'audio' | 'svg'
+
 /** Response shape returned by the local API server. */
 export interface HttpResponse {
   status: number
@@ -192,6 +196,12 @@ export interface HttpResponse {
   body: string
   /** True when the body was not valid UTF-8 and `body` holds a placeholder. */
   bodyIsBinary: boolean
+  /** True when the body was never buffered — see headers and diagnostics instead. */
+  bodySkipped?: boolean
+  /** Base64 payload for previewable media bodies. */
+  bodyBase64?: string
+  bodyMime?: string
+  bodyPreview?: BodyPreviewKind
   elapsedMs: number
   bytes: number
   finalUrl: string

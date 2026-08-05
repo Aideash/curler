@@ -383,6 +383,8 @@ const {
               <button
                 v-else
                 class="request-name"
+                :title="request.name"
+                aria-label="Request name: {{ request.name }}"
                 :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
                 @dblclick.stop="startRename(request.id, request.name)"
                 @keydown.shift.enter="startRename(request.id, request.name)"
