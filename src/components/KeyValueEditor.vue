@@ -390,7 +390,7 @@ ensureTrailingRow()
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
   gap: 6px;
   align-items: center;
-  max-height: 28.5px; /* font-size 12.5, padding 6px + border 1px top and bottom */
+  max-height: 29px; /* font-size 12.5, padding 6px + border 1px top and bottom - rounded to prevent fractional pixel anomalies */
 }
 
 .kv.reorderable .kv-row {
