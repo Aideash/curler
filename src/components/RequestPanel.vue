@@ -34,9 +34,13 @@ const props = withDefaults(
     /** Full GraphQL tooling (validate, open builder). Off in compare lanes. */
     graphqlTools?: boolean
     variableSet?: VariableSet | undefined
+    /** When true, toolbar + tab body collapse below the URL bar (BuildView short layout). */
+    collapsible?: boolean
   }>(),
-  { environmentName: 'none', graphqlTools: false, variableSet: undefined },
+  { environmentName: 'none', graphqlTools: false, variableSet: undefined, collapsible: false },
 )
+
+const detailsExpanded = defineModel<boolean>('detailsExpanded', { default: true })
 
 const emit = defineEmits<{
   send: []
@@ -223,7 +227,12 @@ const flagPreview = computed(() =>
 </script>
 
 <template>
-  <section id="request-panel" class="request" tabindex="-1">
+  <section
+    id="request-panel"
+    class="request"
+    :class="{ 'request--collapsible': collapsible }"
+    tabindex="-1"
+  >
     <div class="url-bar">
       <select
         id="request-method"
@@ -255,405 +264,430 @@ const flagPreview = computed(() =>
       </button>
     </div>
 
-    <div class="toolbar">
-      <div class="tabs">
-        <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'">
-          Headers
-          <span v-if="enabledHeaderCount" class="badge">{{ enabledHeaderCount }}</span>
-        </button>
-        <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
-          Body
-          <span v-if="request.body.mode !== 'none'" class="badge">
-            {{ request.body.mode }}
-          </span>
-        </button>
-        <button class="ghost tab" :class="{ active: tab === 'vars' }" @click="tab = 'vars'">
-          Vars
-          <span v-if="requestVarCount" class="badge">{{ requestVarCount }}</span>
-        </button>
-        <button class="ghost tab" :class="{ active: tab === 'options' }" @click="tab = 'options'">
-          Options
-        </button>
-      </div>
-
-      <div class="toolbar-actions">
-        <button class="ghost" title="Paste a curl command" @click="emit('importCurl')">
-          <span class="material-icons sm">content_paste_go</span>
-          Import curl
-        </button>
-        <PopMenu icon="content_copy" label="Copy as curl" :width="275">
-          <template #default="{ close }">
+    <div
+      :id="collapsible ? 'request-details' : undefined"
+      class="request-details-outer"
+      :class="{
+        'request-details-wrap': collapsible,
+        'is-collapsed': collapsible && !detailsExpanded,
+      }"
+      :inert="collapsible && !detailsExpanded ? true : undefined"
+      :aria-hidden="collapsible && !detailsExpanded ? true : undefined"
+    >
+      <div :class="collapsible ? 'request-details' : undefined">
+        <div class="toolbar">
+          <div class="tabs">
             <button
-              class="preset-item copy-type"
-              title="Ready to run - Variables replaced with their values"
-              @click="(emit('copyCurl', 'ready'), close())"
+              class="ghost tab"
+              :class="{ active: tab === 'headers' }"
+              @click="tab = 'headers'"
             >
-              <span class="preset-label">Ready to run</span>
-              <span class="preset-desc">Variables replaced with their values</span>
+              Headers
+              <span v-if="enabledHeaderCount" class="badge">{{ enabledHeaderCount }}</span>
+            </button>
+            <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
+              Body
+              <span v-if="request.body.mode !== 'none'" class="badge">
+                {{ request.body.mode }}
+              </span>
+            </button>
+            <button class="ghost tab" :class="{ active: tab === 'vars' }" @click="tab = 'vars'">
+              Vars
+              <span v-if="requestVarCount" class="badge">{{ requestVarCount }}</span>
             </button>
             <button
-              class="preset-item copy-type"
-              title="Shareable - Public vars expanded, secrets left as placeholders"
-              @click="(emit('copyCurl', 'shareable'), close())"
+              class="ghost tab"
+              :class="{ active: tab === 'options' }"
+              @click="tab = 'options'"
             >
-              <span class="preset-label">Shareable</span>
-              <span class="preset-desc">Public vars expanded, secrets left as placeholders</span>
-            </button>
-            <button
-              class="preset-item copy-type"
-              title="General - Keeps ${VARIABLE} placeholders"
-              @click="(emit('copyCurl', 'general'), close())"
-            >
-              <span class="preset-label">General</span>
-              <span class="preset-desc">Keeps ${VARIABLE} placeholders</span>
-            </button>
-          </template>
-        </PopMenu>
-      </div>
-    </div>
-
-    <div class="panel-body">
-      <!-- Headers ------------------------------------------------------- -->
-      <div v-show="tab === 'headers'" class="pane">
-        <div class="pane-head">
-          <span class="muted">Request headers</span>
-          <PopMenu icon="bolt" label="Quick add" :width="340">
-            <template #default="{ close }">
-              <div class="preset-section">Combinations</div>
-              <button
-                v-for="bundle in HEADER_BUNDLES"
-                :key="bundle.label"
-                class="preset-item"
-                @click="(applyBundle(bundle.headers), close())"
-              >
-                <span class="preset-label">{{ bundle.label }}</span>
-                <span class="preset-desc">{{ bundle.description }}</span>
-              </button>
-              <div class="preset-section">Single headers</div>
-              <button
-                v-for="(preset, index) in HEADER_PRESETS"
-                :key="index"
-                class="preset-item"
-                @click="(applyBundle([preset]), close())"
-              >
-                <span class="preset-label mono">{{ preset.name }}</span>
-                <span class="preset-desc mono">{{ preset.value || '—' }}</span>
-              </button>
-            </template>
-          </PopMenu>
-        </div>
-        <KeyValueEditor
-          :key="editorKey"
-          v-model:rows="request.headers"
-          :name-options="HEADER_NAMES"
-          :variables="variables"
-          list-id="header-names"
-          id-prefix="header"
-          name-placeholder="Header"
-        />
-      </div>
-
-      <!-- Body ---------------------------------------------------------- -->
-      <div v-show="tab === 'body'" class="pane">
-        <div class="pane-head">
-          <div class="mode-switch">
-            <button
-              v-for="mode in BODY_MODES"
-              :key="mode.value"
-              class="ghost mode"
-              :class="{ active: request.body.mode === mode.value }"
-              :disabled="isModeDisabled(mode.value, request.method)"
-              @click="setBodyMode(mode.value)"
-            >
-              {{ mode.label }}
+              Options
             </button>
           </div>
-          <div class="pane-head-right">
-            <span
-              v-if="request.body.mode === 'json' && !bodyValidity.valid"
-              class="invalid"
-              :title="bodyValidity.message ?? 'Invalid'"
-            >
-              <span class="material-icons sm">error_outline</span>
-              {{ bodyValidity.message }}
-            </span>
-            <span
-              v-else-if="request.body.mode === 'json' && request.body.text.trim()"
-              class="valid"
-            >
-              <span class="material-icons sm">check_circle_outline</span>
-              Valid JSON
-            </span>
-            <button v-if="request.body.mode === 'json'" class="ghost" @click="formatBody">
-              <span class="material-icons sm">format_indent_increase</span>
-              Format
+
+          <div class="toolbar-actions">
+            <button class="ghost" title="Paste a curl command" @click="emit('importCurl')">
+              <span class="material-icons sm">content_paste_go</span>
+              Import curl
             </button>
-            <template v-if="request.body.mode === 'graphql'">
-              <span
-                v-if="!graphqlSyntaxValidity.valid"
-                class="invalid"
-                :title="graphqlSyntaxValidity.message ?? 'Invalid'"
-              >
-                <span class="material-icons sm">error_outline</span>
-                {{ graphqlSyntaxValidity.message }}
-              </span>
-              <span
-                v-else-if="graphqlSchemaValidity.checked && !graphqlSchemaValidity.valid"
-                class="invalid"
-                :title="graphqlSchemaValidity.message ?? 'Invalid'"
-              >
-                <span class="material-icons sm">error_outline</span>
-                {{ graphqlSchemaValidity.message }}
-              </span>
-              <span
-                v-else-if="
-                  graphqlSchemaValidity.checked &&
-                  graphqlSchemaValidity.valid &&
-                  request.body.graphql.query.trim()
-                "
-                class="valid"
-              >
-                <span class="material-icons sm">check_circle_outline</span>
-                Valid query
-              </span>
-              <span
-                v-else-if="graphqlSyntaxValidity.valid && request.body.graphql.query.trim()"
-                class="valid faint"
-              >
-                <span class="material-icons sm">check_circle_outline</span>
-                Valid syntax
-              </span>
-              <button
-                v-if="graphqlTools"
-                class="ghost"
-                :disabled="validatingSchema || !request.url.trim()"
-                :title="request.url.trim() ? 'Validate against server schema' : 'Set a URL first'"
-                @click="validateGraphqlSchema"
-              >
-                <span class="material-icons sm">{{
-                  validatingSchema ? 'hourglass_top' : 'rule'
-                }}</span>
-                {{ validatingSchema ? 'Validating…' : 'Validate' }}
-              </button>
-              <button
-                v-if="graphqlTools"
-                class="ghost"
-                title="Open the GraphQL query builder"
-                @click="openGraphqlBuilder"
-              >
-                <span class="material-icons sm">account_tree</span>
-                Builder
-              </button>
-            </template>
+            <PopMenu icon="content_copy" label="Copy as curl" :width="275">
+              <template #default="{ close }">
+                <button
+                  class="preset-item copy-type"
+                  title="Ready to run - Variables replaced with their values"
+                  @click="(emit('copyCurl', 'ready'), close())"
+                >
+                  <span class="preset-label">Ready to run</span>
+                  <span class="preset-desc">Variables replaced with their values</span>
+                </button>
+                <button
+                  class="preset-item copy-type"
+                  title="Shareable - Public vars expanded, secrets left as placeholders"
+                  @click="(emit('copyCurl', 'shareable'), close())"
+                >
+                  <span class="preset-label">Shareable</span>
+                  <span class="preset-desc"
+                    >Public vars expanded, secrets left as placeholders</span
+                  >
+                </button>
+                <button
+                  class="preset-item copy-type"
+                  title="General - Keeps ${VARIABLE} placeholders"
+                  @click="(emit('copyCurl', 'general'), close())"
+                >
+                  <span class="preset-label">General</span>
+                  <span class="preset-desc">Keeps ${VARIABLE} placeholders</span>
+                </button>
+              </template>
+            </PopMenu>
           </div>
         </div>
 
-        <p v-if="request.body.mode === 'none'" class="empty">
-          This request has no body. Pick JSON, Raw, Form or GraphQL to add one.
-        </p>
-
-        <div v-else-if="request.body.mode === 'form'" class="form-body">
-          <KeyValueEditor
-            :key="editorKey"
-            v-model:rows="request.body.form"
-            :variables="variables"
-            list-id="form-names"
-            id-prefix="form-field"
-            name-placeholder="Field"
-          />
-        </div>
-
-        <div v-else-if="request.body.mode === 'graphql'" class="graphql-body">
-          <p class="section-label">Query</p>
-          <div class="editor-wrap graphql-query">
-            <CodeEditor
-              id="request-graphql-query"
-              v-model="request.body.graphql.query"
-              language="graphql"
-              :schema="graphqlSchema"
-              placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
-              @validity="graphqlSyntaxValidity = $event"
+        <div class="panel-body">
+          <!-- Headers ------------------------------------------------------- -->
+          <div v-show="tab === 'headers'" class="pane">
+            <div class="pane-head">
+              <span class="muted">Request headers</span>
+              <PopMenu icon="bolt" label="Quick add" :width="340">
+                <template #default="{ close }">
+                  <div class="preset-section">Combinations</div>
+                  <button
+                    v-for="bundle in HEADER_BUNDLES"
+                    :key="bundle.label"
+                    class="preset-item"
+                    @click="(applyBundle(bundle.headers), close())"
+                  >
+                    <span class="preset-label">{{ bundle.label }}</span>
+                    <span class="preset-desc">{{ bundle.description }}</span>
+                  </button>
+                  <div class="preset-section">Single headers</div>
+                  <button
+                    v-for="(preset, index) in HEADER_PRESETS"
+                    :key="index"
+                    class="preset-item"
+                    @click="(applyBundle([preset]), close())"
+                  >
+                    <span class="preset-label mono">{{ preset.name }}</span>
+                    <span class="preset-desc mono">{{ preset.value || '—' }}</span>
+                  </button>
+                </template>
+              </PopMenu>
+            </div>
+            <KeyValueEditor
+              :key="editorKey"
+              v-model:rows="request.headers"
+              :name-options="HEADER_NAMES"
+              :variables="variables"
+              list-id="header-names"
+              id-prefix="header"
+              name-placeholder="Header"
             />
           </div>
-          <p class="section-label">Variables</p>
-          <KeyValueEditor
-            :key="editorKey"
-            v-model:rows="request.body.graphql.variables"
-            :variables="variables"
-            list-id="graphql-variable-names"
-            id-prefix="graphql-variable"
-            name-placeholder="Name"
-            value-placeholder='Value (JSON, e.g. "1" or 1 or true)'
-          />
-        </div>
 
-        <div v-else class="editor-wrap">
-          <CodeEditor
-            id="request-body"
-            ref="bodyEditor"
-            v-model="request.body.text"
-            :language="request.body.mode === 'json' ? 'json' : 'text'"
-            :placeholder="
-              request.body.mode === 'json'
-                ? '{\n  &quot;key&quot;: &quot;value&quot;\n}'
-                : 'Request body'
-            "
-            @validity="bodyValidity = $event"
-          />
-        </div>
-      </div>
-
-      <!-- Vars ---------------------------------------------------------- -->
-      <div v-show="tab === 'vars'" class="pane">
-        <div class="pane-head">
-          <span class="muted">Variables for this request only</span>
-          <button class="ghost" @click="emit('manageVariables')">
-            <span class="material-icons sm">tune</span>
-            Wider scopes
-          </button>
-        </div>
-        <p class="pane-hint faint">
-          These override anything of the same name in the collection, environment or globals. Toggle
-          rows on and off to switch between values — handy for a
-          <code>:id</code> path parameter with a few candidates.
-        </p>
-        <KeyValueEditor
-          :key="editorKey"
-          v-model:rows="request.variables"
-          list-id="request-variable-names"
-          id-prefix="request-var"
-          name-placeholder="Variable name"
-          value-placeholder="Value"
-          :resolves="false"
-        />
-      </div>
-
-      <!-- Options ------------------------------------------------------- -->
-      <div v-show="tab === 'options'" class="pane option-list">
-        <label class="option">
-          <input
-            id="option-follow-redirects"
-            v-model="request.options.followRedirects"
-            type="checkbox"
-          />
-          <span>
-            <strong>Follow redirects</strong>
-            <em class="faint">Equivalent to curl -L, up to 10 hops</em>
-          </span>
-        </label>
-        <label class="option">
-          <input id="option-insecure" v-model="request.options.insecure" type="checkbox" />
-          <span>
-            <strong>Skip TLS verification</strong>
-            <em class="faint">Equivalent to curl -k, for self-signed certificates</em>
-          </span>
-        </label>
-        <label class="option">
-          <input
-            id="option-timeout"
-            v-model.number="request.options.timeoutSecs"
-            type="number"
-            min="1"
-            max="600"
-            class="number"
-          />
-          <span>
-            <strong>Timeout (seconds)</strong>
-            <em class="faint">Equivalent to curl -m</em>
-          </span>
-        </label>
-        <label class="option">
-          <input
-            id="option-max-response-mb"
-            v-model.number="request.options.maxResponseMb"
-            type="number"
-            min="1"
-            max="2048"
-            class="number"
-          />
-          <span>
-            <strong>Response size cap (MB)</strong>
-            <em class="faint">
-              Stops reading past this much rather than buffering the whole thing. A truncated
-              response says so in Diagnostics.
-            </em>
-          </span>
-        </label>
-
-        <!-- Terminal-only flags ---------------------------------------- -->
-        <div class="terminal">
-          <h3>
-            <span class="material-icons sm">terminal</span>
-            Terminal-only flags
-          </h3>
-          <p class="faint terminal-hint">
-            Added to every <strong>Copy as curl</strong> form and nothing else. They have no effect
-            on requests sent from here — there is no progress meter to quieten and no file to write.
-            Flags that contradict each other cannot both be picked.
-          </p>
-
-          <div class="terminal-groups">
-            <div v-for="group in TERMINAL_GROUPS" :key="group.id" class="flag-group">
-              <div class="flag-group-label">{{ group.label }}</div>
-              <div
-                v-for="flag in flagsIn(group.id)"
-                :key="flag.id"
-                class="flag"
-                :class="{ blocked: blockedBy(request.terminalFlags, flag.id).length }"
-              >
-                <label class="flag-main">
-                  <input
-                    v-if="flag.kind === 'boolean'"
-                    :id="`flag-${flag.id}`"
-                    type="checkbox"
-                    :checked="isActive(request.terminalFlags, flag.id)"
-                    :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
-                    @change="toggleFlag(flag.id, ($event.target as HTMLInputElement).checked)"
-                  />
-                  <input
-                    v-else
-                    :id="`flag-${flag.id}`"
-                    class="mono flag-value"
-                    :value="
-                      typeof request.terminalFlags[flag.id] === 'string'
-                        ? request.terminalFlags[flag.id]
-                        : ''
-                    "
-                    :placeholder="flag.placeholder"
-                    :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
-                    spellcheck="false"
-                    @input="setFlagValue(flag.id, ($event.target as HTMLInputElement).value)"
-                  />
-                  <span class="flag-text">
-                    <span class="flag-title">
-                      {{ flag.label }}
-                      <code class="mono">{{ flag.short ?? flag.flag }}</code>
-                    </span>
-                    <em class="faint">{{ flag.description }}</em>
-                    <em
-                      v-if="blockedBy(request.terminalFlags, flag.id).length"
-                      class="blocked-note"
-                    >
-                      Unavailable while
-                      {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is on.
-                    </em>
-                    <em
-                      v-else-if="ineffective(request.terminalFlags, flag.id).length"
-                      class="blocked-note"
-                    >
-                      Does nothing without
-                      {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
-                    </em>
-                  </span>
-                </label>
+          <!-- Body ---------------------------------------------------------- -->
+          <div v-show="tab === 'body'" class="pane">
+            <div class="pane-head">
+              <div class="mode-switch">
+                <button
+                  v-for="mode in BODY_MODES"
+                  :key="mode.value"
+                  class="ghost mode"
+                  :class="{ active: request.body.mode === mode.value }"
+                  :disabled="isModeDisabled(mode.value, request.method)"
+                  @click="setBodyMode(mode.value)"
+                >
+                  {{ mode.label }}
+                </button>
               </div>
+              <div class="pane-head-right">
+                <span
+                  v-if="request.body.mode === 'json' && !bodyValidity.valid"
+                  class="invalid"
+                  :title="bodyValidity.message ?? 'Invalid'"
+                >
+                  <span class="material-icons sm">error_outline</span>
+                  {{ bodyValidity.message }}
+                </span>
+                <span
+                  v-else-if="request.body.mode === 'json' && request.body.text.trim()"
+                  class="valid"
+                >
+                  <span class="material-icons sm">check_circle_outline</span>
+                  Valid JSON
+                </span>
+                <button v-if="request.body.mode === 'json'" class="ghost" @click="formatBody">
+                  <span class="material-icons sm">format_indent_increase</span>
+                  Format
+                </button>
+                <template v-if="request.body.mode === 'graphql'">
+                  <span
+                    v-if="!graphqlSyntaxValidity.valid"
+                    class="invalid"
+                    :title="graphqlSyntaxValidity.message ?? 'Invalid'"
+                  >
+                    <span class="material-icons sm">error_outline</span>
+                    {{ graphqlSyntaxValidity.message }}
+                  </span>
+                  <span
+                    v-else-if="graphqlSchemaValidity.checked && !graphqlSchemaValidity.valid"
+                    class="invalid"
+                    :title="graphqlSchemaValidity.message ?? 'Invalid'"
+                  >
+                    <span class="material-icons sm">error_outline</span>
+                    {{ graphqlSchemaValidity.message }}
+                  </span>
+                  <span
+                    v-else-if="
+                      graphqlSchemaValidity.checked &&
+                      graphqlSchemaValidity.valid &&
+                      request.body.graphql.query.trim()
+                    "
+                    class="valid"
+                  >
+                    <span class="material-icons sm">check_circle_outline</span>
+                    Valid query
+                  </span>
+                  <span
+                    v-else-if="graphqlSyntaxValidity.valid && request.body.graphql.query.trim()"
+                    class="valid faint"
+                  >
+                    <span class="material-icons sm">check_circle_outline</span>
+                    Valid syntax
+                  </span>
+                  <button
+                    v-if="graphqlTools"
+                    class="ghost"
+                    :disabled="validatingSchema || !request.url.trim()"
+                    :title="
+                      request.url.trim() ? 'Validate against server schema' : 'Set a URL first'
+                    "
+                    @click="validateGraphqlSchema"
+                  >
+                    <span class="material-icons sm">{{
+                      validatingSchema ? 'hourglass_top' : 'rule'
+                    }}</span>
+                    {{ validatingSchema ? 'Validating…' : 'Validate' }}
+                  </button>
+                  <button
+                    v-if="graphqlTools"
+                    class="ghost"
+                    title="Open the GraphQL query builder"
+                    @click="openGraphqlBuilder"
+                  >
+                    <span class="material-icons sm">account_tree</span>
+                    Builder
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <p v-if="request.body.mode === 'none'" class="empty">
+              This request has no body. Pick JSON, Raw, Form or GraphQL to add one.
+            </p>
+
+            <div v-else-if="request.body.mode === 'form'" class="form-body">
+              <KeyValueEditor
+                :key="editorKey"
+                v-model:rows="request.body.form"
+                :variables="variables"
+                list-id="form-names"
+                id-prefix="form-field"
+                name-placeholder="Field"
+              />
+            </div>
+
+            <div v-else-if="request.body.mode === 'graphql'" class="graphql-body">
+              <p class="section-label">Query</p>
+              <div class="editor-wrap graphql-query">
+                <CodeEditor
+                  id="request-graphql-query"
+                  v-model="request.body.graphql.query"
+                  language="graphql"
+                  :schema="graphqlSchema"
+                  placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
+                  @validity="graphqlSyntaxValidity = $event"
+                />
+              </div>
+              <p class="section-label">Variables</p>
+              <KeyValueEditor
+                :key="editorKey"
+                v-model:rows="request.body.graphql.variables"
+                :variables="variables"
+                list-id="graphql-variable-names"
+                id-prefix="graphql-variable"
+                name-placeholder="Name"
+                value-placeholder='Value (JSON, e.g. "1" or 1 or true)'
+              />
+            </div>
+
+            <div v-else class="editor-wrap">
+              <CodeEditor
+                id="request-body"
+                ref="bodyEditor"
+                v-model="request.body.text"
+                :language="request.body.mode === 'json' ? 'json' : 'text'"
+                :placeholder="
+                  request.body.mode === 'json'
+                    ? '{\n  &quot;key&quot;: &quot;value&quot;\n}'
+                    : 'Request body'
+                "
+                @validity="bodyValidity = $event"
+              />
             </div>
           </div>
 
-          <div class="preview">
-            <span class="faint">Appended to Copy as curl:</span>
-            <code v-if="flagPreview" class="mono">{{ flagPreview }}</code>
-            <span v-else class="faint">nothing yet</span>
+          <!-- Vars ---------------------------------------------------------- -->
+          <div v-show="tab === 'vars'" class="pane">
+            <div class="pane-head">
+              <span class="muted">Variables for this request only</span>
+              <button class="ghost" @click="emit('manageVariables')">
+                <span class="material-icons sm">tune</span>
+                Wider scopes
+              </button>
+            </div>
+            <p class="pane-hint faint">
+              These override anything of the same name in the collection, environment or globals.
+              Toggle rows on and off to switch between values — handy for a
+              <code>:id</code> path parameter with a few candidates.
+            </p>
+            <KeyValueEditor
+              :key="editorKey"
+              v-model:rows="request.variables"
+              list-id="request-variable-names"
+              id-prefix="request-var"
+              name-placeholder="Variable name"
+              value-placeholder="Value"
+              :resolves="false"
+            />
+          </div>
+
+          <!-- Options ------------------------------------------------------- -->
+          <div v-show="tab === 'options'" class="pane option-list">
+            <label class="option">
+              <input
+                id="option-follow-redirects"
+                v-model="request.options.followRedirects"
+                type="checkbox"
+              />
+              <span>
+                <strong>Follow redirects</strong>
+                <em class="faint">Equivalent to curl -L, up to 10 hops</em>
+              </span>
+            </label>
+            <label class="option">
+              <input id="option-insecure" v-model="request.options.insecure" type="checkbox" />
+              <span>
+                <strong>Skip TLS verification</strong>
+                <em class="faint">Equivalent to curl -k, for self-signed certificates</em>
+              </span>
+            </label>
+            <label class="option">
+              <input
+                id="option-timeout"
+                v-model.number="request.options.timeoutSecs"
+                type="number"
+                min="1"
+                max="600"
+                class="number"
+              />
+              <span>
+                <strong>Timeout (seconds)</strong>
+                <em class="faint">Equivalent to curl -m</em>
+              </span>
+            </label>
+            <label class="option">
+              <input
+                id="option-max-response-mb"
+                v-model.number="request.options.maxResponseMb"
+                type="number"
+                min="1"
+                max="2048"
+                class="number"
+              />
+              <span>
+                <strong>Response size cap (MB)</strong>
+                <em class="faint">
+                  Stops reading past this much rather than buffering the whole thing. A truncated
+                  response says so in Diagnostics.
+                </em>
+              </span>
+            </label>
+
+            <!-- Terminal-only flags ---------------------------------------- -->
+            <div class="terminal">
+              <h3>
+                <span class="material-icons sm">terminal</span>
+                Terminal-only flags
+              </h3>
+              <p class="faint terminal-hint">
+                Added to every <strong>Copy as curl</strong> form and nothing else. They have no
+                effect on requests sent from here — there is no progress meter to quieten and no
+                file to write. Flags that contradict each other cannot both be picked.
+              </p>
+
+              <div class="terminal-groups">
+                <div v-for="group in TERMINAL_GROUPS" :key="group.id" class="flag-group">
+                  <div class="flag-group-label">{{ group.label }}</div>
+                  <div
+                    v-for="flag in flagsIn(group.id)"
+                    :key="flag.id"
+                    class="flag"
+                    :class="{ blocked: blockedBy(request.terminalFlags, flag.id).length }"
+                  >
+                    <label class="flag-main">
+                      <input
+                        v-if="flag.kind === 'boolean'"
+                        :id="`flag-${flag.id}`"
+                        type="checkbox"
+                        :checked="isActive(request.terminalFlags, flag.id)"
+                        :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
+                        @change="toggleFlag(flag.id, ($event.target as HTMLInputElement).checked)"
+                      />
+                      <input
+                        v-else
+                        :id="`flag-${flag.id}`"
+                        class="mono flag-value"
+                        :value="
+                          typeof request.terminalFlags[flag.id] === 'string'
+                            ? request.terminalFlags[flag.id]
+                            : ''
+                        "
+                        :placeholder="flag.placeholder"
+                        :disabled="blockedBy(request.terminalFlags, flag.id).length > 0"
+                        spellcheck="false"
+                        @input="setFlagValue(flag.id, ($event.target as HTMLInputElement).value)"
+                      />
+                      <span class="flag-text">
+                        <span class="flag-title">
+                          {{ flag.label }}
+                          <code class="mono">{{ flag.short ?? flag.flag }}</code>
+                        </span>
+                        <em class="faint">{{ flag.description }}</em>
+                        <em
+                          v-if="blockedBy(request.terminalFlags, flag.id).length"
+                          class="blocked-note"
+                        >
+                          Unavailable while
+                          {{ labelsFor(blockedBy(request.terminalFlags, flag.id)) }} is on.
+                        </em>
+                        <em
+                          v-else-if="ineffective(request.terminalFlags, flag.id).length"
+                          class="blocked-note"
+                        >
+                          Does nothing without
+                          {{ labelsFor(ineffective(request.terminalFlags, flag.id)) }}.
+                        </em>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="preview">
+                <span class="faint">Appended to Copy as curl:</span>
+                <code v-if="flagPreview" class="mono">{{ flagPreview }}</code>
+                <span v-else class="faint">nothing yet</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -667,6 +701,41 @@ const flagPreview = computed(() =>
   flex-direction: column;
   min-height: 0;
   border-bottom: 1px solid var(--border);
+}
+
+.request--collapsible {
+  border-bottom: none;
+}
+
+.request-details-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 0.22s ease,
+    opacity 0.22s ease;
+  min-height: 0;
+}
+
+.request-details-wrap.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.request-details-wrap:not(.is-collapsed) .pane {
+  max-height: unset;
+}
+
+.request-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .request-details-wrap {
+    transition: none;
+  }
 }
 
 .request:focus-visible {

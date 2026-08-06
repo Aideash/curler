@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import BuildSidebar from './BuildSidebar.vue'
 import RequestPanel from './RequestPanel.vue'
 import ResponsePanel from './ResponsePanel.vue'
@@ -21,6 +21,7 @@ import { performSend } from '../lib/send'
 import { startComparison } from '../lib/compare'
 import { openFromRequest } from '../lib/graphqlBuilder'
 import { navigate } from '../composables/useRoute'
+import { useMediaQuery } from '../composables/useMediaQuery'
 import { describeIssues, resolveRequest, type BuildTrace } from '../lib/vars'
 import {
   activeEnvironment,
@@ -37,6 +38,12 @@ import { uid } from '../types'
 
 const sending = ref(false)
 const response = ref<HttpResponse | null>(null)
+const compact = useMediaQuery('(max-height: 720px)')
+const requestExpanded = ref(true)
+
+watch(compact, (isCompact) => {
+  if (!isCompact) requestExpanded.value = true
+})
 const error = ref<string | null>(null)
 const errorTitle = ref('Request failed')
 const errorChip = ref('Failed')
@@ -72,6 +79,10 @@ function flash(message: string, kind: 'ok' | 'error' = 'ok') {
   toastTimer = setTimeout(() => (toast.value = ''), kind === 'error' ? 6000 : 2200)
 }
 
+function onResponseFocus() {
+  if (compact.value) requestExpanded.value = false
+}
+
 async function send() {
   sending.value = true
   error.value = null
@@ -90,6 +101,7 @@ async function send() {
     trace.value = outcome.trace
   } finally {
     sending.value = false
+    if (compact.value) requestExpanded.value = false
   }
 }
 
@@ -274,18 +286,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </TitleBar>
 
       <RequestPanel
+        v-model:details-expanded="requestExpanded"
         :request="currentRequest"
         :variables="variables"
         :variable-set="variableSet"
         :environment-name="activeEnvironment?.name ?? 'none'"
         :graphql-tools="true"
         :sending="sending"
+        :collapsible="compact"
         @send="send"
         @import-curl="showImport = true"
         @copy-curl="copyAsCurl"
         @manage-variables="openVariables('collection')"
         @open-graphql-builder="openGraphqlBuilder"
       />
+
+      <button
+        v-if="compact"
+        type="button"
+        class="request-seam-toggle"
+        :aria-expanded="requestExpanded"
+        aria-controls="request-details"
+        :aria-label="requestExpanded ? 'Collapse request' : 'Expand request'"
+        :title="requestExpanded ? 'Collapse request' : 'Expand request'"
+        @click="requestExpanded = !requestExpanded"
+      >
+        <span class="material-icons sm">{{ requestExpanded ? 'expand_less' : 'expand_more' }}</span>
+      </button>
 
       <ResponsePanel
         :response="response"
@@ -294,6 +321,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         :trace="trace"
         :error-title="errorTitle"
         :error-chip="errorChip"
+        @focusin="onResponseFocus"
         @reset="resetResponse"
       />
     </main>
@@ -433,5 +461,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   background-color: var(--bg-raised);
   color: var(--text);
   box-shadow: 0px 0px 5px -3px var(--text);
+}
+
+.request-seam-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.request-seam-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 </style>

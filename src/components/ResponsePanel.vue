@@ -27,7 +27,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'reset'): void
+  reset: []
+  focusin: []
 }>()
 
 type Tab = 'body' | 'headers' | 'diagnostics'
@@ -74,7 +75,7 @@ watch(
 </script>
 
 <template>
-  <section id="response-panel" class="response" tabindex="-1">
+  <section id="response-panel" class="response" tabindex="-1" @focusin="emit('focusin')">
     <div class="status-bar">
       <template v-if="response">
         <span class="chip" :class="statusClass">
