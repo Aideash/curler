@@ -240,6 +240,7 @@ onBeforeUnmount(revokeObjectUrl)
 
 .media.image,
 .media.video {
+  min-height: 200px;
   border: 2px solid var(--border-strong);
   box-shadow: 0 0 30px 0px lch(from var(--bg) calc(100 - l) calc(2.5 * c) h / 0.5);
 }

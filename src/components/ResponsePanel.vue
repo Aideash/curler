@@ -96,7 +96,7 @@ watch(
           {{ response.finalUrl }}
         </span>
       </template>
-      <span v-else-if="sending" class="muted">Sending…</span>
+      <span v-else-if="sending" class="muted sending-label">Sending...</span>
       <span v-else-if="error" class="chip red">{{ errorChip }}</span>
       <span v-else class="faint">No response yet</span>
 
@@ -160,6 +160,14 @@ watch(
           {{ errorTitle }}
         </strong>
         <p>{{ error }}</p>
+      </div>
+
+      <div v-else-if="sending" class="sending-state" role="status" aria-live="polite">
+        <div class="sending-row">
+          <div class="spinner" aria-hidden="true" />
+          <span class="sending-label faint">Sending</span>
+        </div>
+        <div class="spacer" />
       </div>
 
       <div v-else-if="!response" class="placeholder faint">
@@ -349,6 +357,79 @@ input {
   text-align: center;
 }
 
+.sending-row {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+
+.sending-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-around;
+  gap: 16px;
+  min-height: 100%;
+  padding: 32px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.status-bar .sending-label {
+  color: var(--text-dim);
+  opacity: 0.5;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.content .sending-label::after {
+  content: '';
+  animation: sending-ellipsis 2s steps(3, end) infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sending-ellipsis {
+  0% {
+    content: '';
+  }
+  30% {
+    content: '.';
+  }
+  60% {
+    content: '..';
+  }
+  90% {
+    content: '...';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--accent-dim);
+  }
+
+  .sending-label::after {
+    content: '…';
+    animation: none;
+  }
+}
+
 .error {
   padding: 20px 24px;
 }
@@ -411,7 +492,7 @@ input {
 }
 
 /* Wrap the status bar on narrow-ish screens */
-@media screen and (max-width: 500px) {
+@media screen and (max-width: 550px) {
   .status-bar .copy,
   .status-bar .reset {
     min-width: 25px;
@@ -430,6 +511,14 @@ input {
 
   .pretty-label {
     display: none;
+  }
+
+  .pretty input {
+    width: 0;
+  }
+
+  .pretty:has(input:checked) .alt-icon {
+    color: var(--accent);
   }
 }
 </style>
