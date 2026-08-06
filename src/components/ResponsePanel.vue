@@ -5,8 +5,8 @@ import ResponseBodyView from './ResponseBodyView.vue'
 import { copyText } from '../lib/clipboard'
 import {
   canCopyResponseBody,
-  isJsonResponse,
-  prettyBody,
+  canPrettyPrintResponse,
+  prettyResponseBody,
   responseByteLabel,
   statusClass as statusClassFor,
 } from '../lib/response'
@@ -34,13 +34,13 @@ type Tab = 'body' | 'headers' | 'diagnostics'
 const tab = ref<Tab>('body')
 const pretty = ref(true)
 
-const isJson = computed(() => isJsonResponse(props.response))
+const canPretty = computed(() => canPrettyPrintResponse(props.response))
 const copyEnabled = computed(() => canCopyResponseBody(props.response))
 
 const displayBody = computed(() => {
   const body = props.response?.body ?? ''
-  if (!pretty.value || !isJson.value) return body
-  return prettyBody(body)
+  if (!pretty.value || !canPretty.value) return body
+  return prettyResponseBody(props.response, body)
 })
 
 const statusClass = computed(() => statusClassFor(props.response?.status))
@@ -103,7 +103,7 @@ watch(
       <div class="spacer" />
 
       <template v-if="response">
-        <label v-if="isJson && tab === 'body'" class="pretty" title="Pretty print">
+        <label v-if="canPretty && tab === 'body'" class="pretty" title="Pretty print">
           <input id="response-pretty" v-model="pretty" type="checkbox" />
           <span class="pretty-label">Pretty</span>
           <span class="alt-icon material-icons sm">format_indent_increase</span>

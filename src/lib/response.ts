@@ -1,3 +1,4 @@
+import jsBeautify from 'js-beautify'
 import type { HttpResponse } from '../types'
 
 /** Colour band for a status code, matching the chip classes in the stylesheet. */
@@ -51,6 +52,8 @@ const JAVASCRIPT_MIMES = new Set([
 
 const CSS_MIMES = new Set(['text/css', 'text/scss', 'text/less'])
 
+const HTML_MIMES = new Set(['text/html', 'application/xhtml+xml'])
+
 export function responseMime(response: HttpResponse | null): string {
   return contentTypeOf(response).split(';')[0]?.trim().toLowerCase() ?? ''
 }
@@ -63,6 +66,10 @@ export function isCssResponse(response: HttpResponse | null): boolean {
   return CSS_MIMES.has(responseMime(response))
 }
 
+export function isHtmlResponse(response: HttpResponse | null): boolean {
+  return HTML_MIMES.has(responseMime(response))
+}
+
 export function isSassResponse(response: HttpResponse | null): boolean {
   return responseMime(response) === 'text/sass'
 }
@@ -71,7 +78,7 @@ export function hasMediaPreview(response: HttpResponse | null): boolean {
   return Boolean(response?.bodyPreview && response.bodyBase64)
 }
 
-export type ResponseEditorLanguage = 'json' | 'javascript' | 'css' | 'sass' | 'text'
+export type ResponseEditorLanguage = 'json' | 'javascript' | 'css' | 'sass' | 'html' | 'text'
 
 /** CodeMirror language for a response body, when shown as text. */
 export function responseEditorLanguage(response: HttpResponse | null): ResponseEditorLanguage {
@@ -79,6 +86,7 @@ export function responseEditorLanguage(response: HttpResponse | null): ResponseE
   if (isJavascriptResponse(response)) return 'javascript'
   if (isSassResponse(response)) return 'sass'
   if (isCssResponse(response)) return 'css'
+  if (isHtmlResponse(response)) return 'html'
   return 'text'
 }
 
@@ -88,6 +96,10 @@ export function canCopyResponseBody(response: HttpResponse | null): boolean {
   return Boolean(response.body)
 }
 
+export function canPrettyPrintResponse(response: HttpResponse | null): boolean {
+  return isJsonResponse(response) || isJavascriptResponse(response)
+}
+
 /** Indented JSON where the text parses, and the text untouched where it does not. */
 export function prettyBody(body: string): string {
   try {
@@ -95,4 +107,20 @@ export function prettyBody(body: string): string {
   } catch {
     return body
   }
+}
+
+/** Reformats JavaScript; unparseable input is returned as-is. */
+export function prettyJavascriptBody(body: string): string {
+  try {
+    return jsBeautify.js(body, { indent_size: 2 })
+  } catch {
+    return body
+  }
+}
+
+/** Pretty-prints JSON or JavaScript response bodies; other types pass through. */
+export function prettyResponseBody(response: HttpResponse | null, body: string): string {
+  if (isJsonResponse(response)) return prettyBody(body)
+  if (isJavascriptResponse(response)) return prettyJavascriptBody(body)
+  return body
 }
