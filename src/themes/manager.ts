@@ -1,10 +1,4 @@
-import {
-  SYSTEM_PREFERENCE,
-  THEME_STORAGE_KEY,
-  getThemeById,
-  themes,
-  type Theme,
-} from './definitions'
+import { SYSTEM_PREFERENCE, THEME_STORAGE_KEY, getThemeById, themes, type Theme } from './definitions'
 
 /** Either a concrete theme id or the literal `system`. */
 export type ThemePreference = string
@@ -15,7 +9,8 @@ export function systemPrefersDark(): boolean {
   return window.matchMedia(DARK_QUERY).matches
 }
 
-export function readStoredPreference(): ThemePreference {
+/** Fast path for first paint, before the workspace has loaded. */
+export function readCachedThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY)
     if (stored === SYSTEM_PREFERENCE) return SYSTEM_PREFERENCE
@@ -26,7 +21,7 @@ export function readStoredPreference(): ThemePreference {
   return SYSTEM_PREFERENCE
 }
 
-function writeStoredPreference(preference: ThemePreference): void {
+export function writeCachedThemePreference(preference: ThemePreference): void {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, preference)
   } catch {
@@ -86,9 +81,10 @@ export function onThemeChange(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** Apply a theme in the UI and cache it for the next first paint. */
 export function setThemePreference(preference: ThemePreference): void {
   activePreference = preference
-  writeStoredPreference(preference)
+  writeCachedThemePreference(preference)
   applyTheme(resolveThemeId(preference))
   syncSystemListener()
   notify()
@@ -103,10 +99,10 @@ export function getResolvedThemeId(): string {
 }
 
 export function initTheme(): void {
-  activePreference = readStoredPreference()
+  activePreference = readCachedThemePreference()
   applyTheme(resolveThemeId(activePreference))
   syncSystemListener()
   // Subscribers are registered during module evaluation, which happens before
-  // this runs, so they need telling about the stored preference.
+  // this runs, so they need telling about the cached preference.
   notify()
 }

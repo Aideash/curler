@@ -2,13 +2,9 @@ import http from 'node:http'
 import https from 'node:https'
 import zlib from 'node:zlib'
 import { encodeMultipartBody } from './multipart.mjs'
+import { getSetting } from '../settings.defaults.mjs'
 
-const MAX_REDIRECTS = 10
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
-
-export const DEFAULT_MAX_RESPONSE_MB = 10
-/** Media previews are capped separately to keep JSON transport and UI responsive. */
-export const PREVIEW_MAX_MB = 5
 
 const TOSS_EXACT = new Set([
   'application/pdf',
@@ -148,7 +144,7 @@ function describeCertificate(socket) {
  * happened, so there is nothing to gain by making the caller ask first.
  */
 function requestOnce({ url, method, headers, body, insecure, timeoutMs, maxBytes }) {
-  const previewMaxBytes = PREVIEW_MAX_MB * 1024 * 1024
+  const previewMaxBytes = getSetting('mediaPreviewMaxMb') * 1024 * 1024
 
   return new Promise((resolve, reject) => {
     let target
@@ -358,8 +354,15 @@ function buildTimings(result) {
 }
 
 export async function performRequest(spec) {
-  const timeoutMs = Math.min(Math.max(spec.timeoutSecs ?? 30, 1), 600) * 1000
-  const maxMb = Math.min(Math.max(spec.maxResponseMb ?? DEFAULT_MAX_RESPONSE_MB, 1), 2048)
+  const timeoutMaxSecs = getSetting('requestTimeoutMaxSecs')
+  const maxResponseMbMax = getSetting('requestMaxResponseMbMax')
+  const timeoutMs =
+    Math.min(Math.max(spec.timeoutSecs ?? getSetting('defaultTimeoutSecs'), 1), timeoutMaxSecs) *
+    1000
+  const maxMb = Math.min(
+    Math.max(spec.maxResponseMb ?? getSetting('defaultMaxResponseMb'), 1),
+    maxResponseMbMax,
+  )
   const maxBytes = maxMb * 1024 * 1024
 
   const headers = {}
@@ -374,10 +377,10 @@ export async function performRequest(spec) {
   const has = (name) => Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
 
   if (!has('accept')) headers.Accept = '*/*'
-  if (!has('user-agent')) headers['User-Agent'] = 'curler/0.1'
+  if (!has('user-agent')) headers['User-Agent'] = getSetting('defaultUserAgent')
   if (!has('accept-encoding')) headers['Accept-Encoding'] = 'gzip, deflate, br'
 
-  let payload = null
+  let payload
   if (spec.multipart?.length) {
     const { buffer, contentType } = encodeMultipartBody(spec.multipart)
     payload = buffer
@@ -441,7 +444,7 @@ export async function performRequest(spec) {
     const location = result.headers.location
     const isRedirect = REDIRECT_STATUSES.has(result.status) && Boolean(location)
 
-    if (isRedirect && spec.followRedirects && hop < MAX_REDIRECTS) {
+    if (isRedirect && spec.followRedirects && hop < getSetting('maxRedirects')) {
       redirectChain.push({ status: result.status, from: url, to: location })
       url = new URL(location, url).toString()
 

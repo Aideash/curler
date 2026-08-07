@@ -32,6 +32,7 @@ import {
   type SchemaInputFieldNode,
   type SchemaExplorerSortMode,
 } from '../lib/graphqlQueryBuilder'
+import { settingBoolean } from '../lib/store'
 
 const props = defineProps<{
   schema: GraphQLSchema
@@ -39,7 +40,7 @@ const props = defineProps<{
   query: string
 }>()
 
-const showArgsOn = defineModel<boolean>('showArgs', { default: false })
+const showArgsOn = defineModel<boolean>('showArgs', { default: settingBoolean('graphqlShowArgs') })
 const argInsertMode = defineModel<ArgInsertMode>('argInsertMode', {
   default: loadArgInsertMode,
 })

@@ -74,7 +74,12 @@ export function checkUploadPath(rawPath, cwd = process.cwd(), policy = getUpload
 }
 
 /** @returns {{ data: Buffer, filename: string }} */
-export function readUploadFile(rawPath, filenameHint, cwd = process.cwd(), policy = getUploadPolicy()) {
+export function readUploadFile(
+  rawPath,
+  filenameHint,
+  cwd = process.cwd(),
+  policy = getUploadPolicy(),
+) {
   if (rawPath === '-') {
     throw new Error('curl stdin (@-) file parts are not supported.')
   }

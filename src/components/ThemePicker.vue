@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import PopMenu from './PopMenu.vue'
+import SettingsDialog from './SettingsDialog.vue'
+import { pickTheme } from '../lib/store'
 import { useTheme } from '../composables/useTheme'
 import { getThemeById } from '../themes/definitions'
 
-const { preference, resolvedThemeId, themes, systemPreference, setPreference } = useTheme()
+const { preference, resolvedThemeId, themes, systemPreference } = useTheme()
+
+const siteSettingsOpen = ref(false)
 
 const systemLabel = computed(() => {
   const active = getThemeById(resolvedThemeId.value)
@@ -20,60 +24,77 @@ function swatch(id: string) {
     color: tokens.accent,
   }
 }
+
+function openSiteSettings(closeMenu: () => void) {
+  closeMenu()
+  siteSettingsOpen.value = true
+}
 </script>
 
 <template>
-  <PopMenu icon="settings" title="Appearance" :width="272" align="right">
+  <PopMenu icon="settings" title="Settings" :width="272" align="right">
     <template #default="{ close }">
-      <div class="theme-menu">
-        <div class="theme-menu__heading">Theme</div>
+      <div class="settings-menu">
+        <button class="menu-option" @click="openSiteSettings(close)">
+          <span class="material-icons sm menu-option__glyph">tune</span>
+          <span class="menu-option__text">
+            <span class="menu-option__name">Site settings</span>
+            <span class="menu-option__hint">Defaults, limits, and behaviour</span>
+          </span>
+        </button>
+
+        <div class="menu-rule" />
+
+        <div class="menu-heading">Theme</div>
 
         <button
-          class="theme-option"
+          class="menu-option"
           :class="{ active: preference === systemPreference }"
           @click="
             () => {
-              setPreference(systemPreference)
+              pickTheme(systemPreference)
               close()
             }
           "
         >
-          <span class="material-icons sm theme-option__glyph">brightness_auto</span>
-          <span class="theme-option__text">
-            <span class="theme-option__name">System default</span>
-            <span class="theme-option__hint">{{ systemLabel }}</span>
+          <span class="material-icons sm menu-option__glyph">brightness_auto</span>
+          <span class="menu-option__text">
+            <span class="menu-option__name">System default</span>
+            <span class="menu-option__hint">{{ systemLabel }}</span>
           </span>
           <span v-if="preference === systemPreference" class="material-icons sm tick"> check </span>
         </button>
 
-        <div class="theme-menu__rule" />
+        <div class="menu-rule" />
 
         <button
           v-for="theme in themes"
           :key="theme.id"
-          class="theme-option"
+          class="menu-option"
           :class="{ active: preference === theme.id }"
           @click="
             () => {
-              setPreference(theme.id)
+              pickTheme(theme.id)
               close()
             }
           "
         >
-          <span class="theme-option__swatch" :style="swatch(theme.id)">Aa</span>
-          <span class="theme-option__text">
-            <span class="theme-option__name">{{ theme.name }}</span>
-            <span class="theme-option__hint">{{ theme.description }}</span>
+          <span class="menu-option__swatch" :style="swatch(theme.id)">Aa</span>
+          <span class="menu-option__text">
+            <span class="menu-option__name">{{ theme.name }}</span>
+            <span class="menu-option__hint">{{ theme.description }}</span>
           </span>
           <span v-if="preference === theme.id" class="material-icons sm tick">check</span>
         </button>
       </div>
     </template>
   </PopMenu>
+
+  <SettingsDialog v-if="siteSettingsOpen" @close="siteSettingsOpen = false" />
 </template>
 
 <style scoped>
-.theme-menu__heading {
+.menu-heading {
   padding: 6px 8px 4px;
   font-size: 11px;
   text-transform: uppercase;
@@ -81,13 +102,13 @@ function swatch(id: string) {
   color: var(--text-faint);
 }
 
-.theme-menu__rule {
+.menu-rule {
   height: 1px;
   margin: 4px 6px;
   background: var(--border);
 }
 
-.theme-option {
+.menu-option {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -99,17 +120,17 @@ function swatch(id: string) {
   border-radius: var(--radius);
 }
 
-.theme-option:hover:not(:disabled) {
+.menu-option:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: transparent;
 }
 
-.theme-option.active {
+.menu-option.active {
   background: var(--bg-hover);
 }
 
-.theme-option__glyph,
-.theme-option__swatch {
+.menu-option__glyph,
+.menu-option__swatch {
   flex: none;
   display: grid;
   place-items: center;
@@ -120,14 +141,14 @@ function swatch(id: string) {
   vertical-align: 0;
 }
 
-.theme-option__swatch {
+.menu-option__swatch {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
   border-style: solid;
 }
 
-.theme-option__text {
+.menu-option__text {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -135,11 +156,11 @@ function swatch(id: string) {
   gap: 1px;
 }
 
-.theme-option__name {
+.menu-option__name {
   font-size: 13px;
 }
 
-.theme-option__hint {
+.menu-option__hint {
   font-size: 11px;
   color: var(--text-faint);
   white-space: nowrap;

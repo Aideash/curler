@@ -1,13 +1,16 @@
 import { computed, reactive, watch } from 'vue'
 import {
-  DEFAULT_MAX_RESPONSE_MB,
-  newRequest,
   uid,
   type Collection,
   type Environment,
+  type HttpMethod,
   type KeyValue,
   type RequestBody,
   type RequestModel,
+  type SettingName,
+  type SettingValue,
+  type UserSetting,
+  type Workspace,
 } from '../types'
 import { reorderItems } from '../composables/useReorderList'
 import {
@@ -19,7 +22,18 @@ import {
   deleteSecret,
   copySecret,
 } from './backend'
+import {
+  buildSettingsOverrides,
+  defaultSettings,
+  emptyWorkspace,
+  getSetting,
+  getSettingBoolean,
+  getSettingNumber,
+  getSettingString,
+} from './settings'
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
+import { getThemePreference, readCachedThemePreference, setThemePreference } from '../themes/manager'
+import { getThemeById, SYSTEM_PREFERENCE } from '../themes/definitions'
 
 interface State {
   loaded: boolean
@@ -38,6 +52,8 @@ interface State {
   globals: KeyValue[]
   /** Read-only, supplied by the server from its own environment. */
   builtins: Record<string, string>
+  /** User overrides for app settings; undefined until persisted. */
+  settings?: UserSetting
   /** Null while editing an unsaved request. */
   activeRequestId: string | null
   scratch: RequestModel
@@ -55,8 +71,113 @@ const state = reactive<State>({
   globals: [],
   builtins: {},
   activeRequestId: null,
-  scratch: newRequest(),
+  scratch: null as unknown as RequestModel,
 })
+
+export function workspaceFromState(): Workspace {
+  return {
+    workspaceId: state.workspaceId,
+    collections: state.collections,
+    environments: state.environments,
+    activeEnvironmentId: state.activeEnvironmentId,
+    globals: state.globals,
+    settings: state.settings,
+  }
+}
+
+export function setting(name: SettingName): SettingValue {
+  return getSetting(name, workspaceFromState())
+}
+
+export function settingBoolean(name: SettingName): boolean {
+  return getSettingBoolean(name, workspaceFromState())
+}
+
+export function settingNumber(name: SettingName): number {
+  return getSettingNumber(name, workspaceFromState())
+}
+
+export function settingString(name: SettingName): string {
+  return getSettingString(name, workspaceFromState())
+}
+
+function persistSettingsOverrides(overrides: Partial<UserSetting>, refreshScratch = true) {
+  state.settings = Object.keys(overrides).length > 0 ? (overrides as UserSetting) : undefined
+  if (refreshScratch) refreshScratchIfIdle()
+}
+
+/** The one setting that may be changed outside the site settings dialog. */
+export function setThemePreferenceSetting(preference: string) {
+  const merged = { ...readEffectiveSettings(), themePreference: preference }
+  persistSettingsOverrides(buildSettingsOverrides(merged), false)
+}
+
+/** Apply a theme immediately and persist it to the workspace. */
+export function pickTheme(preference: string) {
+  setThemePreference(preference)
+  setThemePreferenceSetting(preference)
+}
+
+function syncThemeFromWorkspace() {
+  const fromWorkspace = getSettingString('themePreference', workspaceFromState())
+  if (fromWorkspace !== getThemePreference()) {
+    setThemePreference(fromWorkspace)
+  }
+}
+
+/** Seed workspace settings from the browser cache when nothing is saved yet. */
+function migrateWorkspaceThemeFromCache() {
+  if (state.settings?.themePreference !== undefined) return
+  const cached = readCachedThemePreference()
+  if (cached === SYSTEM_PREFERENCE) return
+  if (!getThemeById(cached)) return
+  setThemePreferenceSetting(cached)
+}
+
+export function applyWorkspaceSettings(values: Partial<UserSetting>) {
+  persistSettingsOverrides(buildSettingsOverrides(values))
+}
+
+export function readEffectiveSettings(): Partial<UserSetting> {
+  const ws = workspaceFromState()
+  return Object.fromEntries(
+    defaultSettings.map((s) => [s.name, getSetting(s.name, ws)]),
+  ) as Partial<UserSetting>
+}
+
+export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
+  const ws = workspaceFromState()
+  return {
+    id: uid(),
+    name: getSettingString('defaultRequestName', ws),
+    method: getSettingString('defaultHttpMethod', ws) as HttpMethod,
+    url: '',
+    headers: [],
+    body: {
+      mode: 'none',
+      text: '',
+      form: [],
+      multipart: [],
+      graphql: { query: '', variables: [] },
+    },
+    options: {
+      followRedirects: getSettingBoolean('defaultFollowRedirects', ws),
+      insecure: getSettingBoolean('defaultInsecure', ws),
+      timeoutSecs: getSettingNumber('defaultTimeoutSecs', ws),
+      maxResponseMb: getSettingNumber('defaultMaxResponseMb', ws),
+    },
+    variables: [],
+    terminalFlags: {},
+    ...partial,
+  }
+}
+
+/** Rebuild the scratch request once workspace settings are available. */
+function refreshScratchIfIdle() {
+  if (state.activeRequestId === null) state.scratch = newRequest()
+}
+
+state.scratch = newRequest()
 
 /** Decrypted secret values, keyed by variable row id. Never persisted. */
 export const secretCache = reactive<Record<string, string>>({})
@@ -97,6 +218,7 @@ function defaultWorkspace() {
   state.environments = [environment]
   state.activeEnvironmentId = environment.id
   state.globals = []
+  state.settings = undefined
 }
 
 /**
@@ -133,12 +255,20 @@ export function braceRequestReferences(request: RequestModel) {
   }
 }
 
+function migrationWorkspace(parsed: Record<string, unknown>): Workspace {
+  return {
+    ...emptyWorkspace(),
+    settings: parsed.settings as UserSetting | undefined,
+  }
+}
+
 /**
  * Workspaces written before variable scopes existed have no `globals`, and no
  * variable list on collections or requests. Fill them in rather than letting
  * undefined reach the editor.
  */
 function migrate(parsed: Record<string, unknown>) {
+  const ws = migrationWorkspace(parsed)
   const collections = (parsed.collections ?? []) as Collection[]
   for (const collection of collections) {
     collection.variables ??= []
@@ -149,12 +279,12 @@ function migrate(parsed: Record<string, unknown>) {
       // A hand-edited workspace may be missing options entirely, and throwing
       // here would take the whole load down with it.
       request.options ??= {
-        followRedirects: true,
-        insecure: false,
-        timeoutSecs: 30,
-        maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
+        followRedirects: getSettingBoolean('defaultFollowRedirects', ws),
+        insecure: getSettingBoolean('defaultInsecure', ws),
+        timeoutSecs: getSettingNumber('defaultTimeoutSecs', ws),
+        maxResponseMb: getSettingNumber('defaultMaxResponseMb', ws),
       }
-      request.options.maxResponseMb ??= DEFAULT_MAX_RESPONSE_MB
+      request.options.maxResponseMb ??= getSettingNumber('defaultMaxResponseMb', ws)
       request.body.graphql ??= { query: '', variables: [] }
       request.body.graphql.variables ??= []
       request.body.graphql.query ??= ''
@@ -176,6 +306,7 @@ function migrate(parsed: Record<string, unknown>) {
   state.activeEnvironmentId = (parsed.activeEnvironmentId ?? null) as string | null
   state.globals = (parsed.globals ?? []) as KeyValue[]
   state.workspaceId = (parsed.workspaceId as string) ?? uid()
+  state.settings = parsed.settings as UserSetting | undefined
 
   visitVariableRows((rows) => {
     for (const row of rows) {
@@ -283,6 +414,10 @@ export async function initStore() {
   } catch {
     state.builtins = {}
   }
+
+  refreshScratchIfIdle()
+  migrateWorkspaceThemeFromCache()
+  syncThemeFromWorkspace()
 }
 
 /** Reload from disk after an out-of-band change such as restoring a backup. */
@@ -294,7 +429,7 @@ export async function reloadWorkspace() {
   else defaultWorkspace()
   ensureWorkspaceId()
   state.activeRequestId = null
-  state.scratch = newRequest()
+  refreshScratchIfIdle()
   await loadSecretCache()
   state.error = null
   state.persistable = true
@@ -319,6 +454,7 @@ function workspaceSnapshot() {
     })),
     activeEnvironmentId: state.activeEnvironmentId,
     globals: sanitizeRows(state.globals),
+    ...(state.settings !== undefined ? { settings: state.settings } : {}),
   }
 }
 
@@ -335,7 +471,7 @@ function persist() {
     } catch (error) {
       state.error = error instanceof Error ? error.message : String(error)
     }
-  }, 400)
+  }, settingNumber('autosaveDebounceMs'))
 }
 
 export function queueSecretSave(rowId: string, value: string) {
@@ -345,7 +481,7 @@ export function queueSecretSave(rowId: string, value: string) {
     writeSecret(rowId, value).catch((error) => {
       state.error = error instanceof Error ? error.message : String(error)
     })
-  }, 400)
+  }, settingNumber('secretSaveDebounceMs'))
 }
 
 export async function enableRowSecret(row: KeyValue): Promise<void> {
@@ -382,6 +518,7 @@ watch(
     state.environments,
     state.activeEnvironmentId,
     state.globals,
+    state.settings,
   ],
   () => {
     if (state.loaded && state.persistable) persist()
@@ -495,14 +632,14 @@ export function saveCurrentTo(collectionId: string, name: string) {
   if (!collection) return
   const snapshot: RequestModel = JSON.parse(JSON.stringify(currentRequest.value))
   snapshot.id = uid()
-  snapshot.name = name.trim() || 'Untitled request'
+  snapshot.name = name.trim() || settingString('defaultRequestName')
   collection.requests.push(snapshot)
   state.activeRequestId = snapshot.id
 }
 
 export function renameRequest(id: string, name: string) {
   const request = findRequest(id)
-  if (request) request.name = name.trim() || 'Untitled request'
+  if (request) request.name = name.trim() || settingString('defaultRequestName')
 }
 
 export function duplicateRequest(id: string) {

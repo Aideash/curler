@@ -15,26 +15,30 @@ const h = createHarness('upload policy')
 h.group('config parsing')
 
 h.expect('default upload cap', resolveMaxUploadBytes({}), DEFAULT_MAX_UPLOAD_MB * 1024 * 1024)
-h.expect('CURLER_MAX_UPLOAD_MB is honoured', resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: '8' }), 8 * 1024 * 1024)
-h.expect('bad upload cap is rejected', (() => {
-  try {
-    resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: 'nope' })
-    return false
-  } catch {
-    return true
-  }
-})(), true)
+h.expect(
+  'CURLER_MAX_UPLOAD_MB is honoured',
+  resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: '8' }),
+  8 * 1024 * 1024,
+)
+h.expect(
+  'bad upload cap is rejected',
+  (() => {
+    try {
+      resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: 'nope' })
+      return false
+    } catch {
+      return true
+    }
+  })(),
+  true,
+)
 
 h.expect(
   'tilde roots expand',
   parseUploadRootList('~/uploads', {})[0],
   path.join(os.homedir(), 'uploads'),
 )
-h.expect(
-  'comma-separated roots',
-  parseUploadRootList('/tmp/a, /tmp/b', {}).length,
-  2,
-)
+h.expect('comma-separated roots', parseUploadRootList('/tmp/a, /tmp/b', {}).length, 2)
 
 h.expect('policy carries part cap', resolveUploadPolicy({}).maxFileParts, MAX_MULTIPART_FILE_PARTS)
 

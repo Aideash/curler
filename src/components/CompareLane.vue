@@ -21,7 +21,7 @@ import {
   sendLane,
   type Lane,
 } from '../lib/compare'
-import { state } from '../lib/store'
+import { state, settingNumber } from '../lib/store'
 import { HTTP_METHODS, type HttpMethod, type RequestModel } from '../types'
 
 const props = defineProps<{
@@ -94,7 +94,10 @@ async function copyBody() {
     await copyText(displayBody.value)
     copied.value = true
     clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => (copied.value = false), 1600)
+    copiedTimer = setTimeout(
+      () => (copied.value = false),
+      settingNumber('copiedFeedbackDurationMs'),
+    )
   } catch {
     copied.value = false
   }

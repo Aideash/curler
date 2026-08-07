@@ -12,12 +12,12 @@ import {
   renameRequest,
   reorderRequest,
   selectRequest,
+  settingBoolean,
   state,
 } from '../lib/store'
 import { describeIssues, requestVariableIssues } from '../lib/vars'
 import { useReorderList } from '../composables/useReorderList'
 import type { EditableScope } from '../types'
-import { featureFlags } from '../lib/settings.ts'
 import RestoreBackupDialog from './RestoreBackupDialog.vue'
 
 const emit = defineEmits<{ manageVariables: [scope?: EditableScope] }>()
@@ -46,27 +46,13 @@ const renameValue = ref('')
 /** The control that opened the rename field, to hand focus back to. */
 let renameOrigin: HTMLElement | null = null
 
-const RAIL_KEY = 'curler.sidebar-collapsed'
-const railed = ref(readRailed())
+const railed = ref(settingBoolean('sidebarCollapsed'))
 const root = ref<HTMLElement | null>(null)
 /** Keep in sync with the overlay breakpoint in this component's styles. */
 const overlaying = window.matchMedia('(max-width: 750px)')
 
-function readRailed(): boolean {
-  try {
-    return localStorage.getItem(RAIL_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
 function setRailed(value: boolean) {
   railed.value = value
-  try {
-    localStorage.setItem(RAIL_KEY, value ? '1' : '0')
-  } catch {
-    // A sidebar that forgets its width is survivable.
-  }
 }
 
 function toggleRail() {
@@ -297,6 +283,7 @@ const {
               {{ collection.name }}
             </span>
             <button
+              v-if="settingBoolean('showCollectionEditIcons')"
               class="ghost tiny"
               title="Rename collection"
               @click="startRename(collection.id, collection.name)"
@@ -393,7 +380,7 @@ const {
               </button>
               <span class="row-actions">
                 <button
-                  v-if="featureFlags.showRequestEditIcons"
+                  v-if="settingBoolean('showRequestEditIcons')"
                   class="ghost tiny"
                   title="Rename"
                   @click.stop="startRename(request.id, request.name)"

@@ -10,6 +10,7 @@ import {
   responseByteLabel,
   statusClass as statusClassFor,
 } from '../lib/response'
+import { settingNumber } from '../lib/store'
 import type { BuildTrace } from '../lib/vars'
 import type { HttpResponse } from '../types'
 
@@ -54,7 +55,10 @@ async function copyBody() {
     await copyText(displayBody.value)
     copied.value = true
     clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => (copied.value = false), 1600)
+    copiedTimer = setTimeout(
+      () => (copied.value = false),
+      settingNumber('copiedFeedbackDurationMs'),
+    )
   } catch {
     copied.value = false
   }

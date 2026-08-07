@@ -29,6 +29,7 @@ import {
   isScratch,
   replaceCurrent,
   saveCurrentTo,
+  settingNumber,
   state,
   variables,
   variableSet,
@@ -76,7 +77,12 @@ function flash(message: string, kind: 'ok' | 'error' = 'ok') {
   toast.value = message
   toastKind.value = kind
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => (toast.value = ''), kind === 'error' ? 6000 : 2200)
+  toastTimer = setTimeout(
+    () => (toast.value = ''),
+    kind === 'error'
+      ? settingNumber('toastDurationErrorMs')
+      : settingNumber('toastDurationSuccessMs'),
+  )
 }
 
 function onResponseFocus() {

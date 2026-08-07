@@ -15,6 +15,14 @@ export default tseslint.config(
   {
     rules: {
       'prettier/prettier': ['warn', { endOfLine: 'lf', singleQuote: true }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   {

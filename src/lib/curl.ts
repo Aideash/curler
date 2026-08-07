@@ -1,12 +1,7 @@
 import { parse as shellParse } from 'shell-quote'
-import {
-  emptyKeyValue,
-  newRequest,
-  uid,
-  type HttpMethod,
-  type KeyValue,
-  type RequestModel,
-} from '../types'
+import { emptyKeyValue, uid, type HttpMethod, type KeyValue, type RequestModel } from '../types'
+import { newRequest } from './store'
+import { emptyWorkspace, getSettingNumber } from './settings'
 import { parseGraphqlBody, buildGraphqlBody } from './graphql'
 import { resolve, resolveUrl, type VariableSet } from './vars'
 import { TERMINAL_FLAGS, terminalFlagArgs, terminalFlagBySpelling } from './terminalFlags'
@@ -753,7 +748,7 @@ export function toCurl(
 
   if (request.options.followRedirects) parts.push('-L')
   if (request.options.insecure) parts.push('-k')
-  if (request.options.timeoutSecs !== 30) {
+  if (request.options.timeoutSecs !== getSettingNumber('defaultTimeoutSecs', emptyWorkspace())) {
     parts.push('-m', String(request.options.timeoutSecs))
   }
 

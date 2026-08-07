@@ -127,7 +127,9 @@ function readBodyBuffer(request, maxBytes) {
       length += chunk.length
       if (length > maxBytes) {
         request.destroy()
-        reject(new Error(`File exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit.`))
+        reject(
+          new Error(`File exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit.`),
+        )
         return
       }
       chunks.push(chunk)

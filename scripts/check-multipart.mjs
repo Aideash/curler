@@ -44,35 +44,25 @@ h.expect(
 
 h.expect(
   'allowlist advisory warning',
-  validateMultipartPartValue(
-    '@/etc/passwd',
-    {},
-    false,
-    {
-      maxUploadMb: 32,
-      hasAllowlist: true,
-      allowRoots: ['/tmp/uploads'],
-      denyRoots: [],
-      stagingRoot: '/home/user/.curler/upload-staging',
-    },
-  )?.message,
+  validateMultipartPartValue('@/etc/passwd', {}, false, {
+    maxUploadMb: 32,
+    hasAllowlist: true,
+    allowRoots: ['/tmp/uploads'],
+    denyRoots: [],
+    stagingRoot: '/home/user/.curler/upload-staging',
+  })?.message,
   'File path not permitted: /etc/passwd',
 )
 
 h.expect(
   'staging paths bypass allowlist in the UI',
-  validateMultipartPartValue(
-    '@/home/user/.curler/upload-staging/abc-note.txt',
-    {},
-    false,
-    {
-      maxUploadMb: 32,
-      hasAllowlist: true,
-      allowRoots: ['/tmp/uploads'],
-      denyRoots: [],
-      stagingRoot: '/home/user/.curler/upload-staging',
-    },
-  ),
+  validateMultipartPartValue('@/home/user/.curler/upload-staging/abc-note.txt', {}, false, {
+    maxUploadMb: 32,
+    hasAllowlist: true,
+    allowRoots: ['/tmp/uploads'],
+    denyRoots: [],
+    stagingRoot: '/home/user/.curler/upload-staging',
+  }),
   null,
 )
 

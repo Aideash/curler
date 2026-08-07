@@ -1,6 +1,13 @@
 import { reactive } from 'vue'
-import { newRequest, uid, type Environment, type RequestModel } from '../types'
-import { buildVariableSet, collectionOfRequest, environmentById, state } from './store'
+import { uid, type Environment, type RequestModel } from '../types'
+import {
+  buildVariableSet,
+  collectionOfRequest,
+  environmentById,
+  newRequest,
+  settingNumber,
+  state,
+} from './store'
 import { performSend, type SendOutcome } from './send'
 import type { VariableSet } from './vars'
 
@@ -24,7 +31,9 @@ export interface Lane {
   sentSignature: string | null
 }
 
-export const MAX_LANES = 4
+export function maxLanes(): number {
+  return settingNumber('compareMaxLanes')
+}
 
 const LABELS = ['A', 'B', 'C', 'D']
 
@@ -65,7 +74,7 @@ function makeLane(request: RequestModel, sourceRequestId: string | null): Lane {
 }
 
 export function addLane(seed?: RequestModel, sourceRequestId: string | null = null) {
-  if (compare.lanes.length >= MAX_LANES) return
+  if (compare.lanes.length >= maxLanes()) return
   compare.lanes.push(makeLane(seed ?? newRequest(), sourceRequestId))
   relabel()
 }
@@ -81,7 +90,7 @@ export function removeLane(id: string) {
 
 /** Copies a lane's request and environment, which is the quickest way to a pair that differs in one field. */
 export function duplicateLane(id: string) {
-  if (compare.lanes.length >= MAX_LANES) return
+  if (compare.lanes.length >= maxLanes()) return
   const index = compare.lanes.findIndex((lane) => lane.id === id)
   if (index === -1) return
 

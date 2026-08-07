@@ -2,14 +2,20 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 import { resolveWorkspaceHome } from '../config.mjs'
+import { getSetting } from '../settings.defaults.mjs'
 
 export const WORKSPACE_DIR = resolveWorkspaceHome()
 export const WORKSPACE_FILE = path.join(WORKSPACE_DIR, 'workspace.json')
 export const BACKUP_DIR = path.join(WORKSPACE_DIR, 'backups')
 
 /** Keep enough history to cover a working day of periodic snapshots. */
-const MAX_BACKUPS = 40
-const BACKUP_INTERVAL_MS = 5 * 60 * 1000
+function maxBackups() {
+  return getSetting('workspaceBackupsRetained')
+}
+
+function backupIntervalMs() {
+  return getSetting('workspaceBackupIntervalMs')
+}
 
 /** Matches `workspace-2026-08-03T13-24-05-123Z[-shrunk].json` — no path segments. */
 const BACKUP_NAME = /^workspace-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(-shrunk)?\.json$/
@@ -88,7 +94,7 @@ async function prune() {
     const names = (await fs.readdir(BACKUP_DIR))
       .filter((name) => name.startsWith('workspace-'))
       .sort()
-    for (const stale of names.slice(0, -MAX_BACKUPS)) {
+    for (const stale of names.slice(0, -maxBackups())) {
       await fs.rm(path.join(BACKUP_DIR, stale), { force: true })
     }
   } catch {
@@ -117,7 +123,7 @@ async function backup(incoming) {
   const after = countRequests(incoming)
   const losingRequests = before !== null && after !== null && after < before
 
-  if (!losingRequests && (await newestBackupAge()) < BACKUP_INTERVAL_MS) return
+  if (!losingRequests && (await newestBackupAge()) < backupIntervalMs()) return
 
   await writeSnapshot(current, losingRequests ? '-shrunk' : '')
   await prune()

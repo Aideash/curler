@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { copyText } from '../lib/clipboard'
 import { diffLines, normalizeJson, toUnifiedText } from '../lib/diff'
+import { settingNumber } from '../lib/store'
 
 const props = defineProps<{
   left: string
@@ -55,7 +56,10 @@ async function copyDiff() {
     await copyText(toUnifiedText(result.value, props.leftLabel, props.rightLabel))
     copied.value = true
     clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => (copied.value = false), 1600)
+    copiedTimer = setTimeout(
+      () => (copied.value = false),
+      settingNumber('copiedFeedbackDurationMs'),
+    )
   } catch {
     copied.value = false
   }

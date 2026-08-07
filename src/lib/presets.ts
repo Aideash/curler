@@ -1,3 +1,5 @@
+import { emptyWorkspace, getSettingString } from './settings'
+
 /** Pre-filled name for a new environment variable, by far the most common one. */
 //export const DEFAULT_VARIABLE_NAME = 'API_KEY'
 export const DEFAULT_VARIABLE_NAME = undefined
@@ -62,7 +64,7 @@ export const HEADER_PRESETS: HeaderPreset[] = [
   { name: 'Accept-Encoding', value: 'gzip, deflate, br' },
   { name: 'Accept-Language', value: 'en-US,en;q=0.9' },
   { name: 'Cache-Control', value: 'no-cache' },
-  { name: 'User-Agent', value: 'curler/0.1' },
+  { name: 'User-Agent', value: getSettingString('defaultUserAgent', emptyWorkspace()) },
   { name: 'Cookie', value: '' },
   { name: 'Origin', value: '' },
   { name: 'Referer', value: '' },

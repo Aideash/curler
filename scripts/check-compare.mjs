@@ -62,7 +62,7 @@ const { modules, close } = await loadModules([
 
 const {
   compare,
-  MAX_LANES,
+  maxLanes,
   addLane,
   removeLane,
   duplicateLane,
@@ -151,9 +151,9 @@ expect('the last two lanes cannot be removed', compare.lanes.length, 2)
 
 addLane()
 addLane()
-expect('lanes can be added up to the limit', compare.lanes.length, MAX_LANES)
+expect('lanes can be added up to the limit', compare.lanes.length, maxLanes())
 addLane()
-expect('and no further', compare.lanes.length, MAX_LANES)
+expect('and no further', compare.lanes.length, maxLanes())
 expect(
   'labels stay positional',
   compare.lanes.map((lane) => lane.label),

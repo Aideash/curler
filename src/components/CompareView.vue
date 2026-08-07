@@ -14,7 +14,7 @@ import { navigate } from '../composables/useRoute'
 import { compareHeaders, compareMeta } from '../lib/diff'
 import { isJsonResponse, prettyBody } from '../lib/response'
 import {
-  MAX_LANES,
+  maxLanes,
   addLane,
   compare,
   ensureLanes,
@@ -31,17 +31,17 @@ import {
   type CurlCopyMode,
 } from '../lib/curl'
 import { describeIssues, inspect, resolveUrl } from '../lib/vars'
-import { state } from '../lib/store'
+import { settingBoolean, settingString, state } from '../lib/store'
 import type { EditableScope, RequestModel } from '../types'
 
 type Tab = 'body' | 'headers' | 'meta'
-const tab = ref<Tab>('body')
+const tab = ref<Tab>(settingString('compareActiveTab') as Tab)
 
-const diff = ref(false)
+const diff = ref(settingBoolean('compareShowDiff'))
 /** JSON key sorting. On by default: it is the difference between a readable diff and noise. */
-const normalize = ref(true)
+const normalize = ref(settingBoolean('compareNormalizeJson'))
 /** Show only the rows that differ, on the headers and meta tabs. */
-const differencesOnly = ref(false)
+const differencesOnly = ref(settingBoolean('compareDifferencesOnly'))
 
 const editingId = ref<string | null>(null)
 const showImport = ref(false)
@@ -49,7 +49,7 @@ const showVariables = ref(false)
 const variablesScope = ref<EditableScope>('collection')
 
 const lanes = computed(() => compare.lanes)
-const canAdd = computed(() => lanes.value.length < MAX_LANES)
+const canAdd = computed(() => lanes.value.length < maxLanes())
 const anySending = computed(() => lanes.value.some((lane) => lane.sending))
 const anySendable = computed(() => lanes.value.some((lane) => lane.request.url.trim()))
 
@@ -193,7 +193,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         icon="add"
         label="Lane"
         :disabled="!canAdd"
-        :title="canAdd ? 'Add a lane' : `The limit is ${MAX_LANES} lanes`"
+        :title="canAdd ? 'Add a lane' : `The limit is ${maxLanes()} lanes`"
         @click="addLane()"
       />
       <TitleBarButton

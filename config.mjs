@@ -90,9 +90,7 @@ export function resolveMaxUploadBytes(env = process.env) {
   if (!raw) return DEFAULT_MAX_UPLOAD_MB * 1024 * 1024
   const mb = Number(raw)
   if (!Number.isFinite(mb) || mb < 1) {
-    throw new Error(
-      `CURLER_MAX_UPLOAD_MB must be a number between 1 and 2048 (got "${raw}").`,
-    )
+    throw new Error(`CURLER_MAX_UPLOAD_MB must be a number between 1 and 2048 (got "${raw}").`)
   }
   return Math.min(mb, 2048) * 1024 * 1024
 }
@@ -101,7 +99,7 @@ export function resolveMaxUploadBytes(env = process.env) {
  * @param {string | undefined} envValue Comma-separated directory roots.
  * @param {Record<string, string | undefined>} [env]
  */
-export function parseUploadRootList(envValue, env = process.env) {
+export function parseUploadRootList(envValue, _env = process.env) {
   if (!envValue?.trim()) return []
   return envValue
     .split(',')

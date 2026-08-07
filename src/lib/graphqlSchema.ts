@@ -4,7 +4,8 @@ import {
   type GraphQLSchema,
   type IntrospectionQuery,
 } from 'graphql'
-import { newRequest, type RequestModel } from '../types'
+import { type RequestModel } from '../types'
+import { newRequest } from './store'
 import { performSend } from './send'
 import { resolveUrl, type VariableSet } from './vars'
 

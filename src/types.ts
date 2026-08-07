@@ -68,11 +68,6 @@ export interface RequestOptions {
   maxResponseMb: number
 }
 
-export const DEFAULT_MAX_RESPONSE_MB = 1
-export const DEFAULT_TIMEOUT_SECS = 30
-export const DEFAULT_FOLLOW_REDIRECTS = true
-export const DEFAULT_INSECURE = false
-
 /**
  * Flags that only mean something to the curl binary in a terminal. They are
  * appended to "Copy as curl" and are deliberately inert for requests sent from
@@ -110,6 +105,61 @@ export interface Environment {
   variables: KeyValue[]
 }
 
+export type SettingName =
+  // UI
+  | 'showRequestEditIcons'
+  | 'showCollectionEditIcons'
+  | 'themePreference'
+  | 'sidebarCollapsed'
+  | 'graphqlArgInsertMode'
+  | 'graphqlSchemaSort'
+  // Request defaults (applied when creating a new request)
+  | 'defaultTimeoutSecs'
+  | 'defaultFollowRedirects'
+  | 'defaultInsecure'
+  | 'defaultMaxResponseMb'
+  | 'defaultHttpMethod'
+  | 'defaultRequestName'
+  | 'defaultUserAgent'
+  | 'multipartFilePicker'
+  // Page-load defaults (toggles on the page change active state, not these)
+  | 'compareNormalizeJson'
+  | 'compareShowDiff'
+  | 'compareDifferencesOnly'
+  | 'compareActiveTab'
+  | 'graphqlShowArgs'
+  | 'requestDetailsExpanded'
+  | 'defaultCurlCopyMode'
+  // Behaviour tuning
+  | 'autosaveDebounceMs'
+  | 'secretSaveDebounceMs'
+  | 'workspaceBackupIntervalMs'
+  | 'workspaceBackupsRetained'
+  | 'compareMaxLanes'
+  | 'diffMaxChars'
+  | 'diffMaxCells'
+  | 'mediaPreviewMaxMb'
+  | 'toastDurationSuccessMs'
+  | 'toastDurationErrorMs'
+  | 'copiedFeedbackDurationMs'
+  // Request / engine limits
+  | 'maxRedirects'
+  | 'requestTimeoutMaxSecs'
+  | 'requestMaxResponseMbMax'
+
+export type SettingValue = boolean | number | string | null
+
+export interface Setting {
+  name: SettingName
+  type: 'boolean' | 'number' | 'string'
+  default: SettingValue
+  userFacing: boolean
+  title?: string
+  description?: string
+}
+
+export type UserSetting = Record<SettingName, SettingValue>
+
 export interface Workspace {
   /** Stable id for keychain entries; survives CURLER_HOME moves. */
   workspaceId?: string
@@ -118,6 +168,8 @@ export interface Workspace {
   activeEnvironmentId: string | null
   /** Variables visible to every request, whatever the environment. */
   globals: KeyValue[]
+  /** User overrides for app settings; omitted until the user changes something. */
+  settings?: UserSetting
 }
 
 /**
@@ -235,30 +287,4 @@ export function uid(): string {
 
 export function emptyKeyValue(): KeyValue {
   return { id: uid(), name: '', value: '', enabled: true }
-}
-
-export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
-  return {
-    id: uid(),
-    name: 'Untitled request',
-    method: 'GET',
-    url: '',
-    headers: [],
-    body: {
-      mode: 'none',
-      text: '',
-      form: [],
-      multipart: [],
-      graphql: { query: '', variables: [] },
-    },
-    options: {
-      followRedirects: DEFAULT_FOLLOW_REDIRECTS,
-      insecure: DEFAULT_INSECURE,
-      timeoutSecs: DEFAULT_TIMEOUT_SECS,
-      maxResponseMb: DEFAULT_MAX_RESPONSE_MB,
-    },
-    variables: [],
-    terminalFlags: {},
-    ...partial,
-  }
 }

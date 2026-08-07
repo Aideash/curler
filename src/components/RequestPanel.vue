@@ -15,7 +15,7 @@ import {
   terminalFlagArgs,
   type TerminalGroup,
 } from '../lib/terminalFlags'
-import { secretCache } from '../lib/store'
+import { secretCache, settingBoolean, settingNumber } from '../lib/store'
 import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
@@ -47,7 +47,12 @@ const props = withDefaults(
   { environmentName: 'none', graphqlTools: false, variableSet: undefined, collapsible: false },
 )
 
-const detailsExpanded = defineModel<boolean>('detailsExpanded', { default: true })
+const detailsExpanded = defineModel<boolean>('detailsExpanded', {
+  default: settingBoolean('requestDetailsExpanded'),
+})
+
+const timeoutMax = settingNumber('requestTimeoutMaxSecs')
+const responseMax = settingNumber('requestMaxResponseMbMax')
 
 const emit = defineEmits<{
   send: []
@@ -573,10 +578,10 @@ const flagPreview = computed(() =>
 
             <div v-else-if="request.body.mode === 'multipart'" class="form-body">
               <p class="faint">
-                Use <code>-F</code> when <code>@path</code> reads a file; use <code>str</code>
-                (<code>--form-string</code>) when <code>@</code> is literal. Attach copies a picked
-                file to CURLER_HOME staging as an absolute <code>@/path</code>. Modifiers:
-                <code>;type=</code> <code>;filename=</code>.
+                Use <code>-F</code> when <code>@path</code> reads a file; use
+                <code>str</code> (<code>--form-string</code>) when <code>@</code> is literal. Attach
+                copies a picked file to CURLER_HOME staging as an absolute <code>@/path</code>.
+                Modifiers: <code>;type=</code> <code>;filename=</code>.
                 <template v-if="serverCurrentDir">
                   Server cwd: <code>{{ serverCurrentDir }}</code
                   >.
@@ -589,7 +594,7 @@ const flagPreview = computed(() =>
                 :row-alerts="multipartRowAlerts"
                 reorderable
                 show-multipart-kind
-                show-file-picker
+                :show-file-picker="settingBoolean('multipartFilePicker')"
                 list-id="multipart-names"
                 id-prefix="multipart-part"
                 name-placeholder="Part"
@@ -688,7 +693,7 @@ const flagPreview = computed(() =>
                 v-model.number="request.options.timeoutSecs"
                 type="number"
                 min="1"
-                max="600"
+                :max="timeoutMax"
                 class="number"
               />
               <span>
@@ -702,7 +707,7 @@ const flagPreview = computed(() =>
                 v-model.number="request.options.maxResponseMb"
                 type="number"
                 min="1"
-                max="2048"
+                :max="responseMax"
                 class="number"
               />
               <span>

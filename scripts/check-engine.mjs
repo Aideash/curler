@@ -328,7 +328,7 @@ h.expect('a body under the cap is untouched', uncapped.truncated, false)
 h.expect('and arrives whole', uncapped.bytes, 2 * 1024 * 1024)
 
 const defaulted = await performRequest({ url: `${base}/`, method: 'GET', headers: [] })
-h.expect('the cap defaults to 10 MB', defaulted.diagnostics.maxResponseMb, 10)
+h.expect('the cap defaults to 1 MB', defaulted.diagnostics.maxResponseMb, 1)
 
 // -- Body policy -------------------------------------------------------------
 

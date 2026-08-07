@@ -29,6 +29,7 @@ import {
   type VariableDefinitionNode,
 } from 'graphql'
 import { uid, type GraphqlBody, type KeyValue } from '../types'
+import { emptyWorkspace, getSettingString } from './settings'
 
 export type RootOperation = 'query' | 'mutation' | 'subscription'
 
@@ -46,7 +47,7 @@ export function loadArgInsertMode(): ArgInsertMode {
   } catch {
     // sessionStorage unavailable
   }
-  return 'required-vars'
+  return getSettingString('graphqlArgInsertMode', emptyWorkspace()) as ArgInsertMode
 }
 
 export function saveArgInsertMode(mode: ArgInsertMode) {
@@ -69,7 +70,7 @@ export function loadSchemaExplorerSortMode(): SchemaExplorerSortMode {
   } catch {
     // sessionStorage unavailable
   }
-  return 'schema'
+  return getSettingString('graphqlSchemaSort', emptyWorkspace()) as SchemaExplorerSortMode
 }
 
 export function saveSchemaExplorerSortMode(mode: SchemaExplorerSortMode) {

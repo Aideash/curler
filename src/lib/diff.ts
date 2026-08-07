@@ -1,4 +1,5 @@
 import { contentTypeOf, formatBytes } from './response'
+import { emptyWorkspace, getSettingNumber } from './settings'
 import type { HttpResponse } from '../types'
 
 /**
@@ -61,15 +62,16 @@ export interface DiffResult {
   identical: boolean
 }
 
-/** Past this much text per side, normalising and aligning costs more than it is worth. */
-export const MAX_DIFF_CHARS = 1_000_000
+function diffMaxChars(): number {
+  return getSettingNumber('diffMaxChars', emptyWorkspace())
+}
 
-/**
- * The alignment step is O(n*m) in the lines that actually differ, so the cap is
- * on that product rather than on either side alone. Prefix and suffix trimming
- * usually keeps a large pair of near-identical responses well under it.
- */
-export const MAX_DIFF_CELLS = 4_000_000
+function diffMaxCells(): number {
+  return getSettingNumber('diffMaxCells', emptyWorkspace())
+}
+
+/** @deprecated Use diffMaxChars() — kept for check scripts that load this module. */
+export const MAX_DIFF_CHARS = diffMaxChars()
 
 function emptySummary(): DiffSummary {
   return { same: 0, added: 0, removed: 0, changed: 0 }
@@ -230,9 +232,9 @@ function alignMiddle(
 
 /** Line-level diff, aligned so the two columns can be rendered side by side. */
 export function diffLines(left: string, right: string): DiffResult {
-  if (left.length > MAX_DIFF_CHARS || right.length > MAX_DIFF_CHARS) {
+  if (left.length > diffMaxChars() || right.length > diffMaxChars()) {
     return skip(
-      `Too large to diff (over ${Math.round(MAX_DIFF_CHARS / 1000)} KB). Turn the diff off to read the responses side by side.`,
+      `Too large to diff (over ${Math.round(diffMaxChars() / 1000)} KB). Turn the diff off to read the responses side by side.`,
     )
   }
 
@@ -262,7 +264,7 @@ export function diffLines(left: string, right: string): DiffResult {
   const leftMiddle = leftLines.slice(prefix, leftLines.length - suffix)
   const rightMiddle = rightLines.slice(prefix, rightLines.length - suffix)
 
-  if (leftMiddle.length * rightMiddle.length > MAX_DIFF_CELLS) {
+  if (leftMiddle.length * rightMiddle.length > diffMaxCells()) {
     return skip(
       'Too different to align line by line. Turn the diff off to read the responses side by side.',
     )

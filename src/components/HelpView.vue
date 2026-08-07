@@ -95,7 +95,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             </li>
             <li>
               <strong>Options</strong> — follow redirects, skip TLS verification, set a timeout, cap
-              response size (10 MB by default), and configure terminal-only curl flags for copy
+              response size (1 MB by default), and configure terminal-only curl flags for copy
               commands.
             </li>
           </ul>
@@ -347,8 +347,9 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             Backups are kept in <code class="mono">backups/</code> alongside the workspace, with the
-            newest 40 retained. Your theme choice is kept in the browser’s
-            <code class="mono">localStorage</code>, separate from the workspace.
+            newest 40 retained. Your theme is cached in the browser for the first
+            paint, then kept in workspace <code class="mono">settings</code> alongside your
+            collections.
           </p>
         </section>
       </article>
