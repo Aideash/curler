@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, TransitionGroup } from 'vue'
 import VariableIssues from './VariableIssues.vue'
-import { emptyKeyValue, type KeyValue } from '../types'
+import { emptyKeyValue, type KeyValue, type MultipartPart } from '../types'
 import {
   disableRowSecret,
   enableRowSecret,
@@ -10,6 +10,7 @@ import {
   secretCache,
 } from '../lib/store'
 import { braceBareReferences, inspect } from '../lib/vars'
+import { stageLocalFile } from '../lib/backend'
 import { reorderItems, useReorderList } from '../composables/useReorderList'
 
 const rows = defineModel<KeyValue[]>('rows', { required: true })
@@ -41,6 +42,12 @@ const props = withDefaults(
     reorderable?: boolean
     /** When set, rows whose name matches a key render a select of enum values. */
     enumOptions?: Record<string, string[]>
+    /** Per-row advisory errors (e.g. multipart path warnings). Does not disable the row. */
+    rowAlerts?: Record<string, { message: string }>
+    /** Per-row -F vs --form-string toggle for multipart parts. */
+    showMultipartKind?: boolean
+    /** Offer a file picker that stages to disk and fills `@/abs/path` (-F rows only). */
+    showFilePicker?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -54,6 +61,9 @@ const props = withDefaults(
     allowSecrets: false,
     reorderable: false,
     enumOptions: () => ({}),
+    rowAlerts: () => ({}),
+    showMultipartKind: false,
+    showFilePicker: false,
   },
 )
 
@@ -187,6 +197,7 @@ const issues = computed(() => {
   const byRow = new Map<string, ReturnType<typeof inspect>>()
   if (!props.resolves) return byRow
   for (const row of rows.value) {
+    if (props.rowAlerts[row.id]) continue
     const found = inspect(row.value, props.variables)
     if (found.length) byRow.set(row.id, found)
   }
@@ -222,6 +233,45 @@ function onEnumSelect(row: KeyValue, event: Event) {
   ensureTrailingRow()
 }
 
+function multipartTextOnly(row: KeyValue): boolean {
+  return Boolean((row as MultipartPart).textOnly)
+}
+
+function setMultipartTextOnly(row: KeyValue, textOnly: boolean) {
+  ;(row as MultipartPart).textOnly = textOnly || undefined
+}
+
+const fileInput = ref<HTMLInputElement | null>(null)
+const filePickTarget = ref<KeyValue | null>(null)
+const stagingFile = ref(false)
+
+function openFilePicker(row: KeyValue) {
+  if (stagingFile.value || multipartTextOnly(row)) return
+  filePickTarget.value = row
+  fileInput.value?.click()
+}
+
+async function onFilePicked(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  const row = filePickTarget.value
+  filePickTarget.value = null
+  if (!file || !row) return
+
+  stagingFile.value = true
+  try {
+    const stagedPath = await stageLocalFile(file)
+    row.defined = true
+    row.value = `@${stagedPath}`
+    ensureTrailingRow()
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : String(error))
+  } finally {
+    stagingFile.value = false
+  }
+}
+
 function onListDrop(event: DragEvent) {
   if (props.reorderable) drop(LIST, event)
 }
@@ -234,10 +284,27 @@ ensureTrailingRow()
 </script>
 
 <template>
-  <div ref="root" class="kv" :class="{ 'with-secrets': allowSecrets, reorderable }">
+  <div
+    ref="root"
+    class="kv"
+    :class="{
+      'with-secrets': allowSecrets,
+      'with-multipart-kind': showMultipartKind,
+      reorderable,
+    }"
+  >
     <datalist :id="listId">
       <option v-for="option in nameOptions" :key="option" :value="option" />
     </datalist>
+
+    <input
+      ref="fileInput"
+      type="file"
+      class="kv-file-input"
+      tabindex="-1"
+      aria-hidden="true"
+      @change="onFilePicked"
+    />
 
     <component
       :is="listRoot"
@@ -295,6 +362,32 @@ ensureTrailingRow()
                   : 'Needs a value before it can be used'
           "
         />
+        <div
+          v-if="showMultipartKind && !isBlank(row)"
+          class="kv-kind"
+          role="group"
+          :aria-label="`Part ${row.name.trim() || 'type'}: curl -F or --form-string`"
+        >
+          <button
+            type="button"
+            class="kv-kind-btn"
+            :class="{ active: !multipartTextOnly(row) }"
+            title="curl -F: @path reads a file from disk"
+            @click="setMultipartTextOnly(row, false)"
+          >
+            -F
+          </button>
+          <button
+            type="button"
+            class="kv-kind-btn"
+            :class="{ active: multipartTextOnly(row) }"
+            title="curl --form-string: value is literal text, @ is not special"
+            @click="setMultipartTextOnly(row, true)"
+          >
+            str
+          </button>
+        </div>
+        <span v-else-if="showMultipartKind" class="kv-kind-spacer" aria-hidden="true" />
         <input
           :id="`${idPrefix}-${index}-name`"
           v-model="row.name"
@@ -306,7 +399,17 @@ ensureTrailingRow()
           @focus="selectDefaultName(row, $event)"
           @input="ensureTrailingRow"
         />
-        <div class="kv-value">
+        <div class="kv-value" :class="{ 'with-file': showFilePicker && !multipartTextOnly(row) }">
+          <button
+            v-if="showFilePicker && !isBlank(row) && !multipartTextOnly(row)"
+            type="button"
+            class="ghost kv-file"
+            :disabled="stagingFile"
+            title="Pick a file — copied to CURLER_HOME staging as an @/path"
+            @click="openFilePicker(row)"
+          >
+            <span class="material-icons sm">attach_file</span>
+          </button>
           <select
             v-if="enumChoices(row)"
             :id="`${idPrefix}-${index}-value`"
@@ -330,16 +433,21 @@ ensureTrailingRow()
             spellcheck="false"
             :class="{
               warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
+              error: Boolean(rowAlerts[row.id]),
             }"
+            :title="rowAlerts[row.id]?.message"
             @input="onValueInput(row, $event)"
             @keydown.enter="onValueInput(row, $event)"
           />
           <VariableIssues
-            v-if="!enumChoices(row)"
+            v-if="!enumChoices(row) && !rowAlerts[row.id]"
             class="kv-warn"
             :issues="issues.get(row.id) ?? []"
             @fix="(name) => braceRowReference(row, name)"
           />
+          <span v-else-if="rowAlerts[row.id]" class="kv-alert" :title="rowAlerts[row.id].message">
+            {{ rowAlerts[row.id].message }}
+          </span>
         </div>
         <button
           v-if="allowSecrets"
@@ -375,7 +483,7 @@ ensureTrailingRow()
 .kv {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0px;
   overflow-x: auto;
 }
 
@@ -390,19 +498,36 @@ ensureTrailingRow()
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
   gap: 6px;
   align-items: center;
-  max-height: 29px; /* font-size 12.5, padding 6px + border 1px top and bottom - rounded to prevent fractional pixel anomalies */
+  padding: 2px 0px;
+  max-height: 33px; /* font-size 12.5, padding (2px + 6px) + border 1px top and bottom - rounded to prevent fractional pixel anomalies */
+}
+
+.kv.with-multipart-kind .kv-row {
+  grid-template-columns: 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px;
 }
 
 .kv.reorderable .kv-row {
   grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px;
 }
 
+.kv.reorderable.with-multipart-kind .kv-row {
+  grid-template-columns: 22px 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px;
+}
+
 .kv.with-secrets .kv-row {
   grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
 }
 
+.kv.with-secrets.with-multipart-kind .kv-row {
+  grid-template-columns: 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px;
+}
+
 .kv.reorderable.with-secrets .kv-row {
   grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
+.kv.reorderable.with-secrets.with-multipart-kind .kv-row {
+  grid-template-columns: 22px 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px;
 }
 
 .drag-handle {
@@ -460,6 +585,10 @@ ensureTrailingRow()
   opacity: 0.3;
 }
 
+.kv-toggle:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
 /* An untouched row reads as inactive until there is something in it. */
 .kv-row.blank input:not(:focus) {
   opacity: 0.62;
@@ -487,14 +616,78 @@ ensureTrailingRow()
   margin-left: 80px;
 }
 
+.kv-kind {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.kv-kind-btn {
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: none;
+  border-radius: 0;
+}
+
+.kv-kind-btn + .kv-kind-btn {
+  border-left: 1px solid var(--border);
+}
+
+.kv-kind-btn.active {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.kv-kind-btn:hover:not(.active) {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.kv-kind-spacer {
+  width: 74px;
+}
+
 .kv-value {
   position: relative;
   display: flex;
   align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
-.kv-value input {
-  width: 100%;
+.kv-value input,
+.kv-value .kv-enum {
+  flex: 1;
+  min-width: 0;
+}
+
+.kv-file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kv-file {
+  flex-shrink: 0;
+  padding: 2px;
+  line-height: 1;
+  color: var(--text-faint);
+}
+
+.kv-file:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.kv-file:disabled {
+  opacity: 0.4;
+  cursor: wait;
 }
 
 .kv-enum {
@@ -515,12 +708,31 @@ ensureTrailingRow()
   border-color: var(--amber-border);
 }
 
+.kv-value input.error {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+}
+
 .kv-warn {
   position: absolute;
   right: 8px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--amber);
+  pointer-events: none;
+  background: var(--bg-input);
+  padding-left: 6px;
+}
+
+.kv-alert {
+  position: absolute;
+  right: 8px;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--red);
   pointer-events: none;
   background: var(--bg-input);
   padding-left: 6px;

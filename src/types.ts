@@ -11,7 +11,24 @@ export const HTTP_METHODS: HttpMethod[] = [
   'TRACE',
 ]
 
-export type BodyMode = 'none' | 'json' | 'text' | 'form' | 'graphql'
+export type BodyMode = 'none' | 'json' | 'text' | 'form' | 'multipart' | 'graphql'
+
+/** One part of a multipart/form-data body, in curl `-F` syntax. */
+export interface MultipartPart {
+  id: string
+  name: string
+  /** Plain text, or curl file ref `@path` (Phase 2 reads files from disk). */
+  value: string
+  enabled: boolean
+  secret?: boolean
+  defined?: boolean
+  /** curl `;filename=` modifier */
+  filename?: string
+  /** curl `;type=` modifier */
+  contentType?: string
+  /** From `--form-string`: `@` is literal text, not a file path. */
+  textOnly?: boolean
+}
 
 export interface KeyValue {
   id: string
@@ -36,6 +53,8 @@ export interface RequestBody {
   text: string
   /** Field list for the `form` mode (application/x-www-form-urlencoded). */
   form: KeyValue[]
+  /** Parts for the `multipart` mode (multipart/form-data, curl `-F`). */
+  multipart: MultipartPart[]
   /** Query and variables for the `graphql` mode. */
   graphql: GraphqlBody
 }
@@ -225,7 +244,13 @@ export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
     method: 'GET',
     url: '',
     headers: [],
-    body: { mode: 'none', text: '', form: [], graphql: { query: '', variables: [] } },
+    body: {
+      mode: 'none',
+      text: '',
+      form: [],
+      multipart: [],
+      graphql: { query: '', variables: [] },
+    },
     options: {
       followRedirects: DEFAULT_FOLLOW_REDIRECTS,
       insecure: DEFAULT_INSECURE,

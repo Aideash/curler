@@ -36,6 +36,9 @@ Settings come from a `.env` at the project root. Every one is optional.
 | `API_PORT` | `5174` | Port the API server binds, and the port Vite proxies `/api` to |
 | `UI_PORT` | `5173` | Port the Vite dev server binds |
 | `CURLER_HOME` | `~/.curler` | Directory holding the workspace and its backups |
+| `CURLER_MAX_UPLOAD_MB` | `32` | Max size per file part and total multipart payload |
+| `CURLER_UPLOAD_ALLOW` | unset | Optional comma-separated directory roots; `@path` files must resolve under one (after `realpath`) |
+| `CURLER_UPLOAD_DENY` | unset | Optional comma-separated directory roots; deny wins over allow |
 | `CURLER_DEBUG` | unset | `1` logs every request to the terminal |
 
 ```bash
@@ -437,5 +440,13 @@ control, explicit redirect handling, and accurate timings.
 `.npmrc` points at the corporate Artifactory mirror, matching the other projects
 on this machine.
 
-Multipart bodies (`curl -F`) are not supported yet. Importing a command that uses
-`-F` converts the fields to a URL-encoded body and tells you it did so.
+Multipart bodies (`curl -F`) use the **Multipart** body tab. File parts use `@path` or curl's
+`<path` syntax; `--form-string` (`str`) keeps `@` literal. The attach button copies a picked
+file into `CURLER_HOME/upload-staging/` and fills in the absolute `@/path` — only the path is
+saved in your workspace. Modifiers `;type=` and `;filename=` round-trip; `;headers=` is ignored
+with a warning. Relative paths resolve from the server cwd (shown in the editor). Invalid paths
+warn in red but do not block send or Copy-as-curl.
+
+Optional `CURLER_UPLOAD_ALLOW` / `CURLER_UPLOAD_DENY` restrict which paths the server will read
+(staging files are always allowed). `CURLER_MAX_UPLOAD_MB` caps each file part and the total
+multipart payload — separate from the per-request response cap in Options.

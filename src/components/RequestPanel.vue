@@ -21,6 +21,13 @@ import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
 import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { type CurlCopyMode } from '../lib/curl'
+import {
+  mergePathCheckAlerts,
+  multipartPathsToCheck,
+  type UploadPolicy,
+  validateMultipartPartValue,
+} from '../lib/multipart'
+import { checkMultipartPaths, readCurrentDir, readUploadPolicy } from '../lib/backend'
 import { HTTP_METHODS, uid, type HttpMethod, type BodyMode, type RequestModel } from '../types'
 import type { GraphQLSchema } from 'graphql'
 
@@ -60,6 +67,73 @@ const graphqlSchemaValidity = ref<{ valid: boolean; message: string; checked: bo
   message: '',
   checked: false,
 })
+
+const multipartLocalAlerts = computed(() => {
+  if (request.value.body.mode !== 'multipart') return {}
+  const alerts: Record<string, { message: string }> = {}
+  for (const part of request.value.body.multipart) {
+    if (!part.enabled || !part.name.trim() || !part.value.trim()) continue
+    const issue = validateMultipartPartValue(
+      part.value,
+      props.variables,
+      part.textOnly,
+      uploadPolicy.value,
+    )
+    if (issue) alerts[part.id] = issue
+  }
+  return alerts
+})
+
+const multipartPathAlerts = ref<Record<string, { message: string }>>({})
+let multipartPathCheckGeneration = 0
+
+watch(
+  () =>
+    request.value.body.mode === 'multipart'
+      ? multipartPathsToCheck(request.value.body.multipart, props.variables)
+      : [],
+  async (items) => {
+    const generation = ++multipartPathCheckGeneration
+    if (!items.length) {
+      multipartPathAlerts.value = {}
+      return
+    }
+    try {
+      const checked = await checkMultipartPaths(items)
+      if (generation === multipartPathCheckGeneration) {
+        multipartPathAlerts.value = checked
+      }
+    } catch {
+      if (generation === multipartPathCheckGeneration) {
+        multipartPathAlerts.value = {}
+      }
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+const multipartRowAlerts = computed(() =>
+  mergePathCheckAlerts(multipartLocalAlerts.value, multipartPathAlerts.value),
+)
+
+const serverCurrentDir = ref<string | null>(null)
+const uploadPolicy = ref<UploadPolicy | null>(null)
+
+watch(
+  () => request.value.body.mode,
+  async (mode) => {
+    if (mode !== 'multipart') return
+    try {
+      serverCurrentDir.value = await readCurrentDir()
+      uploadPolicy.value = await readUploadPolicy()
+    } catch {
+      serverCurrentDir.value = null
+      uploadPolicy.value = null
+    }
+  },
+  { immediate: true },
+)
+
 const graphqlSchema = shallowRef<GraphQLSchema | null>(null)
 const validatingSchema = ref(false)
 
@@ -111,6 +185,7 @@ const BODY_MODES: { value: BodyMode; label: string }[] = [
   { value: 'json', label: 'JSON' },
   { value: 'text', label: 'Raw' },
   { value: 'form', label: 'Form' },
+  { value: 'multipart', label: 'Multipart' },
   { value: 'graphql', label: 'GraphQL' },
 ]
 
@@ -481,7 +556,7 @@ const flagPreview = computed(() =>
             </div>
 
             <p v-if="request.body.mode === 'none'" class="empty">
-              This request has no body. Pick JSON, Raw, Form or GraphQL to add one.
+              This request has no body. Pick JSON, Raw, Form, Multipart or GraphQL to add one.
             </p>
 
             <div v-else-if="request.body.mode === 'form'" class="form-body">
@@ -489,9 +564,36 @@ const flagPreview = computed(() =>
                 :key="editorKey"
                 v-model:rows="request.body.form"
                 :variables="variables"
+                reorderable
                 list-id="form-names"
                 id-prefix="form-field"
                 name-placeholder="Field"
+              />
+            </div>
+
+            <div v-else-if="request.body.mode === 'multipart'" class="form-body">
+              <p class="faint">
+                Use <code>-F</code> when <code>@path</code> reads a file; use <code>str</code>
+                (<code>--form-string</code>) when <code>@</code> is literal. Attach copies a picked
+                file to CURLER_HOME staging as an absolute <code>@/path</code>. Modifiers:
+                <code>;type=</code> <code>;filename=</code>.
+                <template v-if="serverCurrentDir">
+                  Server cwd: <code>{{ serverCurrentDir }}</code
+                  >.
+                </template>
+              </p>
+              <KeyValueEditor
+                :key="editorKey"
+                v-model:rows="request.body.multipart"
+                :variables="variables"
+                :row-alerts="multipartRowAlerts"
+                reorderable
+                show-multipart-kind
+                show-file-picker
+                list-id="multipart-names"
+                id-prefix="multipart-part"
+                name-placeholder="Part"
+                value-placeholder="Value or @/path/to/file"
               />
             </div>
 

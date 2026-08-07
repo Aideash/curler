@@ -74,3 +74,58 @@ export function resolveWorkspaceHome(env = process.env) {
 export function resolveDomain(env = process.env) {
   return env.DOMAIN?.trim()
 }
+
+export const DEFAULT_MAX_UPLOAD_MB = 32
+/** Guard against accidental huge multipart forms blocking the event loop. */
+export const MAX_MULTIPART_FILE_PARTS = 100
+
+/**
+ * Max bytes per file part and total multipart payload. Separate from the
+ * response cap (`maxResponseMb`) on each request.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function resolveMaxUploadBytes(env = process.env) {
+  const raw = env.CURLER_MAX_UPLOAD_MB?.trim()
+  if (!raw) return DEFAULT_MAX_UPLOAD_MB * 1024 * 1024
+  const mb = Number(raw)
+  if (!Number.isFinite(mb) || mb < 1) {
+    throw new Error(
+      `CURLER_MAX_UPLOAD_MB must be a number between 1 and 2048 (got "${raw}").`,
+    )
+  }
+  return Math.min(mb, 2048) * 1024 * 1024
+}
+
+/**
+ * @param {string | undefined} envValue Comma-separated directory roots.
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function parseUploadRootList(envValue, env = process.env) {
+  if (!envValue?.trim()) return []
+  return envValue
+    .split(',')
+    .map((entry) => {
+      const trimmed = entry.trim()
+      if (!trimmed) return null
+      const expanded = trimmed.startsWith('~/')
+        ? path.join(os.homedir(), trimmed.slice(2))
+        : trimmed
+      return path.resolve(expanded)
+    })
+    .filter(Boolean)
+}
+
+/**
+ * Filesystem policy for `@path` multipart parts and file-picker staging.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function resolveUploadPolicy(env = process.env) {
+  return {
+    maxUploadBytes: resolveMaxUploadBytes(env),
+    allowRoots: parseUploadRootList(env.CURLER_UPLOAD_ALLOW, env),
+    denyRoots: parseUploadRootList(env.CURLER_UPLOAD_DENY, env),
+    maxFileParts: MAX_MULTIPART_FILE_PARTS,
+  }
+}

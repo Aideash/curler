@@ -91,6 +91,7 @@ group('GraphQL body mode')
       mode: 'graphql',
       text: '',
       form: [],
+      multipart: [],
       graphql: {
         query: 'query Hero($id: ID!) { hero(id: $id) { name } }',
         variables: [
@@ -140,7 +141,13 @@ group('literal $ in a body')
   const graphql = newRequest({
     method: 'POST',
     url: 'https://api.example.com/graphql',
-    body: { mode: 'json', text: query, form: [], graphql: { query: '', variables: [] } },
+    body: {
+      mode: 'json',
+      text: query,
+      form: [],
+      multipart: [],
+      graphql: { query: '', variables: [] },
+    },
   })
 
   const resolved = resolveRequest(graphql, map)
@@ -163,6 +170,7 @@ group('literal $ in a body')
       mode: 'json',
       text: '{"token":"${API_KEY}","q":"$id"}',
       form: [],
+      multipart: [],
       graphql: { query: '', variables: [] },
     },
   })
@@ -203,6 +211,7 @@ group('bringing an older workspace forward')
       mode: 'json',
       text: '{"q":"query Hero($id: ID!)"}',
       form: [],
+      multipart: [],
       graphql: { query: '', variables: [] },
     },
   })
@@ -455,7 +464,7 @@ group('path parameters in the url')
   // Only the URL gets this treatment; a JSON body is full of colons.
   const body = newRequest({
     url: 'https://example.com/things/:id',
-    body: { mode: 'json', text: '{"at":"noon","who":"${USER}"}', form: [] },
+    body: { mode: 'json', text: '{"at":"noon","who":"${USER}"}', form: [], multipart: [] },
   })
   const resolved = resolveRequest(body, { ...map, USER: 'ada' })
   expect('the url expands', resolved.url, 'https://example.com/things/42')
@@ -584,7 +593,7 @@ group('build trace')
       { id: uid(), name: 'Authorization', value: 'Bearer ${TOKEN}', enabled: true },
       { id: uid(), name: 'X-Nothing', value: '', enabled: true },
     ],
-    body: { mode: 'json', text: '{"who":"${MISSING}","pad":"${EMPTY}"}', form: [] },
+    body: { mode: 'json', text: '{"who":"${MISSING}","pad":"${EMPTY}"}', form: [], multipart: [] },
   })
 
   const trace = traceRequest(model, set)

@@ -1,5 +1,6 @@
 import type { HttpResponse } from '../types'
 import type { ResolvedRequest } from './vars'
+import type { MultipartPartAlert, UploadPolicy } from './multipart'
 
 /**
  * Every call goes to the local API server rather than out of the browser, so
@@ -28,6 +29,7 @@ export async function sendRequest(request: ResolvedRequest): Promise<HttpRespons
       url: request.url,
       headers: request.headers,
       body: request.body,
+      multipart: request.multipart,
       followRedirects: request.followRedirects,
       insecure: request.insecure,
       timeoutSecs: request.timeoutSecs,
@@ -43,9 +45,63 @@ export async function readWorkspace(): Promise<{ contents: string | null; path: 
 }
 
 /** Read-only values the server picks up from its own environment. */
+export async function checkMultipartPaths(
+  items: { id: string; path: string }[],
+): Promise<Record<string, MultipartPartAlert>> {
+  if (!items.length) return {}
+  const { results } = await api<{
+    results: { id: string; ok: boolean; message?: string }[]
+  }>('/check-paths', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths: items }),
+  })
+  const alerts: Record<string, MultipartPartAlert> = {}
+  for (const result of results) {
+    if (!result.ok && result.message) {
+      alerts[result.id] = { message: result.message }
+    }
+  }
+  return alerts
+}
+
 export async function readBuiltins(): Promise<Record<string, string>> {
   const { variables } = await api<{ variables: Record<string, string> }>('/builtins')
   return variables
+}
+
+/** Server process cwd — same base curl uses for relative `@file` paths. */
+export async function readCurrentDir(): Promise<string> {
+  const { currentDir } = await api<{ currentDir: string }>('/current-dir')
+  return currentDir
+}
+
+/** Upload allow/deny policy for advisory multipart path warnings. */
+export async function readUploadPolicy(): Promise<UploadPolicy> {
+  return api<UploadPolicy>('/upload-policy')
+}
+
+/**
+ * Copy a browser-picked file to CURLER_HOME staging and return its absolute path.
+ * The workspace stores only `@path`; bytes never enter workspace.json.
+ */
+export async function stageLocalFile(file: File): Promise<string> {
+  let response: Response
+  try {
+    response = await fetch('/api/stage-file', {
+      method: 'POST',
+      headers: { 'X-Filename': file.name },
+      body: file,
+    })
+  } catch {
+    throw new Error(
+      'Could not reach the local curler server. Is it still running? Start it with "npm run dev".',
+    )
+  }
+  const payload = (await response.json()) as { path?: string; error?: string }
+  if (!response.ok) throw new Error(payload?.error ?? `Upload failed (${response.status})`)
+  if (!payload.path) throw new Error('Upload succeeded but no path was returned.')
+  return payload.path
 }
 
 export async function writeWorkspace(contents: string): Promise<void> {

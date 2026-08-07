@@ -120,7 +120,12 @@ function defaultWorkspace() {
 export function braceRequestReferences(request: RequestModel) {
   request.url = braceBareReferences(request.url ?? '')
 
-  for (const rows of [request.headers, request.body?.form, request.body?.graphql?.variables]) {
+  for (const rows of [
+    request.headers,
+    request.body?.form,
+    request.body?.multipart,
+    request.body?.graphql?.variables,
+  ]) {
     for (const row of rows ?? []) {
       row.name = braceBareReferences(row.name)
       row.value = braceBareReferences(row.value)
@@ -153,6 +158,7 @@ function migrate(parsed: Record<string, unknown>) {
       request.body.graphql ??= { query: '', variables: [] }
       request.body.graphql.variables ??= []
       request.body.graphql.query ??= ''
+      request.body.multipart ??= []
       const legacy = request.body as RequestBody & { graphqlVariables?: KeyValue[] }
       if (legacy.graphqlVariables?.length && !request.body.graphql.variables.length) {
         request.body.graphql.variables = legacy.graphqlVariables

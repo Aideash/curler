@@ -35,7 +35,24 @@ const cases = [
     `curl -m 5 -H 'Authorization: Bearer \${TOKEN}' \${BASE_URL}/me`,
   ],
   ['HEAD via -I with --compressed', `curl -I --compressed https://example.com`],
-  ['form fields', `curl -F 'file=@x' -F 'name=bob' https://api.example.com/upload`],
+  [
+    'form fields',
+    `curl -F 'file=@x' -F 'name=bob' https://api.example.com/upload`,
+    { bodyMode: 'multipart' },
+  ],
+  [
+    'form-string keeps @ literal',
+    `curl --form-string 'note=@not-a-file' https://api.example.com/upload`,
+    { bodyMode: 'multipart', multipart: [['note', '@not-a-file', true, null, null]] },
+  ],
+  [
+    'form modifiers and angle-bracket file syntax',
+    `curl -F 'photo=<pic.jpg;type=image/jpeg;filename=shot.jpg' https://api.example.com/upload`,
+    {
+      bodyMode: 'multipart',
+      multipart: [['photo', '@pic.jpg', false, 'image/jpeg', 'shot.jpg']],
+    },
+  ],
   [
     // What a browser puts on the clipboard for a GraphQL request: ANSI-C
     // quoting, reached for because of the `!`, with every backslash in the
@@ -124,14 +141,37 @@ for (const [label, input, wanted] of cases) {
       .map((row) => [row.name, row.value])
     expect('graphql variables', got, wanted.graphqlVariables)
   }
+  if (wanted?.multipart !== undefined) {
+    const got = request.body.multipart
+      .filter((part) => part.enabled && part.name.trim())
+      .map((part) => [
+        part.name,
+        part.value,
+        Boolean(part.textOnly),
+        part.contentType ?? null,
+        part.filename ?? null,
+      ])
+    expect('multipart parts', got, wanted.multipart)
+  }
 
-  // Form bodies are exported as a URL-encoded -d payload, so compare what
-  // actually goes over the wire rather than the editor representation.
+  // Multipart bodies export as -F flags; compare the editor representation.
   const wireBody = (model) => {
     if (model.body.mode === 'form') {
       return model.body.form
         .filter((field) => field.enabled && field.name.trim())
         .map((field) => `${encodeURIComponent(field.name)}=${encodeURIComponent(field.value)}`)
+        .join('&')
+    }
+    if (model.body.mode === 'multipart') {
+      return model.body.multipart
+        .filter((part) => part.enabled && part.name.trim())
+        .map((part) => {
+          let line = `${part.name}=${part.value}`
+          if (part.textOnly) line += '|textOnly'
+          if (part.contentType) line += `;type=${part.contentType}`
+          if (part.filename) line += `;filename=${part.filename}`
+          return line
+        })
         .join('&')
     }
     if (model.body.mode === 'graphql') {

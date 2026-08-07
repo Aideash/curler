@@ -4,6 +4,8 @@ import { createHarness } from './harness.mjs'
 import {
   DEFAULT_API_PORT,
   DEFAULT_UI_PORT,
+  DEFAULT_MAX_UPLOAD_MB,
+  resolveMaxUploadBytes,
   resolvePorts,
   resolveWorkspaceHome,
 } from '../config.mjs'
@@ -95,5 +97,19 @@ h.expect(
   resolveWorkspaceHome({ CURLER_HOME: '  ' }),
   path.join(os.homedir(), '.curler'),
 )
+
+h.group('upload limits')
+
+h.expect('default upload cap in MB', DEFAULT_MAX_UPLOAD_MB, 32)
+h.expect('default upload cap in bytes', resolveMaxUploadBytes({}), 32 * 1024 * 1024)
+h.expect('upload cap override', resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: '16' }), 16 * 1024 * 1024)
+h.expect('bad upload cap fails', (() => {
+  try {
+    resolveMaxUploadBytes({ CURLER_MAX_UPLOAD_MB: '0' })
+    return false
+  } catch {
+    return true
+  }
+})(), true)
 
 process.exit(h.summary() === 0 ? 0 : 1)

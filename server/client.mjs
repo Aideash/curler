@@ -1,6 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import zlib from 'node:zlib'
+import { encodeMultipartBody } from './multipart.mjs'
 
 const MAX_REDIRECTS = 10
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
@@ -376,12 +377,23 @@ export async function performRequest(spec) {
   if (!has('user-agent')) headers['User-Agent'] = 'curler/0.1'
   if (!has('accept-encoding')) headers['Accept-Encoding'] = 'gzip, deflate, br'
 
-  const body = spec.body ? Buffer.from(spec.body, 'utf8') : null
-  if (body && !has('content-length')) headers['Content-Length'] = String(body.length)
+  let payload = null
+  if (spec.multipart?.length) {
+    const { buffer, contentType } = encodeMultipartBody(spec.multipart)
+    payload = buffer
+    delete headers['Content-Type']
+    delete headers['content-type']
+    delete headers['Content-Length']
+    delete headers['content-length']
+    headers['Content-Type'] = contentType
+    headers['Content-Length'] = String(buffer.length)
+  } else {
+    payload = spec.body ? Buffer.from(spec.body, 'utf8') : null
+    if (payload && !has('content-length')) headers['Content-Length'] = String(payload.length)
+  }
 
   let url = spec.url.trim()
   let method = (spec.method || 'GET').toUpperCase()
-  let payload = body
   const redirectChain = []
   const hops = []
 

@@ -12,9 +12,10 @@ import { resolve, resolveUrl, type VariableSet } from './vars'
 import { TERMINAL_FLAGS, terminalFlagArgs, terminalFlagBySpelling } from './terminalFlags'
 
 /** Long flags that take an argument, for the line-wrapping pass in `toCurl`. */
-const VALUED_LONG_FLAGS = new Set(
-  TERMINAL_FLAGS.filter((flag) => flag.kind === 'value').map((flag) => flag.flag),
-)
+const VALUED_LONG_FLAGS = new Set([
+  ...TERMINAL_FLAGS.filter((flag) => flag.kind === 'value').map((flag) => flag.flag),
+  '--form-string',
+])
 
 /**
  * shell-quote wants to expand `$FOO` itself. We hand it back our own `${FOO}`
@@ -372,16 +373,21 @@ export function parseCurl(input: string): ParsedCurl {
       case 'form-string':
         {
           const raw = takeValue(`--${name}`, attached)
-          const eq = raw.indexOf('=')
-          if (eq !== -1) {
-            request.body.mode = 'form'
-            request.body.form.push({
+          const textOnly = name === 'form-string'
+          const { part, warnings: fieldWarnings } = parseFormField(raw, { textOnly })
+          if (part) {
+            request.body.mode = 'multipart'
+            request.body.multipart.push({
               id: uid(),
-              name: raw.slice(0, eq),
-              value: raw.slice(eq + 1),
+              name: part.name,
+              value: part.value,
               enabled: true,
+              ...(textOnly ? { textOnly: true } : {}),
+              ...(part.filename ? { filename: part.filename } : {}),
+              ...(part.contentType ? { contentType: part.contentType } : {}),
             })
             usedFormFlag = true
+            fieldWarnings.forEach((message) => warnings.push(message))
           }
         }
         break
@@ -513,7 +519,7 @@ export function parseCurl(input: string): ParsedCurl {
 
   if (data && dataAsQuery) {
     request.url += (request.url.includes('?') ? '&' : '?') + data
-  } else if (data) {
+  } else if (data && !usedFormFlag) {
     const graphql = parseGraphqlBody(data)
     if (graphql) {
       request.body.mode = 'graphql'
@@ -538,17 +544,62 @@ export function parseCurl(input: string): ParsedCurl {
     request.url = `https://${request.url}`
   }
 
-  if (usedFormFlag) {
-    warnings.push(
-      'curl -F sends multipart/form-data, which curler does not support yet. The fields were imported as a URL-encoded form body instead.',
-    )
-  }
-
   if (!request.url) warnings.push('No URL was found in the command.')
   if (request.headers.length === 0) request.headers.push(emptyKeyValue())
 
   request.name = deriveName(request.url) ?? 'Imported request'
   return { request, warnings }
+}
+
+/** Parses curl `-F` / `--form-string` fields into a multipart part. */
+function parseFormField(
+  raw: string,
+  { textOnly = false }: { textOnly?: boolean } = {},
+): {
+  part: {
+    name: string
+    value: string
+    filename?: string
+    contentType?: string
+  } | null
+  warnings: string[]
+} {
+  const warnings: string[] = []
+  const eq = raw.indexOf('=')
+  if (eq === -1) return { part: null, warnings }
+
+  const name = raw.slice(0, eq)
+  let remainder = raw.slice(eq + 1)
+  let filename: string | undefined
+  let contentType: string | undefined
+
+  if (!textOnly && remainder.startsWith('<')) {
+    remainder = `@${remainder.slice(1)}`
+  }
+
+  // curl appends ;type=, ;filename=, and ;headers= after the value; peel from the end.
+  let match: RegExpExecArray | null
+  while ((match = /;(type|filename|headers)=([^;]*)$/i.exec(remainder))) {
+    const modName = match[1].toLowerCase()
+    if (modName === 'headers') {
+      warnings.push('curl ;headers= on -F is not supported.')
+      remainder = remainder.slice(0, match.index)
+      continue
+    }
+    if (modName === 'type') contentType = match[2]
+    else filename = match[2]
+    remainder = remainder.slice(0, match.index)
+  }
+
+  if (!textOnly && (remainder === '@-' || remainder === '-')) {
+    warnings.push('curl stdin (@-) file parts are not supported.')
+    if (remainder === '-') remainder = '@-'
+  }
+
+  return {
+    part: { name, value: remainder, filename, contentType },
+    warnings,
+  }
 }
 
 /**
@@ -690,6 +741,14 @@ export function toCurl(
       )
       .join('&')
     if (encoded) parts.push('-d', quote(encoded))
+  } else if (request.body.mode === 'multipart') {
+    for (const part of request.body.multipart) {
+      if (!part.enabled || !part.name.trim() || !part.value.trim()) continue
+      let field = `${apply(part.name.trim())}=${apply(part.value)}`
+      if (part.contentType?.trim()) field += `;type=${apply(part.contentType.trim())}`
+      if (part.filename?.trim()) field += `;filename=${apply(part.filename.trim())}`
+      parts.push(part.textOnly ? '--form-string' : '-F', quote(field))
+    }
   }
 
   if (request.options.followRedirects) parts.push('-L')

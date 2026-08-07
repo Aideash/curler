@@ -5,6 +5,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { performRequest } from './client.mjs'
+import { checkUploadPath } from './paths.mjs'
+import { stageUploadedFile } from './staging.mjs'
+import { getUploadPolicy, uploadPolicyForClient } from './uploadPolicy.mjs'
+import { resolveMaxUploadBytes } from '../config.mjs'
 import {
   copySecret,
   deleteSecret,
@@ -115,6 +119,26 @@ function readBody(request) {
   })
 }
 
+function readBodyBuffer(request, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let length = 0
+    request.on('data', (chunk) => {
+      length += chunk.length
+      if (length > maxBytes) {
+        request.destroy()
+        reject(new Error(`File exceeds the ${Math.round(maxBytes / (1024 * 1024))} MB upload limit.`))
+        return
+      }
+      chunks.push(chunk)
+    })
+    request.on('end', () => resolve(Buffer.concat(chunks)))
+    request.on('error', reject)
+  })
+}
+
+const MAX_STAGE_BYTES = resolveMaxUploadBytes()
+
 async function serveStatic(url, response) {
   const relative = url === '/' ? 'index.html' : url.replace(/^\/+/, '')
   const target = path.join(DIST, relative)
@@ -168,6 +192,37 @@ const server = http.createServer(async (request, response) => {
 
     if (url === '/api/builtins' && request.method === 'GET') {
       sendJson(response, 200, { variables: builtinVariables() })
+      return
+    }
+
+    if (url === '/api/check-paths' && request.method === 'POST') {
+      const { paths } = JSON.parse(await readBody(request))
+      const items = Array.isArray(paths) ? paths : []
+      const results = items.map((item) => {
+        const id = String(item?.id ?? '')
+        const rawPath = String(item?.path ?? '')
+        const checked = checkUploadPath(rawPath)
+        return checked.ok ? { id, ok: true } : { id, ok: false, message: checked.message }
+      })
+      sendJson(response, 200, { results })
+      return
+    }
+
+    if (url === '/api/current-dir' && request.method === 'GET') {
+      sendJson(response, 200, { currentDir: process.cwd() })
+      return
+    }
+
+    if (url === '/api/upload-policy' && request.method === 'GET') {
+      sendJson(response, 200, uploadPolicyForClient(getUploadPolicy()))
+      return
+    }
+
+    if (url === '/api/stage-file' && request.method === 'POST') {
+      const originalName = request.headers['x-filename'] ?? 'upload'
+      const buffer = await readBodyBuffer(request, MAX_STAGE_BYTES)
+      const stagedPath = await stageUploadedFile(buffer, originalName, MAX_STAGE_BYTES)
+      sendJson(response, 200, { path: stagedPath })
       return
     }
 

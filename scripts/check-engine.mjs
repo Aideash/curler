@@ -107,6 +107,21 @@ const server = http.createServer((request, response) => {
     return
   }
 
+  if (url.pathname === '/multipart-echo') {
+    const chunks = []
+    request.on('data', (chunk) => chunks.push(chunk))
+    request.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      const textOk = /name="name"\r\n\r\nbob\r\n/.test(raw)
+      const fileOk = /name="file"[\s\S]*?\r\n\r\nfile-bytes\r\n/.test(raw)
+      response.writeHead(200, { 'Content-Type': 'text/plain' })
+      response.end(
+        textOk && fileOk ? 'multipart-file-ok' : textOk ? 'multipart-ok' : 'multipart-fail',
+      )
+    })
+    return
+  }
+
   if (url.pathname === '/redirect') {
     response.writeHead(302, { Location: '/landed' })
     response.end()
@@ -160,6 +175,105 @@ h.expect(
     .every((value) => value <= hop.timings.totalMs + 1),
   true,
 )
+
+// -- Multipart bodies -------------------------------------------------------
+
+h.group('multipart')
+
+const uploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'curler-engine-upload-'))
+const uploadFile = path.join(uploadDir, 'payload.txt')
+fs.writeFileSync(uploadFile, 'file-bytes')
+
+const multipart = await performRequest({
+  url: `${base}/multipart-echo`,
+  method: 'POST',
+  headers: [],
+  multipart: [{ name: 'name', value: 'bob' }],
+})
+
+h.expect('text multipart parts are encoded and sent', multipart.body, 'multipart-ok')
+h.expect(
+  'multipart content-type was set on the wire',
+  multipart.diagnostics.hops[0].requestHeaders.some(
+    ([name, value]) =>
+      name.toLowerCase() === 'content-type' && value.startsWith('multipart/form-data'),
+  ),
+  true,
+)
+
+const multipartFile = await performRequest({
+  url: `${base}/multipart-echo`,
+  method: 'POST',
+  headers: [],
+  multipart: [
+    { name: 'name', value: 'bob' },
+    { name: 'file', value: `@${uploadFile}` },
+  ],
+})
+
+h.expect('file parts are read from disk and sent', multipartFile.body, 'multipart-file-ok')
+
+const missingFile = await performRequest({
+  url: `${base}/`,
+  method: 'POST',
+  headers: [],
+  multipart: [{ name: 'file', value: `@${path.join(uploadDir, 'missing.txt')}` }],
+}).catch((error) => error)
+
+h.expect(
+  'missing files fail with a readable error',
+  missingFile instanceof Error && /not found/i.test(missingFile.message),
+  true,
+)
+
+const stdinPart = await performRequest({
+  url: `${base}/`,
+  method: 'POST',
+  headers: [],
+  multipart: [{ name: 'file', value: '@-' }],
+}).catch((error) => error)
+
+h.expect(
+  'stdin file parts fail with a readable error',
+  stdinPart instanceof Error && /stdin/i.test(stdinPart.message),
+  true,
+)
+
+const literalAt = await performRequest({
+  url: `${base}/multipart-echo`,
+  method: 'POST',
+  headers: [],
+  multipart: [{ name: 'note', value: '@not-a-file', textOnly: true }],
+})
+
+h.expect(
+  'form-string parts are sent as literal text',
+  literalAt.diagnostics.hops[0].requestBodyBytes > 0 && literalAt.status === 200,
+  true,
+)
+
+const { resetUploadPolicy } = await import('../server/uploadPolicy.mjs')
+
+process.env.CURLER_UPLOAD_ALLOW = uploadDir
+resetUploadPolicy()
+
+const blockedOutside = await performRequest({
+  url: `${base}/`,
+  method: 'POST',
+  headers: [],
+  multipart: [{ name: 'file', value: `@${path.join(os.tmpdir(), 'curler-blocked-test.txt')}` }],
+}).catch((error) => error)
+
+h.expect(
+  'paths outside CURLER_UPLOAD_ALLOW fail at send time',
+  blockedOutside instanceof Error && /not permitted/i.test(blockedOutside.message),
+  true,
+)
+
+delete process.env.CURLER_UPLOAD_ALLOW
+resetUploadPolicy()
+
+fs.rmSync(uploadDir, { recursive: true, force: true })
 
 // -- Redirects --------------------------------------------------------------
 

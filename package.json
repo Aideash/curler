@@ -15,7 +15,7 @@
     "type-check": "vue-tsc -b",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server/index.mjs",
-    "check": "node scripts/check-config.mjs && node scripts/check-curl.mjs && node scripts/check-vars.mjs && node scripts/check-terminal-flags.mjs && node scripts/check-diff.mjs && node scripts/check-compare.mjs && node scripts/check-response.mjs && node scripts/check-engine.mjs && node scripts/check-storage.mjs && node scripts/check-theme.mjs",
+    "check": "node scripts/check-config.mjs && node scripts/check-curl.mjs && node scripts/check-vars.mjs && node scripts/check-multipart.mjs && node scripts/check-staging.mjs && node scripts/check-upload-policy.mjs && node scripts/check-terminal-flags.mjs && node scripts/check-diff.mjs && node scripts/check-compare.mjs && node scripts/check-response.mjs && node scripts/check-engine.mjs && node scripts/check-storage.mjs && node scripts/check-theme.mjs",
     "check:verbose": "CURLER_VERBOSE=1 npm run check --silent",
     "check:config": "node scripts/check-config.mjs",
     "check:curl": "node scripts/check-curl.mjs",

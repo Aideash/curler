@@ -43,6 +43,7 @@ async function introspect(
       mode: 'graphql',
       text: '',
       form: [],
+      multipart: [],
       graphql: {
         query: getIntrospectionQuery(),
         variables: [],

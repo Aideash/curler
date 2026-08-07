@@ -285,9 +285,28 @@ export function traceRequest(request: RequestModel, set: VariableSet): BuildTrac
       }
       noteUsage(`${field.name} ${field.value}`, `field ${field.name.trim()}`)
     }
+  } else if (request.body.mode === 'multipart') {
+    for (const part of request.body.multipart) {
+      if (!part.enabled) continue
+      if (!part.name.trim() || !part.value.trim()) {
+        if (part.name.trim() || part.value.trim()) {
+          droppedFields.push(part.name.trim() || `(value "${part.value.trim()}")`)
+        }
+        continue
+      }
+      noteUsage(`${part.name} ${part.value}`, `part ${part.name.trim()}`)
+    }
   }
 
   return { variables: [...seen.values()], droppedHeaders, droppedFields }
+}
+
+export interface ResolvedMultipartPart {
+  name: string
+  value: string
+  filename?: string
+  contentType?: string
+  textOnly?: boolean
 }
 
 export interface ResolvedRequest {
@@ -295,6 +314,7 @@ export interface ResolvedRequest {
   url: string
   headers: [string, string][]
   body: string | null
+  multipart: ResolvedMultipartPart[] | null
   followRedirects: boolean
   insecure: boolean
   timeoutSecs: number
@@ -319,11 +339,12 @@ export function resolveRequest(
   const apply = (input: string) => collect(resolve(input, variables))
 
   // Both halves are required, matching the rule the editor enforces.
-  const headers: [string, string][] = request.headers
+  let headers: [string, string][] = request.headers
     .filter((header) => header.enabled && header.name.trim() && header.value.trim())
     .map((header) => [apply(header.name.trim()), apply(header.value)])
 
   let body: string | null = null
+  let multipart: ResolvedMultipartPart[] | null = null
   if (request.body.mode === 'json' || request.body.mode === 'text') {
     body = request.body.text ? apply(request.body.text) : null
   } else if (request.body.mode === 'graphql') {
@@ -343,6 +364,19 @@ export function resolveRequest(
     if (encoded && !headers.some(([name]) => name.toLowerCase() === 'content-type')) {
       headers.push(['Content-Type', 'application/x-www-form-urlencoded'])
     }
+  } else if (request.body.mode === 'multipart') {
+    const parts = request.body.multipart
+      .filter((part) => part.enabled && part.name.trim() && part.value.trim())
+      .map((part) => ({
+        name: apply(part.name.trim()),
+        value: apply(part.value),
+        ...(part.filename?.trim() ? { filename: apply(part.filename.trim()) } : {}),
+        ...(part.contentType?.trim() ? { contentType: apply(part.contentType.trim()) } : {}),
+        ...(part.textOnly ? { textOnly: true } : {}),
+      }))
+    multipart = parts.length ? parts : null
+    // Content-Type with boundary is set when the body is encoded on the server.
+    headers = headers.filter(([name]) => name.toLowerCase() !== 'content-type')
   }
 
   return {
@@ -350,6 +384,7 @@ export function resolveRequest(
     url: collect(resolveUrl(request.url.trim(), variables)),
     headers,
     body,
+    multipart,
     followRedirects: request.options.followRedirects,
     insecure: request.options.insecure,
     timeoutSecs: request.options.timeoutSecs,

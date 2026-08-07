@@ -17,7 +17,7 @@ import {
 import { describeIssues, requestVariableIssues } from '../lib/vars'
 import { useReorderList } from '../composables/useReorderList'
 import type { EditableScope } from '../types'
-import { featureFlags } from '../lib/featureFlags'
+import { featureFlags } from '../lib/settings.ts'
 import RestoreBackupDialog from './RestoreBackupDialog.vue'
 
 const emit = defineEmits<{ manageVariables: [scope?: EditableScope] }>()
