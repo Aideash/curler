@@ -183,6 +183,7 @@ const {
   startDrag,
   endDrag,
   dragOver: dragOverRequest,
+  dragOverContainer: dragOverRequestContainer,
   drop: dropOnRequests,
   dropIndicator,
   onHandleKeydown,
@@ -305,13 +306,16 @@ const {
             tag="ul"
             name="request"
             class="requests"
-            @dragover.prevent
+            data-reorder-list
+            :class="{ 'is-reordering': dragging?.groupId === collection.id }"
+            @dragover="dragOverRequestContainer(collection.id, collection.requests.length, $event)"
             @drop="dropOnRequests(collection.id, $event)"
           >
             <li
               v-for="(request, index) in collection.requests"
               :key="request.id"
               class="request-item"
+              data-reorder-row
               :class="{
                 active: state.activeRequestId === request.id,
                 unconfigured: unconfigured.has(request.id),
@@ -334,7 +338,7 @@ const {
                 aria-keyshortcuts="ArrowUp ArrowDown"
                 @click.stop
                 @dragstart="startDrag(collection.id, index, $event)"
-                @dragend="endDrag"
+                @dragend="endDrag($event)"
                 @keydown="
                   onHandleKeydown(
                     collection.id,
@@ -682,6 +686,10 @@ const {
 
 .request-move {
   transition: transform 0.18s ease;
+}
+
+.requests.is-reordering .request-move {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

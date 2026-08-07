@@ -78,15 +78,23 @@ const reorderableLength = computed(() => {
   return last && isBlank(last) ? rows.value.length - 1 : rows.value.length
 })
 
-const { dragging, startDrag, endDrag, dragOver, drop, dropIndicator, onHandleKeydown } =
-  useReorderList({
-    reorder: (_group, from, to) => {
-      if (!props.reorderable) return
-      reorderItems(rows.value, from, to)
-    },
-    root,
-    handleSelector: (rowId) => `.drag-handle[data-row-id="${rowId}"]`,
-  })
+const {
+  dragging,
+  startDrag,
+  endDrag,
+  dragOver,
+  dragOverContainer,
+  drop,
+  dropIndicator,
+  onHandleKeydown,
+} = useReorderList({
+  reorder: (_group, from, to) => {
+    if (!props.reorderable) return
+    reorderItems(rows.value, from, to)
+  },
+  root,
+  handleSelector: (rowId) => `.drag-handle[data-row-id="${rowId}"]`,
+})
 
 function valueOf(row: KeyValue): string {
   return props.allowSecrets && row.secret ? (secretCache[row.id] ?? '') : row.value
@@ -276,6 +284,10 @@ function onListDrop(event: DragEvent) {
   if (props.reorderable) drop(LIST, event)
 }
 
+function onListDragOver(event: DragEvent) {
+  if (props.reorderable) dragOverContainer(LIST, reorderableLength.value, event)
+}
+
 function onRowDragOver(index: number, event: DragEvent) {
   if (props.reorderable && index < reorderableLength.value) dragOver(LIST, index, event)
 }
@@ -311,14 +323,16 @@ ensureTrailingRow()
       tag="div"
       :name="reorderable ? 'kv-row' : undefined"
       class="kv-rows"
+      data-reorder-list
       :class="{ 'is-reordering': reorderable && !!dragging }"
-      @dragover.prevent
+      @dragover="onListDragOver"
       @drop="onListDrop"
     >
       <div
         v-for="(row, index) in rows"
         :key="row.id"
         class="kv-row"
+        :data-reorder-row="reorderable && index < reorderableLength ? '' : undefined"
         :class="{
           blank: isBlank(row),
           partial: isPartial(row),
@@ -338,7 +352,7 @@ ensureTrailingRow()
           aria-label="Drag to reorder, or press arrow up or down"
           aria-keyshortcuts="ArrowUp ArrowDown"
           @dragstart="startDrag(LIST, index, $event)"
-          @dragend="endDrag"
+          @dragend="endDrag($event)"
           @keydown="onHandleKeydown(LIST, index, row.id, reorderableLength, $event)"
         >
           <span class="material-icons sm">drag_indicator</span>
@@ -565,6 +579,10 @@ ensureTrailingRow()
 
 .kv-row-move {
   transition: transform 0.18s ease;
+}
+
+.kv-rows.is-reordering .kv-row-move {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

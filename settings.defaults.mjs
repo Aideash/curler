@@ -30,7 +30,7 @@ export const SETTINGS = {
   compareActiveTab: { type: 'string', default: 'body', userFacing: true },
   graphqlShowArgs: { type: 'boolean', default: false, userFacing: true },
   requestDetailsExpanded: { type: 'boolean', default: true, userFacing: true },
-  defaultCurlCopyMode: { type: 'string', default: 'ready', userFacing: true },
+  defaultCurlCopyMode: { type: 'string', default: 'shareable', userFacing: true },
 
   autosaveDebounceMs: { type: 'number', default: 400, userFacing: true },
   secretSaveDebounceMs: { type: 'number', default: 400, userFacing: true },

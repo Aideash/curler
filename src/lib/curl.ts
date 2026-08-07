@@ -3,7 +3,7 @@ import { emptyKeyValue, uid, type HttpMethod, type KeyValue, type RequestModel }
 import { newRequest } from './store'
 import { emptyWorkspace, getSettingNumber } from './settings'
 import { parseGraphqlBody, buildGraphqlBody } from './graphql'
-import { resolve, resolveUrl, type VariableSet } from './vars'
+import { ensureDefaultScheme, resolve, resolveUrl, type VariableSet } from './vars'
 import { TERMINAL_FLAGS, terminalFlagArgs, terminalFlagBySpelling } from './terminalFlags'
 
 /** Long flags that take an argument, for the line-wrapping pass in `toCurl`. */
@@ -534,10 +534,7 @@ export function parseCurl(input: string): ParsedCurl {
     if (!hasContentType) setHeader('Content-Type', 'application/json')
   }
 
-  // A URL starting with a variable probably carries its own scheme, so leave it be.
-  if (request.url && !/^https?:\/\//i.test(request.url) && !request.url.startsWith('$')) {
-    request.url = `https://${request.url}`
-  }
+  if (request.url) request.url = ensureDefaultScheme(request.url)
 
   if (!request.url) warnings.push('No URL was found in the command.')
   if (request.headers.length === 0) request.headers.push(emptyKeyValue())

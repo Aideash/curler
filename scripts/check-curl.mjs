@@ -11,6 +11,7 @@ const { group, detail, expect, pass, fail, summary } = createHarness('curl round
  */
 const cases = [
   ['basic GET', `curl https://api.example.com/v1/things`],
+  ['bare hostname gets http', `curl example.com`, { url: 'http://example.com' }],
   [
     'multiline POST with JSON',
     `curl -X POST 'https://api.example.com/v1/things' \\

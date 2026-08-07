@@ -426,6 +426,43 @@ group('scope precedence: narrowest wins')
   expect('a toggled-off row defers to the wider scope', disabled.values.ID, '9')
 }
 
+group('default scheme')
+{
+  expect('a bare hostname gets http', resolveUrl('example.com', {}).value, 'http://example.com')
+  expect(
+    'host and path',
+    resolveUrl('example.com/v1/things', {}).value,
+    'http://example.com/v1/things',
+  )
+  expect(
+    'host and port',
+    resolveUrl('localhost:8080/foo', {}).value,
+    'http://localhost:8080/foo',
+  )
+  expect('https is unchanged', resolveUrl('https://example.com', {}).value, 'https://example.com')
+  expect('relative path is unchanged', resolveUrl('/api/foo', {}).value, '/api/foo')
+  expect(
+    'protocol-relative is unchanged',
+    resolveUrl('//example.com/foo', {}).value,
+    '//example.com/foo',
+  )
+  expect(
+    'after variable expansion',
+    resolveUrl('${BASE}/path', { BASE: 'example.com' }).value,
+    'http://example.com/path',
+  )
+  expect(
+    'variable url with scheme',
+    resolveUrl('${BASE}/path', { BASE: 'https://example.com' }).value,
+    'https://example.com/path',
+  )
+  expect(
+    'send resolves bare hostname',
+    resolveRequest(newRequest({ url: 'example.com' }), {}).url,
+    'http://example.com',
+  )
+}
+
 group('path parameters in the url')
 {
   const map = { id: '42', BASE_URL: 'https://api.example.com' }

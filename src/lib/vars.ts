@@ -124,9 +124,25 @@ export function resolve(input: string, variables: Record<string, string>): Resol
   return substitute(input, variables, false)
 }
 
+/**
+ * curl treats a bare hostname as http://; mirror that when a URL is resolved
+ * for sending. Relative and protocol-relative forms are left alone, as are URLs
+ * that still carry placeholders.
+ */
+export function ensureDefaultScheme(url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) return trimmed
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (trimmed.startsWith('/') || trimmed.startsWith('//')) return trimmed
+  if (/\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(trimmed)) return trimmed
+  if (trimmed.startsWith('$')) return trimmed
+  return `http://${trimmed}`
+}
+
 /** Same as `resolve`, but also expands `:name` path parameters. */
 export function resolveUrl(input: string, variables: Record<string, string>): Resolution {
-  return substitute(input, variables, true)
+  const result = substitute(input, variables, true)
+  return { ...result, value: ensureDefaultScheme(result.value) }
 }
 
 /**
