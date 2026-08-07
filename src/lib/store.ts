@@ -32,7 +32,11 @@ import {
   getSettingString,
 } from './settings'
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
-import { getThemePreference, readCachedThemePreference, setThemePreference } from '../themes/manager'
+import {
+  getThemePreference,
+  readCachedThemePreference,
+  setThemePreference,
+} from '../themes/manager'
 import { getThemeById, SYSTEM_PREFERENCE } from '../themes/definitions'
 
 interface State {

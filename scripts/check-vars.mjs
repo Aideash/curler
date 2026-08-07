@@ -434,11 +434,7 @@ group('default scheme')
     resolveUrl('example.com/v1/things', {}).value,
     'http://example.com/v1/things',
   )
-  expect(
-    'host and port',
-    resolveUrl('localhost:8080/foo', {}).value,
-    'http://localhost:8080/foo',
-  )
+  expect('host and port', resolveUrl('localhost:8080/foo', {}).value, 'http://localhost:8080/foo')
   expect('https is unchanged', resolveUrl('https://example.com', {}).value, 'https://example.com')
   expect('relative path is unchanged', resolveUrl('/api/foo', {}).value, '/api/foo')
   expect(

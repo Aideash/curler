@@ -347,9 +347,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             Backups are kept in <code class="mono">backups/</code> alongside the workspace, with the
-            newest 40 retained. Your theme is cached in the browser for the first
-            paint, then kept in workspace <code class="mono">settings</code> alongside your
-            collections.
+            newest 40 retained. Your theme is cached in the browser for the first paint, then kept
+            in workspace <code class="mono">settings</code> alongside your collections.
           </p>
         </section>
       </article>

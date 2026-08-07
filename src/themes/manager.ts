@@ -1,4 +1,10 @@
-import { SYSTEM_PREFERENCE, THEME_STORAGE_KEY, getThemeById, themes, type Theme } from './definitions'
+import {
+  SYSTEM_PREFERENCE,
+  THEME_STORAGE_KEY,
+  getThemeById,
+  themes,
+  type Theme,
+} from './definitions'
 
 /** Either a concrete theme id or the literal `system`. */
 export type ThemePreference = string

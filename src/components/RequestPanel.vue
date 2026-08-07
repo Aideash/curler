@@ -577,16 +577,25 @@ const flagPreview = computed(() =>
             </div>
 
             <div v-else-if="request.body.mode === 'multipart'" class="form-body">
-              <p class="faint">
-                Use <code>-F</code> when <code>@path</code> reads a file; use
-                <code>str</code> (<code>--form-string</code>) when <code>@</code> is literal. Attach
-                copies a picked file to CURLER_HOME staging as an absolute <code>@/path</code>.
-                Modifiers: <code>;type=</code> <code>;filename=</code>.
-                <template v-if="serverCurrentDir">
-                  Server cwd: <code>{{ serverCurrentDir }}</code
-                  >.
-                </template>
-              </p>
+              <details class="faint">
+                <summary>Multipart hints</summary>
+                <p>
+                  Use <code>-F</code> when <code>@path</code> reads a file; use
+                  <code>str</code> (<code>--form-string</code>) when <code>@</code> is literal.
+                  <br />
+                  <template v-if="settingBoolean('multipartFilePicker')">
+                    Attach copies a picked file to CURLER_HOME staging as an absolute
+                    <code>@/path</code>.
+                    <br />
+                  </template>
+                  Modifiers: <code>;type=</code> <code>;filename=</code>.
+                  <br />
+                  <template v-if="serverCurrentDir">
+                    Server cwd: <code>{{ serverCurrentDir }}</code
+                    >.
+                  </template>
+                </p>
+              </details>
               <KeyValueEditor
                 :key="editorKey"
                 v-model:rows="request.body.multipart"
@@ -1131,6 +1140,35 @@ const flagPreview = computed(() =>
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+}
+
+.form-body details {
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.form-body details > summary {
+  cursor: pointer;
+  list-style: none;
+  font-style: italic;
+  padding: 2px 4px;
+}
+
+.form-body details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-body details > summary::after {
+  content: ' + ';
+}
+
+.form-body details[open] > summary::after {
+  content: ' - ';
+}
+
+.form-body details p {
+  border-left: 2px solid var(--border);
+  padding-left: 10px;
 }
 
 .graphql-body {
