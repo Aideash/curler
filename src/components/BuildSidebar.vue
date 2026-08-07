@@ -279,7 +279,12 @@ const {
             <span
               v-else
               class="collection-name"
+              tabindex="0"
+              role="textbox"
+              aria-readonly="true"
+              :aria-label="`Collection name: ${collection.name}. Double click or press Shift+Enter to edit`"
               @dblclick="startRename(collection.id, collection.name)"
+              @keydown.shift.enter="startRename(collection.id, collection.name)"
             >
               {{ collection.name }}
             </span>
@@ -375,7 +380,7 @@ const {
                 v-else
                 class="request-name"
                 :title="request.name"
-                aria-label="Request name: {{ request.name }}"
+                :aria-label="`Request name: ${request.name}. Double click or press Shift+Enter to edit`"
                 :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
                 @dblclick.stop="startRename(request.id, request.name)"
                 @keydown.shift.enter="startRename(request.id, request.name)"
@@ -782,6 +787,7 @@ const {
   background: none;
 }
 
+.sidebar .collection-name:focus-visible,
 .sidebar .request-name:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

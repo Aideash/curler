@@ -19,7 +19,6 @@ import { secretCache, settingBoolean, settingNumber } from '../lib/store'
 import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
-import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { type CurlCopyMode } from '../lib/curl'
 import {
   mergePathCheckAlerts,
@@ -66,12 +65,8 @@ type Tab = 'headers' | 'body' | 'vars' | 'options'
 const tab = ref<Tab>('headers')
 const bodyEditor = ref<InstanceType<typeof CodeEditor>>()
 const bodyValidity = ref({ valid: true, message: '' })
-const graphqlSyntaxValidity = ref({ valid: true, message: '' })
-const graphqlSchemaValidity = ref<{ valid: boolean; message: string; checked: boolean }>({
-  valid: true,
-  message: '',
-  checked: false,
-})
+const graphqlQueryValidity = ref({ valid: true, message: '' })
+const graphqlSchemaFetchError = ref('')
 
 const multipartLocalAlerts = computed(() => {
   if (request.value.body.mode !== 'multipart') return {}
@@ -140,7 +135,7 @@ watch(
 )
 
 const graphqlSchema = shallowRef<GraphQLSchema | null>(null)
-const validatingSchema = ref(false)
+const fetchingSchema = ref(false)
 
 const graphqlCacheKey = computed(() => {
   if (!props.variableSet) return ''
@@ -149,35 +144,25 @@ const graphqlCacheKey = computed(() => {
 
 watch(graphqlCacheKey, (key) => {
   graphqlSchema.value = key ? (getCachedSchema(key) ?? null) : null
-  graphqlSchemaValidity.value = { valid: true, message: '', checked: false }
+  graphqlSchemaFetchError.value = ''
 })
 
-async function validateGraphqlSchema() {
+async function fetchGraphqlSchema() {
   if (!props.variableSet) return
-  validatingSchema.value = true
-  graphqlSchemaValidity.value = { valid: true, message: '', checked: false }
+  fetchingSchema.value = true
+  graphqlSchemaFetchError.value = ''
 
   try {
     const result = await fetchSchema(request.value, props.variableSet, props.environmentName)
     if (!result.ok) {
-      graphqlSchemaValidity.value = {
-        valid: false,
-        message: result.error,
-        checked: true,
-      }
+      graphqlSchemaFetchError.value = result.error
       graphqlSchema.value = null
       return
     }
 
     graphqlSchema.value = result.schema
-    const validation = validateAgainstSchema(request.value.body.graphql.query, result.schema)
-    graphqlSchemaValidity.value = {
-      valid: validation.valid,
-      message: validation.valid ? '' : firstErrorMessage(validation),
-      checked: true,
-    }
   } finally {
-    validatingSchema.value = false
+    fetchingSchema.value = false
   }
 }
 
@@ -500,34 +485,30 @@ const flagPreview = computed(() =>
                 </button>
                 <template v-if="request.body.mode === 'graphql'">
                   <span
-                    v-if="!graphqlSyntaxValidity.valid"
+                    v-if="graphqlSchemaFetchError"
                     class="invalid"
-                    :title="graphqlSyntaxValidity.message ?? 'Invalid'"
+                    :title="graphqlSchemaFetchError"
                   >
                     <span class="material-icons sm">error_outline</span>
-                    {{ graphqlSyntaxValidity.message }}
+                    {{ graphqlSchemaFetchError }}
                   </span>
                   <span
-                    v-else-if="graphqlSchemaValidity.checked && !graphqlSchemaValidity.valid"
+                    v-else-if="!graphqlQueryValidity.valid"
                     class="invalid"
-                    :title="graphqlSchemaValidity.message ?? 'Invalid'"
+                    :title="graphqlQueryValidity.message ?? 'Invalid'"
                   >
                     <span class="material-icons sm">error_outline</span>
-                    {{ graphqlSchemaValidity.message }}
+                    {{ graphqlQueryValidity.message }}
                   </span>
                   <span
-                    v-else-if="
-                      graphqlSchemaValidity.checked &&
-                      graphqlSchemaValidity.valid &&
-                      request.body.graphql.query.trim()
-                    "
+                    v-else-if="graphqlSchema && request.body.graphql.query.trim()"
                     class="valid"
                   >
                     <span class="material-icons sm">check_circle_outline</span>
                     Valid query
                   </span>
                   <span
-                    v-else-if="graphqlSyntaxValidity.valid && request.body.graphql.query.trim()"
+                    v-else-if="graphqlQueryValidity.valid && request.body.graphql.query.trim()"
                     class="valid faint"
                   >
                     <span class="material-icons sm">check_circle_outline</span>
@@ -536,16 +517,26 @@ const flagPreview = computed(() =>
                   <button
                     v-if="graphqlTools"
                     class="ghost"
-                    :disabled="validatingSchema || !request.url.trim()"
+                    :disabled="fetchingSchema || !request.url.trim()"
                     :title="
-                      request.url.trim() ? 'Validate against server schema' : 'Set a URL first'
+                      !request.url.trim()
+                        ? 'Set a URL first'
+                        : graphqlSchema
+                          ? 'Re-fetch schema from server'
+                          : 'Fetch schema from server'
                     "
-                    @click="validateGraphqlSchema"
+                    @click="fetchGraphqlSchema"
                   >
                     <span class="material-icons sm">{{
-                      validatingSchema ? 'hourglass_top' : 'rule'
+                      fetchingSchema ? 'hourglass_top' : 'cloud_download'
                     }}</span>
-                    {{ validatingSchema ? 'Validating…' : 'Validate' }}
+                    {{
+                      fetchingSchema
+                        ? 'Fetching…'
+                        : graphqlSchema
+                          ? 'Refresh schema'
+                          : 'Fetch schema'
+                    }}
                   </button>
                   <button
                     v-if="graphqlTools"
@@ -620,7 +611,7 @@ const flagPreview = computed(() =>
                   language="graphql"
                   :schema="graphqlSchema"
                   placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
-                  @validity="graphqlSyntaxValidity = $event"
+                  @validity="graphqlQueryValidity = $event"
                 />
               </div>
               <p class="section-label">Variables</p>

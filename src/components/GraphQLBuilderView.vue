@@ -28,15 +28,13 @@ import {
   type FragmentClickTarget,
   type RootOperation,
 } from '../lib/graphqlQueryBuilder'
-import { firstErrorMessage, validateAgainstSchema } from '../lib/graphqlValidate'
 import { activeEnvironment, currentRequest, variables, variableSet } from '../lib/store'
 
 const schema = shallowRef<GraphQLSchema | null>(null)
 const schemaFilter = ref('')
 const showArguments = ref(false)
 const argInsertMode = ref<ArgInsertMode>(loadArgInsertMode())
-const syntaxValidity = ref({ valid: true, message: '' })
-const schemaValidity = ref({ valid: true, message: '', checked: false })
+const queryValidity = ref({ valid: true, message: '' })
 const builderError = ref('')
 const activeOperation = ref<RootOperation>('query')
 
@@ -105,17 +103,6 @@ async function loadSchema(force = false) {
 function onQueryUpdate(query: string) {
   if (!draft.value) return
   updateDraftGraphql({ ...draft.value.graphql, query })
-  schemaValidity.value = { ...schemaValidity.value, checked: false }
-}
-
-function validateDraft() {
-  if (!draft.value || !schema.value) return
-  const result = validateAgainstSchema(draft.value.graphql.query, schema.value)
-  schemaValidity.value = {
-    valid: result.valid,
-    message: result.valid ? '' : firstErrorMessage(result),
-    checked: true,
-  }
 }
 
 function onFieldClick(target: FieldClickTarget) {
@@ -125,7 +112,6 @@ function onFieldClick(target: FieldClickTarget) {
   try {
     const result = insertField(draft.value.graphql, schema.value, target, argInsertMode.value)
     updateDraftGraphql({ query: result.query, variables: result.variables })
-    schemaValidity.value = { valid: true, message: '', checked: false }
   } catch (error) {
     builderError.value = error instanceof Error ? error.message : String(error)
   }
@@ -143,7 +129,6 @@ function onFragmentClick(target: FragmentClickTarget) {
       argInsertMode.value,
     )
     updateDraftGraphql({ query: result.query, variables: result.variables })
-    schemaValidity.value = { valid: true, message: '', checked: false }
   } catch (error) {
     builderError.value = error instanceof Error ? error.message : String(error)
   }
@@ -156,7 +141,6 @@ function onArgClick(target: ArgClickTarget) {
   try {
     const result = insertArgument(draft.value.graphql, schema.value, target, argInsertMode.value)
     updateDraftGraphql({ query: result.query, variables: result.variables })
-    schemaValidity.value = { valid: true, message: '', checked: false }
   } catch (error) {
     builderError.value = error instanceof Error ? error.message : String(error)
   }
@@ -165,7 +149,6 @@ function onArgClick(target: ArgClickTarget) {
 function clearPanel() {
   if (!draft.value) return
   updateDraftGraphql({ query: '', variables: [] })
-  schemaValidity.value = { valid: true, message: '', checked: false }
 }
 
 function done() {
@@ -207,7 +190,6 @@ function cancel() {
         :disabled="loading || !currentRequest.url.trim()"
         @click="loadSchema(true)"
       />
-      <TitleBarButton icon="rule" label="Validate" :disabled="!schema" @click="validateDraft" />
       <button class="primary" title="Done" @click="done">Done</button>
       <TitleBarButton
         icon="help_outline"
@@ -256,22 +238,17 @@ function cancel() {
         <div class="pane-head">
           <span class="section-label">Query</span>
           <div class="pane-head-right">
-            <span v-if="!syntaxValidity.valid" class="invalid">
+            <span v-if="!queryValidity.valid" class="invalid">
               <span class="material-icons sm">error_outline</span>
-              {{ syntaxValidity.message }}
+              {{ queryValidity.message }}
             </span>
-            <span v-else-if="schemaValidity.checked && !schemaValidity.valid" class="invalid">
-              <span class="material-icons sm">error_outline</span>
-              {{ schemaValidity.message }}
-            </span>
-            <span
-              v-else-if="
-                schemaValidity.checked && schemaValidity.valid && draft.graphql.query.trim()
-              "
-              class="valid"
-            >
+            <span v-else-if="schema && draft.graphql.query.trim()" class="valid">
               <span class="material-icons sm">check_circle_outline</span>
               Valid query
+            </span>
+            <span v-else-if="queryValidity.valid && draft.graphql.query.trim()" class="valid faint">
+              <span class="material-icons sm">check_circle_outline</span>
+              Valid syntax
             </span>
             <button class="ghost clear-button" title="Clear Panel" @click="clearPanel">
               <span class="material-icons sm">clear</span>
@@ -287,7 +264,7 @@ function cancel() {
             :graphql-operation="activeOperation"
             placeholder="query { }"
             @update:model-value="onQueryUpdate"
-            @validity="syntaxValidity = $event"
+            @validity="queryValidity = $event"
           />
         </div>
 

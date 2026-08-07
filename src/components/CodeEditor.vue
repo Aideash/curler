@@ -17,7 +17,7 @@ import { sass } from '@codemirror/lang-sass'
 import { graphql, graphqlLanguageSupport, updateSchema } from 'cm6-graphql'
 import { linter, lintGutter, type Diagnostic } from '@codemirror/lint'
 import type { GraphQLSchema } from 'graphql'
-import { firstErrorMessage, validateSyntax } from '../lib/graphqlValidate'
+import { firstErrorMessage, validateAgainstSchema, validateSyntax } from '../lib/graphqlValidate'
 import { findPlaceholderTypenameRanges, type RootOperation } from '../lib/graphqlQueryBuilder'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
@@ -197,7 +197,7 @@ function reportValidity(text: string) {
   }
 
   if (props.language === 'graphql') {
-    const result = validateSyntax(text)
+    const result = props.schema ? validateAgainstSchema(text, props.schema) : validateSyntax(text)
     emit('validity', {
       valid: result.valid,
       message: result.valid ? '' : firstErrorMessage(result),
@@ -270,6 +270,7 @@ watch(
       view.dispatch({ effects: languageCompartment.reconfigure(graphqlExtensions()) })
     }
     if (hasSchema) updateSchema(view, schema as Parameters<typeof updateSchema>[1])
+    reportValidity(props.modelValue)
   },
 )
 
