@@ -443,7 +443,8 @@ on this machine.
 Multipart bodies (`curl -F`) use the **Multipart** body tab. File parts use `@path` or curl's
 `<path` syntax; `--form-string` (`str`) keeps `@` literal. The attach button copies a picked
 file into `CURLER_HOME/upload-staging/` and fills in the absolute `@/path` — only the path is
-saved in your workspace. Modifiers `;type=` and `;filename=` round-trip; `;headers=` is ignored
+saved in your workspace. Modifiers `;type=` and `;filename=` round-trip (tune button on each part);
+`;headers=` is ignored
 with a warning. Relative paths resolve from the server cwd (shown in the editor). Invalid paths
 warn in red but do not block send or Copy-as-curl.
 

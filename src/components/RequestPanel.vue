@@ -588,7 +588,7 @@ const flagPreview = computed(() =>
                     <code>@/path</code>.
                     <br />
                   </template>
-                  Modifiers: <code>;type=</code> <code>;filename=</code>.
+                  Modifiers <code>;type=</code> <code>;filename=</code>: tune button on each part.
                   <br />
                   <template v-if="serverCurrentDir">
                     Server cwd: <code>{{ serverCurrentDir }}</code

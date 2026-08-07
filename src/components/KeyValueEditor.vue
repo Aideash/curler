@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, TransitionGroup } from 'vue'
+import MultipartModifiersDialog from './MultipartModifiersDialog.vue'
 import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue, type MultipartPart } from '../types'
 import {
@@ -249,6 +250,34 @@ function setMultipartTextOnly(row: KeyValue, textOnly: boolean) {
   ;(row as MultipartPart).textOnly = textOnly || undefined
 }
 
+function multipartPart(row: KeyValue): MultipartPart {
+  return row as MultipartPart
+}
+
+function hasMultipartModifiers(row: KeyValue): boolean {
+  const part = multipartPart(row)
+  return Boolean(part.contentType?.trim() || part.filename?.trim())
+}
+
+const modifiersTarget = ref<MultipartPart | null>(null)
+
+function openMultipartModifiers(row: KeyValue) {
+  if (isBlank(row)) return
+  modifiersTarget.value = multipartPart(row)
+}
+
+function closeMultipartModifiers() {
+  modifiersTarget.value = null
+}
+
+function saveMultipartModifiers(values: { contentType?: string; filename?: string }) {
+  const part = modifiersTarget.value
+  if (!part) return
+  part.contentType = values.contentType
+  part.filename = values.filename
+  closeMultipartModifiers()
+}
+
 const fileInput = ref<HTMLInputElement | null>(null)
 const filePickTarget = ref<KeyValue | null>(null)
 const stagingFile = ref(false)
@@ -413,7 +442,17 @@ ensureTrailingRow()
           @focus="selectDefaultName(row, $event)"
           @input="ensureTrailingRow"
         />
-        <div class="kv-value" :class="{ 'with-file': showFilePicker && !multipartTextOnly(row) }">
+        <div class="kv-value">
+          <button
+            v-if="showMultipartKind && !isBlank(row)"
+            type="button"
+            class="ghost kv-modifiers"
+            :class="{ active: hasMultipartModifiers(row) }"
+            title="Part modifiers (;type=, ;filename=)"
+            @click="openMultipartModifiers(row)"
+          >
+            <span class="material-icons sm">tune</span>
+          </button>
           <button
             v-if="showFilePicker && !isBlank(row) && !multipartTextOnly(row)"
             type="button"
@@ -490,6 +529,15 @@ ensureTrailingRow()
         >Press Enter in the value input to accept empty values.</span
       >
     </p>
+
+    <MultipartModifiersDialog
+      v-if="modifiersTarget"
+      :part-name="modifiersTarget.name"
+      :content-type="modifiersTarget.contentType ?? ''"
+      :filename="modifiersTarget.filename ?? ''"
+      @close="closeMultipartModifiers"
+      @save="saveMultipartModifiers"
+    />
   </div>
 </template>
 
@@ -692,6 +740,7 @@ ensureTrailingRow()
   pointer-events: none;
 }
 
+.kv-modifiers,
 .kv-file {
   flex-shrink: 0;
   padding: 2px;
@@ -699,8 +748,13 @@ ensureTrailingRow()
   color: var(--text-faint);
 }
 
+.kv-modifiers:hover,
 .kv-file:hover:not(:disabled) {
   color: var(--text);
+}
+
+.kv-modifiers.active {
+  color: var(--accent);
 }
 
 .kv-file:disabled {
