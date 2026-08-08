@@ -14,64 +14,25 @@ useResetFocusShortcut()
 onMounted(initStore)
 </script>
 
-<template>
+<!-- <template>
   <BuildView v-if="route === 'build'" />
   <CompareView v-else-if="route === 'compare'" />
   <GraphQLBuilderView v-else-if="route === 'graphql'" />
   <HelpView v-else />
+</template> -->
 
-  <!-- <div class="app-container">
-    <BuildView v-if="route === 'build'" />
-    <CompareView v-else-if="route === 'compare'" />
-    <GraphQLBuilderView v-else-if="route === 'graphql'" />
-    <transition name="fade-in-out">
-      <HelpView v-if="route === 'help'" />
-    </transition>
-  </div> -->
-
-  <!-- <div class="app-container">
+<template>
+  <div class="app-container">
     <transition name="fade-in-out">
       <BuildView v-if="route === 'build'" />
       <CompareView v-else-if="route === 'compare'" />
       <GraphQLBuilderView v-else-if="route === 'graphql'" />
       <HelpView v-else-if="route === 'help'" />
     </transition>
-  </div> -->
-
-  <!-- <div class="app-container">
-    <transition name="fade-in-out">
-      <HelpView v-if="route === 'help'" />
-      <div v-else class="app-container">
-        <BuildView v-if="route === 'build'" />
-        <CompareView v-else-if="route === 'compare'" />
-        <GraphQLBuilderView v-else-if="route === 'graphql'" />
-      </div>
-    </transition>
-  </div> -->
-
-  <!-- <div class="app-container" style="position: relative">
-    <BuildView class="app-container" position="absolute" />
-    <transition name="fade-in-out">
-      <CompareView
-        v-if="route === 'compare'"
-        class="app-container"
-        style="position: absolute; z-index: 2; top: 0"
-      />
-      <GraphQLBuilderView
-        v-else-if="route === 'graphql'"
-        class="app-container"
-        style="position: absolute; z-index: 2; top: 0"
-      />
-      <HelpView
-        v-else-if="route === 'help'"
-        class="app-container"
-        style="position: absolute; z-index: 2; top: 0"
-      />
-    </transition>
-  </div> -->
+  </div>
 </template>
 
-<!-- <style scoped>
+<style scoped>
 .app-container {
   background-color: var(--bg);
   height: 100vh;
@@ -81,11 +42,11 @@ onMounted(initStore)
 .fade-in-out-enter-active,
 .fade-in-out-leave-active {
   transition-property: opacity;
-  transition-duration: 500ms;
+  transition-duration: 100ms;
 }
 
 .fade-in-out-enter-from,
 .fade-in-out-leave-to {
   opacity: 0;
 }
-</style> -->
+</style>
