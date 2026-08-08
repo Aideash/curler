@@ -463,7 +463,7 @@ const flagPreview = computed(() =>
                   {{ mode.label }}
                 </button>
               </div>
-              <div class="pane-head-right">
+              <div class="status-tags">
                 <span
                   v-if="request.body.mode === 'json' && !bodyValidity.valid"
                   class="invalid"
@@ -479,41 +479,51 @@ const flagPreview = computed(() =>
                   <span class="material-icons sm">check_circle_outline</span>
                   Valid JSON
                 </span>
+                <span
+                  v-if="request.body.mode === 'graphql' && graphqlSchemaFetchError"
+                  class="invalid"
+                  :title="graphqlSchemaFetchError"
+                >
+                  <span class="material-icons sm">error_outline</span>
+                  {{ graphqlSchemaFetchError }}
+                </span>
+                <span
+                  v-else-if="request.body.mode === 'graphql' && !graphqlQueryValidity.valid"
+                  class="invalid"
+                  :title="graphqlQueryValidity.message ?? 'Invalid'"
+                >
+                  <span class="material-icons sm">error_outline</span>
+                  {{ graphqlQueryValidity.message }}
+                </span>
+                <span
+                  v-else-if="
+                    request.body.mode === 'graphql' &&
+                    graphqlSchema &&
+                    request.body.graphql.query.trim()
+                  "
+                  class="valid"
+                >
+                  <span class="material-icons sm">check_circle_outline</span>
+                  Valid query
+                </span>
+                <span
+                  v-else-if="
+                    request.body.mode === 'graphql' &&
+                    graphqlQueryValidity.valid &&
+                    request.body.graphql.query.trim()
+                  "
+                  class="valid faint"
+                >
+                  <span class="material-icons sm">check_circle_outline</span>
+                  Valid syntax
+                </span>
+              </div>
+              <div class="pane-head-right">
                 <button v-if="request.body.mode === 'json'" class="ghost" @click="formatBody">
                   <span class="material-icons sm">format_indent_increase</span>
                   Format
                 </button>
                 <template v-if="request.body.mode === 'graphql'">
-                  <span
-                    v-if="graphqlSchemaFetchError"
-                    class="invalid"
-                    :title="graphqlSchemaFetchError"
-                  >
-                    <span class="material-icons sm">error_outline</span>
-                    {{ graphqlSchemaFetchError }}
-                  </span>
-                  <span
-                    v-else-if="!graphqlQueryValidity.valid"
-                    class="invalid"
-                    :title="graphqlQueryValidity.message ?? 'Invalid'"
-                  >
-                    <span class="material-icons sm">error_outline</span>
-                    {{ graphqlQueryValidity.message }}
-                  </span>
-                  <span
-                    v-else-if="graphqlSchema && request.body.graphql.query.trim()"
-                    class="valid"
-                  >
-                    <span class="material-icons sm">check_circle_outline</span>
-                    Valid query
-                  </span>
-                  <span
-                    v-else-if="graphqlQueryValidity.valid && request.body.graphql.query.trim()"
-                    class="valid faint"
-                  >
-                    <span class="material-icons sm">check_circle_outline</span>
-                    Valid syntax
-                  </span>
                   <button
                     v-if="graphqlTools"
                     class="ghost"
@@ -1026,6 +1036,14 @@ const flagPreview = computed(() =>
   flex-wrap: wrap;
 }
 
+.status-tags {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  padding-left: 5px;
+  min-width: 15px;
+}
+
 .pane-head-right {
   display: flex;
   align-items: center;
@@ -1114,7 +1132,6 @@ const flagPreview = computed(() =>
 .invalid {
   color: var(--red);
   font-family: var(--mono);
-  max-width: 460px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
