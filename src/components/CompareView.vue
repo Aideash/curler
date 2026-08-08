@@ -236,8 +236,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             class="toggle"
             title="Sort JSON keys before comparing, so field order is not reported as a change"
           >
-            <input id="compare-normalise-json" v-model="normalize" type="checkbox" />
-            Normalise JSON
+            <input id="compare-normalize-json" v-model="normalize" type="checkbox" />
+            Normalize JSON
           </label>
           <label
             class="toggle strong"

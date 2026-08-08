@@ -300,7 +300,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             </li>
             <li>
               Use <strong>Diff</strong> to align two bodies with added/removed/changed highlighting.
-              <strong>Normalise JSON</strong> (on by default) sorts object keys before comparing so
+              <strong>Normalize JSON</strong> (on by default) sorts object keys before comparing so
               field order does not create noise.
             </li>
             <li>
@@ -346,7 +346,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             The gear menu opens <strong>Site settings</strong> for defaults (timeouts, response
-            caps, compare behaviour, GraphQL explorer options, and more). Values save with your
+            caps, compare behavior, GraphQL explorer options, and more). Values save with your
             workspace.
           </p>
           <p>
@@ -390,8 +390,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
               <tr>
                 <td><kbd>Alt</kbd> + <kbd>Enter</kbd></td>
                 <td>
-                  Cycle forward through boolean, integer, or enum values in key-value fields,
-                  JSON editors, and GraphQL query editors
+                  Cycle forward through boolean, integer, or enum values in key-value fields, JSON
+                  editors, and GraphQL query editors
                 </td>
               </tr>
               <tr>

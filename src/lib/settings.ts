@@ -20,7 +20,7 @@ const SETTING_META: Record<
   themePreference: {
     type: 'string',
     title: 'Theme',
-    description: 'Colour theme on load: a built-in theme id, or "system" to follow the OS.',
+    description: 'Color theme on load: a built-in theme id, or "system" to follow the OS.',
   },
   sidebarCollapsed: {
     type: 'boolean',
@@ -80,7 +80,7 @@ const SETTING_META: Record<
   },
   compareNormalizeJson: {
     type: 'boolean',
-    title: 'Compare: normalise JSON',
+    title: 'Compare: normalize JSON',
     description: 'Sort JSON object keys before comparing response bodies.',
   },
   compareShowDiff: {

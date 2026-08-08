@@ -130,7 +130,7 @@ export type SettingName =
   | 'graphqlShowArgs'
   | 'requestDetailsExpanded'
   | 'defaultCurlCopyMode'
-  // Behaviour tuning
+  // Behavior tuning
   | 'autosaveDebounceMs'
   | 'secretSaveDebounceMs'
   | 'workspaceBackupIntervalMs'
