@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from '../composables/useTheme'
 import { editorTabIndentExtensions } from '../lib/editorTabIndent'
+import { editorValueCycleExtensions } from '../lib/editorValueCycle'
 import { Compartment, EditorState, StateField, Prec, type Extension } from '@codemirror/state'
 import {
   Decoration,
@@ -34,6 +35,8 @@ const props = withDefaults(
     schema?: GraphQLSchema | null
     /** When set with GraphQL, lone __typename placeholders are dimmed in the editor. */
     graphqlOperation?: RootOperation | null
+    /** Optional JSON property names mapped to enum choices for Alt+Enter cycling. */
+    valueCycleEnumOptions?: Record<string, string[]>
   }>(),
   {
     language: 'text',
@@ -42,6 +45,7 @@ const props = withDefaults(
     indentWithTab: true,
     schema: null,
     graphqlOperation: null,
+    valueCycleEnumOptions: () => ({}),
   },
 )
 
@@ -57,10 +61,14 @@ const readonlyCompartment = new Compartment()
 const themeCompartment = new Compartment()
 const tabIndentCompartment = new Compartment()
 const placeholderTypenameCompartment = new Compartment()
+const valueCycleCompartment = new Compartment()
 
 const { isDark } = useTheme()
 
 const tabIndentEnabled = computed(() => !props.readonly && props.indentWithTab)
+const valueCycleEnabled = computed(
+  () => !props.readonly && (props.language === 'json' || props.language === 'graphql'),
+)
 
 function buildTheme(dark: boolean): Extension {
   return EditorView.theme(
@@ -174,6 +182,22 @@ function tabIndentExtensions(): Extension[] {
   return tabIndentEnabled.value ? editorTabIndentExtensions() : []
 }
 
+function valueCycleExtensions(): Extension[] {
+  return editorValueCycleExtensions({
+    language: props.language,
+    readonly: props.readonly,
+    enumOptionsByKey: props.valueCycleEnumOptions,
+    schema: props.schema,
+  })
+}
+
+function editorKeyShortcuts(): string | undefined {
+  const shortcuts: string[] = []
+  if (tabIndentEnabled.value) shortcuts.push('Escape Tab')
+  if (valueCycleEnabled.value) shortcuts.push('Alt+Enter Shift+Alt+Enter')
+  return shortcuts.length ? shortcuts.join(' ') : undefined
+}
+
 /**
  * The gutter linter shows where the problem is; this reports whether the
  * document parses at all so the surrounding UI can react.
@@ -225,6 +249,7 @@ onMounted(() => {
         languageCompartment.of(languageExtensions()),
         readonlyCompartment.of(EditorState.readOnly.of(props.readonly)),
         tabIndentCompartment.of(tabIndentExtensions()),
+        valueCycleCompartment.of(valueCycleExtensions()),
         placeholderTypenameCompartment.of(placeholderTypenameExtensionConfig()),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
@@ -288,6 +313,14 @@ watch(tabIndentEnabled, () => {
 })
 
 watch(
+  () => [props.language, props.readonly, props.valueCycleEnumOptions, props.schema] as const,
+  () => {
+    view?.dispatch({ effects: valueCycleCompartment.reconfigure(valueCycleExtensions()) })
+  },
+  { deep: true },
+)
+
+watch(
   () => [props.language, props.graphqlOperation] as const,
   () => {
     view?.dispatch({
@@ -320,7 +353,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="code-editor" :aria-keyshortcuts="tabIndentEnabled ? 'Escape Tab' : undefined">
+  <div class="code-editor" :aria-keyshortcuts="editorKeyShortcuts()">
     <div ref="host" class="editor-host" />
     <p v-if="tabIndentEnabled" class="tab-hint faint">Esc, then Tab to leave editor</p>
   </div>

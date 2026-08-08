@@ -11,6 +11,7 @@ import {
   secretCache,
 } from '../lib/store'
 import { braceBareReferences, inspect } from '../lib/vars'
+import { cycleScalarValue, type CycleDirection } from '../lib/valueCycle'
 import { stageLocalFile } from '../lib/backend'
 import { reorderItems, useReorderList } from '../composables/useReorderList'
 
@@ -242,6 +243,22 @@ function onEnumSelect(row: KeyValue, event: Event) {
   ensureTrailingRow()
 }
 
+function applyCycledValue(row: KeyValue, next: string) {
+  row.defined = true
+  if (props.allowSecrets && row.secret) queueSecretSave(row.id, next)
+  else row.value = next
+  ensureTrailingRow()
+}
+
+function onValueCycleKeydown(row: KeyValue, event: KeyboardEvent) {
+  if (!event.altKey || event.key !== 'Enter' || event.metaKey || event.ctrlKey) return
+  event.preventDefault()
+  const direction: CycleDirection = event.shiftKey ? 'prev' : 'next'
+  const next = cycleScalarValue(valueOf(row), direction, { enumChoices: enumChoices(row) })
+  if (next === null) return
+  applyCycledValue(row, next)
+}
+
 function multipartTextOnly(row: KeyValue): boolean {
   return Boolean((row as MultipartPart).textOnly)
 }
@@ -470,6 +487,7 @@ ensureTrailingRow()
             :value="enumSelection(row)"
             :class="{ warn: isPartial(row) && !enumSelection(row) }"
             @change="onEnumSelect(row, $event)"
+            @keydown="onValueCycleKeydown(row, $event)"
           >
             <option value="" disabled>Select…</option>
             <option v-for="choice in enumChoices(row)" :key="choice" :value="choice">
@@ -491,6 +509,7 @@ ensureTrailingRow()
             :title="rowAlerts[row.id]?.message"
             @input="onValueInput(row, $event)"
             @keydown.enter="onValueInput(row, $event)"
+            @keydown="onValueCycleKeydown(row, $event)"
           />
           <VariableIssues
             v-if="!enumChoices(row) && !rowAlerts[row.id]"

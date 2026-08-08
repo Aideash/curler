@@ -385,6 +385,8 @@ disconnected; it just will not persist. Reload once the server is back.
 | `Cmd`/`Ctrl` + `S` | Save an unsaved request |
 | `Esc` | Close the open dialog |
 | `Alt` + `Shift` + `S` | Clear focus and jump back to the skip links |
+| `Alt` + `Enter` | Cycle forward through boolean, integer, or enum values in key-value fields, JSON editors, and GraphQL query editors |
+| `Alt` + `Shift` + `Enter` | Cycle backward through those values |
 
 Inside a lane's editor, `Cmd`/`Ctrl` + `Enter` sends that lane alone, since it is
 the request on screen. On the builder, tabbing in lands on skip links first — use

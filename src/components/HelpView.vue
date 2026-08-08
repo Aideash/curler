@@ -387,6 +387,17 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
                 <td><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></td>
                 <td>Clear focus and jump back to the skip links</td>
               </tr>
+              <tr>
+                <td><kbd>Alt</kbd> + <kbd>Enter</kbd></td>
+                <td>
+                  Cycle forward through boolean, integer, or enum values in key-value fields,
+                  JSON editors, and GraphQL query editors
+                </td>
+              </tr>
+              <tr>
+                <td><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd></td>
+                <td>Cycle backward through those values</td>
+              </tr>
             </tbody>
           </table>
           <p class="faint">

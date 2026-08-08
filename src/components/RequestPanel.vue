@@ -19,6 +19,7 @@ import { secretCache, settingBoolean, settingNumber } from '../lib/store'
 import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
+import { resolveVariableEnumOptions } from '../lib/graphqlQueryBuilder'
 import { type CurlCopyMode } from '../lib/curl'
 import {
   mergePathCheckAlerts,
@@ -136,6 +137,12 @@ watch(
 
 const graphqlSchema = shallowRef<GraphQLSchema | null>(null)
 const fetchingSchema = ref(false)
+
+const graphqlVariableEnumOptions = computed(() =>
+  graphqlSchema.value
+    ? resolveVariableEnumOptions(request.value.body.graphql.query, graphqlSchema.value)
+    : {},
+)
 
 const graphqlCacheKey = computed(() => {
   if (!props.variableSet) return ''
@@ -629,6 +636,7 @@ const flagPreview = computed(() =>
                 :key="editorKey"
                 v-model:rows="request.body.graphql.variables"
                 :variables="variables"
+                :enum-options="graphqlVariableEnumOptions"
                 list-id="graphql-variable-names"
                 id-prefix="graphql-variable"
                 name-placeholder="Name"
