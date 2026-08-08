@@ -332,6 +332,7 @@ defineExpose({
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  cursor: text;
 }
 
 .editor-host {
