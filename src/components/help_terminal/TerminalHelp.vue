@@ -72,7 +72,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   border: 1px solid var(--border);
   border-radius: 4px;
   margin: 0 auto;
-  padding: 12px 14px 2px 14px;
+  padding: 12px 14px 0px 14px;
   font-size: 12px;
   line-height: 1.4;
   max-width: 850px;
@@ -122,13 +122,18 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 }
 
 .faux-terminal .tier-legend {
+  background: var(--bg-input);
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
   margin-top: 10px;
   padding-left: 1ch;
+  padding-bottom: 2px;
   font-size: 11px;
   border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 .legend-send::before {
