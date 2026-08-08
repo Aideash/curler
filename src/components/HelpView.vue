@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import ThemePicker from './ThemePicker.vue'
+import TerminalHelp from './help_terminal/TerminalHelp.vue'
 import TitleBar from './TitleBar.vue'
 import TitleBarButton from './TitleBarButton.vue'
-import { helpSectionFromHash, navigate } from '../composables/useRoute'
+import { helpScrollTargetFromHash, navigate } from '../composables/useRoute'
 
 const toc = [
   { id: 'overview', label: 'Overview' },
+  { id: '--help', label: 'Help' },
   { id: 'requests', label: 'Building requests' },
   { id: 'variables', label: 'Variables' },
   { id: 'graphql', label: 'GraphQL' },
@@ -26,11 +28,15 @@ function scrollToSection(id: string | null) {
 }
 
 function onHashChange() {
-  scrollToSection(helpSectionFromHash())
+  scrollToSection(helpScrollTargetFromHash())
 }
 
+// function copyToClipboard(text: string) {
+//   navigator.clipboard.writeText(text)
+// }
+
 onMounted(() => {
-  scrollToSection(helpSectionFromHash())
+  scrollToSection(helpScrollTargetFromHash())
   window.addEventListener('hashchange', onHashChange)
 })
 onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
@@ -75,6 +81,91 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             request. Nothing you send is subject to CORS, preflight checks, the browser cookie jar,
             or automatic redirect handling — what you get back is what curl would have shown you.
           </p>
+        </section>
+
+        <section id="--help">
+          <TerminalHelp />
+          <!-- <div class="faux-terminal mono">
+            <p class="cmd-line"><span style="color: var(--syntax-comment)">$</span> curl --help</p>
+            <p class="cmd-line">Usage: curl [options...] &lt;url&gt;</p>
+            <table class="help-options">
+              <tbody>
+                <tr>
+                  <td>-d,</td>
+                  <td>--data &lt;data&gt;</td>
+                  <td>HTTP POST data</td>
+                </tr>
+                <tr>
+                  <td>-f,</td>
+                  <td>--fail</td>
+                  <td>Fail fast with no output on HTTP errors</td>
+                </tr>
+                <tr>
+                  <td>-h,</td>
+                  <td>--help &lt;category&gt;</td>
+                  <td>Get help for commands</td>
+                </tr>
+                <tr>
+                  <td>-i,</td>
+                  <td>--include</td>
+                  <td>Include response headers in output</td>
+                </tr>
+                <tr>
+                  <td>-o,</td>
+                  <td>--output &lt;file&gt;</td>
+                  <td>Write to file instead of stdout</td>
+                </tr>
+                <tr>
+                  <td>-O,</td>
+                  <td>--remote-name</td>
+                  <td>Write output to file named as remote file</td>
+                </tr>
+                <tr>
+                  <td>-s,</td>
+                  <td>--silent</td>
+                  <td>Silent mode</td>
+                </tr>
+                <tr>
+                  <td>-T,</td>
+                  <td>--upload-file &lt;file&gt;</td>
+                  <td>Transfer local FILE to destination</td>
+                </tr>
+                <tr>
+                  <td>-u,</td>
+                  <td>--user &lt;user:password&gt;</td>
+                  <td>Server user and password</td>
+                </tr>
+                <tr>
+                  <td>-A,</td>
+                  <td>--user-agent &lt;name&gt;</td>
+                  <td>Send User-Agent &lt;name&gt; to server</td>
+                </tr>
+                <tr>
+                  <td>-v,</td>
+                  <td>--verbose</td>
+                  <td>Make the operation more talkative</td>
+                </tr>
+                <tr>
+                  <td>-V,</td>
+                  <td>--version</td>
+                  <td>Show version number and quit</td>
+                </tr>
+              </tbody>
+            </table>
+            <br />
+            <p class="cmd-line">
+              This is not the full help, this menu is stripped into categories.
+            </p>
+            <p class="cmd-line">Use "--help category" to get an overview of all categories.</p>
+            <p class="cmd-line">For all options use the manual or "--help all".</p>
+            <button
+              class="ghost copy-button"
+              title="Copy as curl"
+              @click="copyToClipboard('curl --help')"
+            >
+              <span class="material-icons sm">content_copy</span>
+            </button>
+          </div> -->
         </section>
 
         <section id="requests">
@@ -518,6 +609,71 @@ th {
 td code.mono {
   font-size: 11.5px;
 }
+
+/* .faux-terminal {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin: 0 auto;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 850px;
+  position: relative;
+}
+
+.faux-terminal p {
+  margin: 0;
+}
+
+.faux-terminal .cmd-line + .help-options,
+.faux-terminal .help-options + .cmd-line {
+  margin-top: 0.35em;
+}
+
+.help-options {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  padding-left: 1ch;
+}
+
+.help-options td {
+  padding: 0;
+  border: none;
+  vertical-align: top;
+  text-align: left;
+}
+
+.help-options td:nth-child(1) {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 1ch;
+}
+
+.help-options td:nth-child(2) {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 2ch;
+}
+
+.cmd-line {
+  display: block;
+}
+
+.copy-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 0;
+  margin: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.copy-button:hover {
+  background: var(--bg-input);
+} */
 
 @media screen and (max-width: 700px) {
   .content {

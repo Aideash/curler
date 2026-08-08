@@ -13,10 +13,17 @@ function readRoute(): RouteName {
   return ROUTES[hash] ?? 'build'
 }
 
-/** Section id from `#/help/overview`-style hashes, if any. */
+/** Section path from `#/help/overview` or `#/help/--help/auth`-style hashes, if any. */
 export function helpSectionFromHash(): string | null {
-  const match = window.location.hash.match(/^#\/help\/([^/?#]+)/)
+  const match = window.location.hash.match(/^#\/help\/([^?#]+)/)
   return match?.[1] ?? null
+}
+
+/** DOM id to scroll to for a help hash (nested `--help/<topic>` stays on `#--help`). */
+export function helpScrollTargetFromHash(): string | null {
+  const section = helpSectionFromHash()
+  if (!section) return null
+  return section.split('/')[0] ?? section
 }
 
 const current = ref<RouteName>(readRoute())

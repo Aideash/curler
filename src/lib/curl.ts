@@ -61,6 +61,10 @@ const SHORT_BOOLEAN = new Set([
 export interface ParsedCurl {
   request: RequestModel
   warnings: string[]
+  /** Set when the pasted command is curl's help, not an HTTP request. */
+  redirectToHelp?: boolean
+  /** Category from `curl --help <category>`, when present. */
+  helpCategory?: string
 }
 
 /** How much of the variable table to substitute when copying as curl. */
@@ -298,7 +302,20 @@ export function parseCurl(input: string): ParsedCurl {
   let explicitMethod: HttpMethod | null = null
   let dataAsQuery = false
   let usedFormFlag = false
+  let redirectToHelp = false
+  let helpCategory: string | undefined
   const dataParts: string[] = []
+
+  const takeOptionalCategory = (attached: string | undefined) => {
+    if (attached !== undefined && attached !== '') {
+      helpCategory = attached
+      return
+    }
+    if (tokens[index + 1] !== undefined && !tokens[index + 1].startsWith('-')) {
+      index += 1
+      helpCategory = tokens[index]
+    }
+  }
 
   const setHeader = (name: string, value: string) => {
     const existing = request.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())
@@ -420,6 +437,10 @@ export function parseCurl(input: string): ParsedCurl {
       case 'compressed':
       case 'no-buffer':
         break
+      case 'help':
+        redirectToHelp = true
+        takeOptionalCategory(attached)
+        break
       default:
         // Terminal-only flags are kept rather than dropped, so a pasted
         // command comes back out of "Copy as curl" the way it went in.
@@ -488,6 +509,12 @@ export function parseCurl(input: string): ParsedCurl {
           break
         }
 
+        if (flag === 'h') {
+          redirectToHelp = true
+          takeOptionalCategory(token.slice(cursor + 1) || undefined)
+          break
+        }
+
         if (SHORT_BOOLEAN.has(flag)) {
           if (flag === 'L') request.options.followRedirects = true
           else if (flag === 'k') request.options.insecure = true
@@ -536,11 +563,18 @@ export function parseCurl(input: string): ParsedCurl {
 
   if (request.url) request.url = ensureDefaultScheme(request.url)
 
-  if (!request.url) warnings.push('No URL was found in the command.')
+  if (!request.url && !redirectToHelp) warnings.push('No URL was found in the command.')
   if (request.headers.length === 0) request.headers.push(emptyKeyValue())
 
   request.name = deriveName(request.url) ?? 'Imported request'
-  return { request, warnings }
+  return redirectToHelp
+    ? {
+        request,
+        warnings,
+        redirectToHelp: true,
+        ...(helpCategory ? { helpCategory } : {}),
+      }
+    : { request, warnings }
 }
 
 /** Parses curl `-F` / `--form-string` fields into a multipart part. */

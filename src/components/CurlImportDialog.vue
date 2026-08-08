@@ -1,28 +1,50 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ModalShell from './ModalShell.vue'
-import { parseCurl } from '../lib/curl'
+import { parseCurl, type ParsedCurl } from '../lib/curl'
+import {
+  curlHelpCommandLabel,
+  curlHelpHashForCategory,
+  isKnownCurlHelpCategory,
+} from '../lib/curlHelpNav'
+import { newRequest } from '../lib/store'
+import { navigate } from '../composables/useRoute'
 import type { RequestModel } from '../types'
 
 const emit = defineEmits<{ close: []; imported: [request: RequestModel] }>()
 
 const text = ref('')
 
-const preview = computed(() => {
+const preview = computed((): ParsedCurl | null => {
   if (!text.value.trim()) return null
   try {
     return parseCurl(text.value)
   } catch (error) {
     return {
-      request: null,
+      request: newRequest({ name: 'Import error', url: '' }),
       warnings: [error instanceof Error ? error.message : String(error)],
     }
+  }
+})
+
+const helpDestination = computed(() => {
+  const category = preview.value?.helpCategory
+  const known = category ? isKnownCurlHelpCategory(category) : true
+  return {
+    command: curlHelpCommandLabel(known ? category : undefined),
+    hash: curlHelpHashForCategory(category),
+    unknownCategory: category && !known ? category : null,
   }
 })
 
 function confirm() {
   const parsed = preview.value
   if (parsed?.request) emit('imported', parsed.request)
+}
+
+function viewHelp() {
+  navigate('help', helpDestination.value.hash)
+  emit('close')
 }
 </script>
 
@@ -45,7 +67,19 @@ function confirm() {
       from the active environment instead of being expanded now.
     </p>
 
-    <div v-if="preview?.request" class="preview">
+    <div v-if="preview?.redirectToHelp" class="preview help-preview">
+      <p class="faint">
+        Not an HTTP request — opens
+        <code class="mono">{{ helpDestination.command }}</code
+        >.
+      </p>
+      <p v-if="helpDestination.unknownCategory" class="unknown-category faint">
+        Unknown help category “{{ helpDestination.unknownCategory }}” — opening main help
+        instead.
+      </p>
+    </div>
+
+    <div v-else-if="preview?.request" class="preview">
       <div class="row">
         <span class="label faint">Method</span>
         <span class="mono">{{ preview.request.method }}</span>
@@ -66,13 +100,21 @@ function confirm() {
       </div>
     </div>
 
-    <ul v-if="preview?.warnings.length" class="warnings">
+    <ul v-if="preview?.warnings.length && !preview?.redirectToHelp" class="warnings">
       <li v-for="(warning, index) in preview.warnings" :key="index">{{ warning }}</li>
     </ul>
 
     <template #footer>
       <button @click="emit('close')">Cancel</button>
-      <button class="primary" :disabled="!preview?.request?.url" @click="confirm">Import</button>
+      <button v-if="preview?.redirectToHelp" class="primary" @click="viewHelp">View help</button>
+      <button
+        v-else
+        class="primary"
+        :disabled="!preview?.request?.url"
+        @click="confirm"
+      >
+        Import
+      </button>
     </template>
   </ModalShell>
 </template>
@@ -103,6 +145,21 @@ function confirm() {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.help-preview p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.help-preview code.mono {
+  font-size: 12px;
+}
+
+.unknown-category {
+  margin-top: 8px !important;
+  color: var(--amber);
 }
 
 .row {

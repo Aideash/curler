@@ -203,6 +203,24 @@ for (const [label, input, wanted] of cases) {
   }
 }
 
+const helpCases = [
+  ['curl --help redirects to in-app help', 'curl --help', {}],
+  ['curl -h redirects to in-app help', 'curl -h', {}],
+  ['curl --help auth redirects with category', 'curl --help auth', { helpCategory: 'auth' }],
+  ['curl --help=auth redirects with category', 'curl --help=auth', { helpCategory: 'auth' }],
+  ['curl -h auth redirects with category', 'curl -h auth', { helpCategory: 'auth' }],
+]
+
+for (const [label, input, wanted] of helpCases) {
+  const { redirectToHelp, helpCategory, warnings } = parseCurl(input)
+  group(label)
+  expect('redirectToHelp', redirectToHelp, true)
+  expect('warnings', warnings, [])
+  if (wanted.helpCategory !== undefined) {
+    expect('helpCategory', helpCategory, wanted.helpCategory)
+  }
+}
+
 const failures = summary()
 
 await close()
