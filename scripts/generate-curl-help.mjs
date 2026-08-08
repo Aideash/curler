@@ -36,7 +36,9 @@ function parseOptionLine(line) {
   }
 
   // Option rows: flags, then 2+ spaces, then description.
-  const match = line.match(/^(\s*(?:-\S+,\s+)?(?:--[\w-]+(?:\s+<[^>]+>)?(?:\[[^\]]+\])?(?:\s+\S+)*?)?)\s{2,}(.+)$/)
+  const match = line.match(
+    /^(\s*(?:-\S+,\s+)?(?:--[\w-]+(?:\s+<[^>]+>)?(?:\[[^\]]+\])?(?:\s+\S+)*?)?)\s{2,}(.+)$/,
+  )
   if (!match) return null
 
   const flags = match[1].trim()

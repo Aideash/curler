@@ -74,8 +74,7 @@ function viewHelp() {
         >.
       </p>
       <p v-if="helpDestination.unknownCategory" class="unknown-category faint">
-        Unknown help category “{{ helpDestination.unknownCategory }}” — opening main help
-        instead.
+        Unknown help category “{{ helpDestination.unknownCategory }}” — opening main help instead.
       </p>
     </div>
 
@@ -107,12 +106,7 @@ function viewHelp() {
     <template #footer>
       <button @click="emit('close')">Cancel</button>
       <button v-if="preview?.redirectToHelp" class="primary" @click="viewHelp">View help</button>
-      <button
-        v-else
-        class="primary"
-        :disabled="!preview?.request?.url"
-        @click="confirm"
-      >
+      <button v-else class="primary" :disabled="!preview?.request?.url" @click="confirm">
         Import
       </button>
     </template>

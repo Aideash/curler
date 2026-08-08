@@ -57,6 +57,10 @@ for (const flag of TERMINAL_FLAGS) {
   if (flag.short) COPY_SHORT.add(flag.short.replace(/^-/, ''))
 }
 
+// Import redirects to the faux-terminal help; the copy button emits curl --help.
+COPY_LONG.add('help')
+COPY_SHORT.add('h')
+
 function longStem(long: string): string | null {
   const match = long.match(/^--([\w.-]+)/)
   return match?.[1] ?? null

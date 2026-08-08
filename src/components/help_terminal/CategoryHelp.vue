@@ -79,12 +79,6 @@ tr.tier-none {
   opacity: 0.42;
 }
 
-tr.tier-copy td:nth-child(3)::after {
-  content: ' copy';
-  color: var(--text-dim);
-  font-size: 0.92em;
-}
-
 tr.tier-send td:nth-child(1)::before {
   content: '● ';
   color: var(--accent);

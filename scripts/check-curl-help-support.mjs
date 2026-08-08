@@ -18,9 +18,10 @@ const spotChecks = [
   [{ short: '-s,', long: '--silent', description: '' }, 'copy'],
   [{ short: '-o,', long: '--output <file>', description: '' }, 'copy'],
   [{ short: '-i,', long: '--include', description: '' }, 'copy'],
+  [{ short: '-h,', long: '--help <category>', description: '' }, 'copy'],
   [{ long: '--compressed', description: '' }, 'ignored'],
   [{ long: '--ntlm', description: '' }, 'none'],
-] 
+]
 
 group('spot checks')
 for (const [option, tier] of spotChecks) {
