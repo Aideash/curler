@@ -78,6 +78,12 @@ application/json`. A `$id` in the query is GraphQL syntax and is sent literally;
 value is parsed as JSON. Pasting a browser curl that carries a GraphQL body
 splits it into this form automatically.
 
+The **GraphQL builder** (title bar, when body mode is GraphQL) fetches your
+endpoint schema, lets you click fields and arguments into the query, validates
+syntax as you type and against the loaded schema, and supports inline fragments,
+enum pickers, and used-field highlighting. Argument insertion mode and field
+sort order are configurable in Site settings.
+
 **Quick-add headers.** The Headers tab has a menu of common single headers and
 of combinations that come up constantly — "JSON API" adds both `Content-Type`
 and `Accept`, "Bearer token" adds an `Authorization` header wired to a variable.
@@ -98,21 +104,27 @@ contain a `!`, a quote or a control character, with every backslash doubled to
 survive it. Those escapes are decoded on the way in, so a GraphQL query's `\n`
 lands as the JSON escape it started out as rather than a stray `\\n`.
 
-"Copy as curl" goes the other way, and offers two forms.
+"Copy as curl" goes the other way, and offers three forms.
 
-**Ready to run** substitutes your variables and single-quotes the result, so the
+**Ready to run** substitutes every variable and single-quotes the result, so the
 command works anywhere and nothing gets re-expanded by accident. It does put
 real credentials on your clipboard.
 
-**Shareable** keeps the references and double-quotes them, so the command reads
-as `-H "x-api-key: $API_KEY"` and picks the value up from the environment of
-whoever runs it. Braces are only kept where the shell would otherwise read the
-following character as part of the name, as in `"${BASE_URL}v1"`. A `$` that is
+**Shareable** expands public variables but leaves secrets as shell references
+— a header wired to a secret becomes `-H "x-api-key: $API_KEY"` rather than
+leaking the value. Anything still expandable is double-quoted; a `$` that is
 *not* a reference is escaped instead, so a GraphQL `$id` in the payload arrives
 as itself rather than as whatever the reader happens to have in `id`.
 
-`:id` path parameters are expanded in *both* forms, since a shell has no idea
-what they mean and would otherwise request the wrong path.
+**General** keeps every `${VAR}` placeholder and expands nothing at all — not
+values, not `:id` path parameters. Useful when the command should stay in
+curler's own syntax.
+
+`:id` path parameters are expanded in *ready* and *shareable* forms, since a
+shell has no idea what they mean and would otherwise request the wrong path.
+
+Pasting `curl --help` (or a category) in Import curl opens the matching page in
+the in-app help view instead of building a request.
 
 **Variables.** Reference a variable as `${NAME}` anywhere in a request — in the
 URL, in header values, and inside the body. The braces are required. A bare
@@ -207,10 +219,11 @@ rather than averaging them into a single misleading number:
 - every header sent and received, in curl's `>` and `<` shape, including the
   ones curler adds for you
 
-**Response size cap.** Options carries a cap, 10 MB by default, on how much of a
+**Response size cap.** Options carries a cap, 1 MB by default, on how much of a
 response body will be read. Past it curler stops pulling bytes off the socket
 rather than buffering a download nobody asked for. A capped response says so in
-Diagnostics and on the tab itself.
+Diagnostics and on the tab itself. The default cap is configurable in Site
+settings and applies to newly created requests.
 
 **Terminal-only flags.** Also under Options, and the reason is that a good half
 of curl's flags describe a terminal: there is no progress meter here to silence
@@ -222,7 +235,24 @@ Flags that contradict each other cannot both be picked: switch on `--silent` and
 `--progress-bar` greys out, explaining why. Flags that are merely useless alone
 — `--show-error` without `--silent` — stay available and say so. Importing a
 curl command captures these flags too, so a pasted `-sS --retry 3` comes back
-out the way it went in.
+out the way it went in. The in-app help view browses curl's own `--help` output
+with each flag marked by whether curler sends it, appends it to Copy as curl
+only, or does not support it.
+
+**Response bodies.** The body tab syntax-highlights by content type. JSON and
+JavaScript can be pretty-printed; HTML, CSS, and Sass get proper highlighting.
+Images, video, audio, and SVG render inline when under the media preview cap
+(configurable in Site settings). Binary or oversized bodies show a placeholder
+instead.
+
+**Multipart.** Choose the Multipart body tab for `curl -F` style uploads. File
+parts use `@path` or curl's `<path` syntax; `--form-string` (`str`) keeps `@`
+literal. The attach button (optional in Site settings) copies a picked file into
+`CURLER_HOME/upload-staging/` and fills in the absolute `@/path` — only the path
+is saved in your workspace. Modifiers `;type=` and `;filename=` round-trip (tune
+button on each part); `;headers=` is ignored with a warning. Relative paths
+resolve from the server cwd (shown in the editor). Invalid paths warn in red but
+do not block send or Copy-as-curl.
 
 **Saved requests.** Requests live in collections in the sidebar. Selecting one
 loads it; edits to a saved request persist automatically. The sidebar collapses
@@ -280,6 +310,13 @@ you to ignore the marker where it counts.
 Very large or wholly dissimilar bodies are not aligned — the diff says so and
 suggests reading them side by side instead, rather than hanging while it tries.
 
+**Site settings.** The gear menu opens a dialog for defaults and limits: new-request
+options (method, timeout, response cap, User-Agent), sidebar behaviour, GraphQL
+explorer preferences, compare defaults, backup retention, diff and media limits,
+and more. Values save with your workspace; some only apply on the next page load
+or when you create a new request. Theme is picked from the same menu and saved
+in workspace `settings` (with a browser cache for the first paint).
+
 **Themes.** The gear in the top right switches between seven themes — Dark,
 Light, Cute, Minimalist, BTerminal, Aquatic and Forest — or follows your OS
 light/dark setting, which is the default and updates live when the OS flips.
@@ -295,8 +332,8 @@ browser to fill in from whatever is installed. It lands on `<html>` and reaches
 the page by inheritance, which means anything naming its own font is unaffected —
 the JSON editor and every monospace run stay monospace under Cute.
 
-Your choice is kept in `localStorage` rather than the workspace file, since it
-belongs to the browser you are looking at rather than to your requests.
+Your theme preference is saved in workspace `settings` and cached in
+`localStorage` for the first paint before the workspace loads.
 
 ## Where your data lives
 
@@ -318,14 +355,16 @@ would treat a `.env` file.
 
 ### Backups
 
-Snapshots are kept alongside the workspace in `backups/`, newest 40 retained.
+Snapshots are kept alongside the workspace in `backups/`, newest 40 retained by
+default (both counts configurable in Site settings).
 
 One is taken on the first change of a session, then at most every five minutes —
 saves are debounced but still frequent, and snapshotting every one would burn
 through the history in minutes. That interval is ignored in the case that
 matters: any save holding **fewer requests than the file it replaces** is
 snapshotted immediately, and the filename is tagged `-shrunk`. Recovery is a
-file copy.
+file copy, or use **Restore from backup** at the bottom of the sidebar to pick a
+snapshot and reload the workspace.
 
 ### Saving is refused when loading failed
 
@@ -345,28 +384,36 @@ disconnected; it just will not persist. Reload once the server is back.
 | `Cmd`/`Ctrl` + `Enter` | Send the current request, or every lane when comparing |
 | `Cmd`/`Ctrl` + `S` | Save an unsaved request |
 | `Esc` | Close the open dialog |
+| `Alt` + `Shift` + `S` | Clear focus and jump back to the skip links |
 
 Inside a lane's editor, `Cmd`/`Ctrl` + `Enter` sends that lane alone, since it is
-the request on screen.
+the request on screen. On the builder, tabbing in lands on skip links first — use
+them to jump straight to the request or response panel.
 
 ## Layout
 
 ```
 config.mjs       Ports and workspace location, shared by the server and Vite
+settings.defaults.mjs  Default values for Site settings, shared by the server and UI
 server/          Node API server: performs requests, reads and writes the workspace
   client.mjs     The request engine, built on node:https for full control
   storage.mjs    Atomic reads and writes of ~/.curler/workspace.json, plus backups
+  multipart.mjs  Multipart body encoding for outgoing requests
   index.mjs      HTTP routes, and static serving of the build
 src/
   lib/curl.ts    curl parser and serialiser
+  lib/curlHelpData.ts  Generated curl --help text for the in-app help browser
+  lib/curlOptionSupport.ts  Which curl flags curler sends, copies, or ignores
   lib/vars.ts    Scope merging, ${VAR} and :id resolution, request build trace
   lib/store.ts   Reactive workspace state with debounced persistence
+  lib/settings.ts  Site settings metadata and groups
   lib/send.ts    One send, start to finish, shared by the builder and every lane
-  lib/response.ts  Status colours, sizes, content type and JSON formatting
+  lib/response.ts  Status colours, sizes, content type, JSON/JS formatting, media preview
+  lib/multipart.ts  Multipart part validation and path resolution
   lib/diff.ts    JSON normalisation, line alignment, header and meta comparison
   lib/compare.ts Comparison lanes: copies, per-lane environments, per-lane sends
   lib/terminalFlags.ts  The terminal-only flag catalogue and its conflict rules
-  composables/useRoute.ts  Hash routing between the builder and the comparison
+  composables/useRoute.ts  Hash routing between the builder, compare, GraphQL, and help
   themes/        Theme token maps, and the code that applies and persists them
   components/    Vue 3 single-file components
 scripts/
@@ -374,34 +421,45 @@ scripts/
   harness.mjs    Shared check runner: quiet on success, loud on failure
   check-config.mjs  Port parsing, bad values, and CURLER_HOME resolution
   check-curl.mjs Parser cases and import/export round-trip checks
+  check-curl-help-support.mjs  curl --help tier classification
+  generate-curl-help.mjs  Regenerates curlHelpData.ts from local curl --help
   check-vars.mjs Variable resolution, warnings, build trace, per-lane scopes
+  check-multipart.mjs  Multipart encoding and modifier round-trip
+  check-staging.mjs  Upload staging directory behaviour
+  check-upload-policy.mjs  CURLER_UPLOAD_ALLOW / DENY enforcement
   check-terminal-flags.mjs  Flag catalogue, conflicts, and curl round-trip
   check-diff.mjs JSON normalisation, alignment, budgets, header and meta rows
   check-compare.mjs  Lanes over loopback: copies, independence, staleness
+  check-response.mjs  Response formatting, media preview, pretty-print
   check-engine.mjs  The real engine over loopback: diagnostics, TLS, size cap
   check-storage.mjs Backup rotation and the never-overwrite-what-you-cannot-read rule
   check-theme.mjs Every theme is complete, and every colour is legible on it
 ```
 
-The builder and the comparison are two views over the same workspace, switched on
-the URL hash. Two views is not enough to justify a router, and the hash keeps the
-back button and a reloaded tab working without any history bookkeeping.
+The builder, comparison, GraphQL builder, and help views share one workspace,
+switched on the URL hash. A router is not worth the overhead, and the hash keeps
+the back button and a reloaded tab working without any history bookkeeping.
 
 ## Checks and logging
 
-`npm run check` runs all nine check scripts. They print one summary line each
+`npm run check` runs all fourteen check scripts. They print one summary line each
 when everything passes, and only the failing assertions when it does not:
 
 ```
-config: 27 checks passed
-curl round-trip: 8 checks passed
-variables: 65 checks passed
+config: 31 checks passed
+curl round-trip: 50 checks passed
+curl help support tiers: 41 checks passed
+variables: 120 checks passed
+multipart: 19 checks passed
+staging: 7 checks passed
+upload policy: 15 checks passed
 terminal flags: 44 checks passed
 diff: 51 checks passed
 compare: 50 checks passed
-engine: 44 checks passed
-storage: 17 checks passed
-themes: 126 checks passed
+response: 13 checks passed
+engine: 64 checks passed
+storage: 21 checks passed
+themes: 184 checks passed
 ```
 
 `npm run check:verbose` prints every assertion, which is what you want when a
@@ -439,14 +497,6 @@ control, explicit redirect handling, and accurate timings.
 
 `.npmrc` points at the corporate Artifactory mirror, matching the other projects
 on this machine.
-
-Multipart bodies (`curl -F`) use the **Multipart** body tab. File parts use `@path` or curl's
-`<path` syntax; `--form-string` (`str`) keeps `@` literal. The attach button copies a picked
-file into `CURLER_HOME/upload-staging/` and fills in the absolute `@/path` — only the path is
-saved in your workspace. Modifiers `;type=` and `;filename=` round-trip (tune button on each part);
-`;headers=` is ignored
-with a warning. Relative paths resolve from the server cwd (shown in the editor). Invalid paths
-warn in red but do not block send or Copy-as-curl.
 
 Optional `CURLER_UPLOAD_ALLOW` / `CURLER_UPLOAD_DENY` restrict which paths the server will read
 (staging files are always allowed). `CURLER_MAX_UPLOAD_MB` caps each file part and the total

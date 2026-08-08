@@ -8,7 +8,7 @@ import { helpScrollTargetFromHash, navigate } from '../composables/useRoute'
 
 const toc = [
   { id: 'overview', label: 'Overview' },
-  { id: '--help', label: 'Help' },
+  { id: '--help', label: 'Curl options' },
   { id: 'requests', label: 'Building requests' },
   { id: 'variables', label: 'Variables' },
   { id: 'graphql', label: 'GraphQL' },
@@ -84,88 +84,14 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         </section>
 
         <section id="--help">
+          <h2>Curl options</h2>
+          <p>
+            Browse curl’s own <code class="mono">--help</code> output, with each flag marked by how
+            curler handles it: sent on every request, appended to Copy as curl only, or not
+            supported. Pick a category from the dropdown to drill in; paste
+            <code class="mono">curl --help</code> in Import curl to jump here directly.
+          </p>
           <TerminalHelp />
-          <!-- <div class="faux-terminal mono">
-            <p class="cmd-line"><span style="color: var(--syntax-comment)">$</span> curl --help</p>
-            <p class="cmd-line">Usage: curl [options...] &lt;url&gt;</p>
-            <table class="help-options">
-              <tbody>
-                <tr>
-                  <td>-d,</td>
-                  <td>--data &lt;data&gt;</td>
-                  <td>HTTP POST data</td>
-                </tr>
-                <tr>
-                  <td>-f,</td>
-                  <td>--fail</td>
-                  <td>Fail fast with no output on HTTP errors</td>
-                </tr>
-                <tr>
-                  <td>-h,</td>
-                  <td>--help &lt;category&gt;</td>
-                  <td>Get help for commands</td>
-                </tr>
-                <tr>
-                  <td>-i,</td>
-                  <td>--include</td>
-                  <td>Include response headers in output</td>
-                </tr>
-                <tr>
-                  <td>-o,</td>
-                  <td>--output &lt;file&gt;</td>
-                  <td>Write to file instead of stdout</td>
-                </tr>
-                <tr>
-                  <td>-O,</td>
-                  <td>--remote-name</td>
-                  <td>Write output to file named as remote file</td>
-                </tr>
-                <tr>
-                  <td>-s,</td>
-                  <td>--silent</td>
-                  <td>Silent mode</td>
-                </tr>
-                <tr>
-                  <td>-T,</td>
-                  <td>--upload-file &lt;file&gt;</td>
-                  <td>Transfer local FILE to destination</td>
-                </tr>
-                <tr>
-                  <td>-u,</td>
-                  <td>--user &lt;user:password&gt;</td>
-                  <td>Server user and password</td>
-                </tr>
-                <tr>
-                  <td>-A,</td>
-                  <td>--user-agent &lt;name&gt;</td>
-                  <td>Send User-Agent &lt;name&gt; to server</td>
-                </tr>
-                <tr>
-                  <td>-v,</td>
-                  <td>--verbose</td>
-                  <td>Make the operation more talkative</td>
-                </tr>
-                <tr>
-                  <td>-V,</td>
-                  <td>--version</td>
-                  <td>Show version number and quit</td>
-                </tr>
-              </tbody>
-            </table>
-            <br />
-            <p class="cmd-line">
-              This is not the full help, this menu is stripped into categories.
-            </p>
-            <p class="cmd-line">Use "--help category" to get an overview of all categories.</p>
-            <p class="cmd-line">For all options use the manual or "--help all".</p>
-            <button
-              class="ghost copy-button"
-              title="Copy as curl"
-              @click="copyToClipboard('curl --help')"
-            >
-              <span class="material-icons sm">content_copy</span>
-            </button>
-          </div> -->
         </section>
 
         <section id="requests">
@@ -180,9 +106,25 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
               presets like “JSON API” or “Bearer token”.
             </li>
             <li>
-              <strong>Body</strong> — choose none, JSON, plain text, form-urlencoded, or GraphQL.
-              JSON mode includes syntax highlighting, bracket matching, inline error markers, and a
-              Format button.
+              <strong>Body</strong> — choose none, JSON, plain text, Form, Multipart, or GraphQL.
+              <ul>
+                <li>
+                  JSON — syntax highlighting, bracket matching, inline error markers, and a Format
+                  button.
+                </li>
+                <li>Plain text — plain text syntax highlighting.</li>
+                <li>
+                  Form — a key/value table as
+                  <code class="mono">application/x-www-form-urlencoded</code> — names and values are
+                  percent-encoded on send.
+                </li>
+                <li>
+                  Multipart — supports file parts (<code class="mono">@path</code>),
+                  <code class="mono">--form-string</code>, and <code class="mono">;type=</code> /
+                  <code class="mono">;filename=</code> modifiers.
+                </li>
+                <li>GraphQL — a GraphQL query editor and variables table.</li>
+              </ul>
             </li>
             <li>
               <strong>Options</strong> — follow redirects, skip TLS verification, set a timeout, cap
@@ -192,7 +134,10 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </ul>
           <p>
             Press <kbd>Send</kbd> or use <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>. The
-            response appears below with tabs for the body, headers, and diagnostics.
+            response appears below with tabs for the body, headers, and diagnostics. Bodies are
+            syntax-highlighted by content type — JSON and JavaScript can be pretty-printed, HTML and
+            CSS get proper highlighting, and images, video, audio, and SVG render inline when small
+            enough.
           </p>
         </section>
 
@@ -294,8 +239,16 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             Click <strong>GraphQL</strong> in the title bar (when body mode is GraphQL) to open the
             <strong>GraphQL builder</strong>. Fetch the schema from your endpoint, explore types in
             the sidebar, click fields to insert them into the query, and validate against the schema
-            before applying changes back to your request.
+            before applying changes back to your request. The query editor validates syntax as you
+            type and checks against the loaded schema when one is available.
           </p>
+          <ul>
+            <li>
+              The schema explorer can show field arguments, insert inline fragments, pick enum
+              values from a list, and highlight fields already used in the query.
+            </li>
+            <li>Argument insertion mode and field sort order are configurable in Site settings.</li>
+          </ul>
         </section>
 
         <section id="curl">
@@ -306,21 +259,25 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
             backslash line continuations. Shell variables become curler references where a shell
             would expand them.
           </p>
-          <p><strong>Copy as curl</strong> offers two forms:</p>
+          <p><strong>Copy as curl</strong> offers three forms:</p>
           <ul>
             <li>
-              <strong>Ready to run</strong> — substitutes variables and single-quotes the result.
-              Works anywhere; puts real credentials on your clipboard.
+              <strong>Ready to run</strong> — substitutes all variables and single-quotes the
+              result. Works anywhere; puts real credentials on your clipboard.
             </li>
             <li>
-              <strong>Shareable</strong> — keeps references like
-              <code class="mono">-H "x-api-key: $API_KEY"</code> so whoever runs it picks up values
-              from their environment.
+              <strong>Shareable</strong> — expands public variables, leaves secrets as shell
+              references like <code class="mono">-H "x-api-key: $API_KEY"</code>, and double-quotes
+              anything still expandable.
+            </li>
+            <li>
+              <strong>General</strong> — keeps every <code class="mono">${VAR}</code> placeholder
+              and expands nothing, including <code class="mono">:id</code> path parameters.
             </li>
           </ul>
           <p>
-            <code class="mono">:id</code> path parameters are expanded in both forms, since a shell
-            has no idea what they mean.
+            <code class="mono">:id</code> path parameters are expanded in ready and shareable forms,
+            since a shell has no idea what they mean.
           </p>
         </section>
 
@@ -383,12 +340,24 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             Switch environments from the sidebar to swap a whole set of variables at once. The
-            sidebar collapses to an icon rail when you need more room.
+            sidebar collapses to an icon rail when you need more room. Double-click a collection or
+            request name to rename it; optional edit icons beside names can be turned on in Site
+            settings.
+          </p>
+          <p>
+            The gear menu opens <strong>Site settings</strong> for defaults (timeouts, response
+            caps, compare behaviour, GraphQL explorer options, and more). Values save with your
+            workspace.
           </p>
           <p>
             If the workspace cannot be read (for example, the API server was restarted), a
             <strong>Not saving</strong> badge appears and nothing is written until a load succeeds.
             Reload once the server is back.
+          </p>
+          <p>
+            Automatic snapshots are kept in <code class="mono">backups/</code>. Use
+            <strong>Restore from backup</strong> at the bottom of the sidebar to roll back to an
+            earlier workspace.
           </p>
         </section>
 
@@ -438,8 +407,9 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             Backups are kept in <code class="mono">backups/</code> alongside the workspace, with the
-            newest 40 retained. Your theme is cached in the browser for the first paint, then kept
-            in workspace <code class="mono">settings</code> alongside your collections.
+            newest 40 retained by default (both counts are configurable in Site settings). Your
+            theme preference is cached in the browser for the first paint, then saved in workspace
+            <code class="mono">settings</code> alongside your collections.
           </p>
         </section>
       </article>
@@ -609,71 +579,6 @@ th {
 td code.mono {
   font-size: 11.5px;
 }
-
-/* .faux-terminal {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  margin: 0 auto;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.4;
-  max-width: 850px;
-  position: relative;
-}
-
-.faux-terminal p {
-  margin: 0;
-}
-
-.faux-terminal .cmd-line + .help-options,
-.faux-terminal .help-options + .cmd-line {
-  margin-top: 0.35em;
-}
-
-.help-options {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0;
-  padding-left: 1ch;
-}
-
-.help-options td {
-  padding: 0;
-  border: none;
-  vertical-align: top;
-  text-align: left;
-}
-
-.help-options td:nth-child(1) {
-  width: 1%;
-  white-space: nowrap;
-  padding-right: 1ch;
-}
-
-.help-options td:nth-child(2) {
-  width: 1%;
-  white-space: nowrap;
-  padding-right: 2ch;
-}
-
-.cmd-line {
-  display: block;
-}
-
-.copy-button {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 0;
-  margin: 0;
-  width: 24px;
-  height: 24px;
-}
-
-.copy-button:hover {
-  background: var(--bg-input);
-} */
 
 @media screen and (max-width: 700px) {
   .content {
