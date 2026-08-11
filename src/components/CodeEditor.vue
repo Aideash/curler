@@ -85,6 +85,37 @@ function buildTheme(dark: boolean): Extension {
         opacity: '0.55',
         color: 'var(--text-faint)',
       },
+      // Panel chrome lives under .cm-editor but is styled by @codemirror/view's
+      // baseTheme (&light/&dark), which beats a plain `.themePrefix .cm-panels`
+      // selector. Pin rules to `.themePrefix.cm-editor` for enough specificity.
+      '.cm-panels': {
+        backgroundColor: 'var(--bg-raised)',
+        color: 'var(--text)',
+      },
+      '.cm-panels-top': { borderBottom: '1px solid var(--border)' },
+      '.cm-panel.cm-search': {
+        backgroundColor: 'var(--bg-raised)',
+        '& label': { color: 'var(--text-dim)' },
+        '& [name=close]': {
+          backgroundColor: 'transparent',
+          color: 'var(--text-dim)',
+        },
+        '& .cm-textfield': {
+          backgroundImage: 'none',
+          backgroundColor: 'var(--bg-input)',
+          color: 'var(--text)',
+          border: '1px solid var(--border)',
+        },
+        '& .cm-button': {
+          backgroundImage: 'none',
+          backgroundColor: 'var(--bg-input)',
+          color: 'var(--text)',
+          border: '1px solid var(--border-strong)',
+          '&:active': { backgroundImage: 'none', backgroundColor: 'var(--bg-hover)' },
+        },
+      },
+      '.cm-searchMatch': { backgroundColor: 'var(--selection)' },
+      '.cm-searchMatch-selected': { backgroundColor: 'var(--accent-dim)' },
     },
     { dark },
   )
