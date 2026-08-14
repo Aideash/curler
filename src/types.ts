@@ -39,6 +39,8 @@ export interface KeyValue {
   secret?: boolean
   /** Row is a real definition, including when the value is intentionally empty. */
   defined?: boolean
+  /** Optional short annotation; UI only, does not affect resolution. */
+  note?: string
 }
 
 export interface GraphqlBody {
@@ -122,6 +124,7 @@ export type SettingName =
   | 'defaultRequestName'
   | 'defaultUserAgent'
   | 'multipartFilePicker'
+  | 'variableNotesScopes'
   // Page-load defaults (toggles on the page change active state, not these)
   | 'compareNormalizeJson'
   | 'compareShowDiff'

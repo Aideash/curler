@@ -78,6 +78,11 @@ const SETTING_META: Record<
     title: 'Multipart file picker',
     description: 'Show the attach button on multipart form parts to pick files from disk.',
   },
+  variableNotesScopes: {
+    type: 'string',
+    title: 'Variable notes',
+    description: 'Which variable scopes can carry short notes under each row.',
+  },
   compareNormalizeJson: {
     type: 'boolean',
     title: 'Compare: normalize JSON',
@@ -296,6 +301,10 @@ export const SETTING_STRING_OPTIONS: Partial<
     { value: 'shareable', label: 'Shareable' },
     { value: 'general', label: 'General' },
   ],
+  variableNotesScopes: [
+    { value: 'request', label: 'Request only' },
+    { value: 'all', label: 'All scopes' },
+  ],
 }
 
 export const SETTING_GROUPS: { title: string; names: SettingName[] }[] = [
@@ -307,6 +316,7 @@ export const SETTING_GROUPS: { title: string; names: SettingName[] }[] = [
       'sidebarCollapsed',
       'requestDetailsExpanded',
       'multipartFilePicker',
+      'variableNotesScopes',
     ],
   },
   {

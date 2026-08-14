@@ -9,6 +9,7 @@ import {
   deleteEnvironment,
   isScratch,
   secretCache,
+  settingString,
   state,
   variableSet,
 } from '../lib/store'
@@ -118,6 +119,12 @@ const builtins = computed(() => Object.entries(state.builtins))
  */
 const defaultName = computed(() => (scope.value === 'request' ? '' : DEFAULT_VARIABLE_NAME))
 
+function notesAllowedFor(target: EditableScope): boolean {
+  const mode = settingString('variableNotesScopes')
+  if (mode === 'all') return true
+  return target === 'request'
+}
+
 function promptEnvironment() {
   const name = window.prompt('Environment name', 'Staging')
   if (name !== null) {
@@ -201,6 +208,7 @@ function confirmDeleteEnvironment() {
       :resolves="false"
       allow-secrets
       reorderable
+      :show-notes="notesAllowedFor(scope)"
     />
 
     <p v-if="shadowed.length" class="notice">

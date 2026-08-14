@@ -23,6 +23,7 @@ export const SETTINGS = {
   defaultRequestName: { type: 'string', default: 'Untitled request', userFacing: true },
   defaultUserAgent: { type: 'string', default: 'curler/0.1', userFacing: true },
   multipartFilePicker: { type: 'boolean', default: false, userFacing: true },
+  variableNotesScopes: { type: 'string', default: 'request', userFacing: true },
 
   compareNormalizeJson: { type: 'boolean', default: true, userFacing: true },
   compareShowDiff: { type: 'boolean', default: false, userFacing: true },

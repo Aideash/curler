@@ -682,6 +682,7 @@ const flagPreview = computed(() =>
               name-placeholder="Variable name"
               value-placeholder="Value"
               :resolves="false"
+              show-notes
             />
           </div>
 

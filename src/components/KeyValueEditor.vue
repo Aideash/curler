@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, TransitionGroup } from 'vue'
+import { computed, nextTick, ref, watch, TransitionGroup } from 'vue'
 import MultipartModifiersDialog from './MultipartModifiersDialog.vue'
 import VariableIssues from './VariableIssues.vue'
 import { emptyKeyValue, type KeyValue, type MultipartPart } from '../types'
@@ -50,6 +50,8 @@ const props = withDefaults(
     showMultipartKind?: boolean
     /** Offer a file picker that stages to disk and fills `@/abs/path` (-F rows only). */
     showFilePicker?: boolean
+    /** Offer a short note under each row (variable definitions). */
+    showNotes?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -66,6 +68,7 @@ const props = withDefaults(
     rowAlerts: () => ({}),
     showMultipartKind: false,
     showFilePicker: false,
+    showNotes: false,
   },
 )
 
@@ -155,6 +158,10 @@ watch(
 
 async function remove(index: number) {
   const row = rows.value[index]
+  if (editingNoteId.value === row.id) {
+    editingNoteId.value = null
+    noteDraft.value = ''
+  }
   if (props.allowSecrets && row.secret && isUsable(row)) {
     const ok = window.confirm(
       'This secret is stored in your OS keychain and will be deleted. It cannot be recovered. Remove anyway?',
@@ -295,6 +302,60 @@ function saveMultipartModifiers(values: { contentType?: string; filename?: strin
   closeMultipartModifiers()
 }
 
+const editingNoteId = ref<string | null>(null)
+const noteDraft = ref('')
+const noteInput = ref<HTMLInputElement | null>(null)
+
+function bindNoteInput(el: unknown, rowId: string) {
+  if (editingNoteId.value === rowId) {
+    noteInput.value = (el as HTMLInputElement | null) ?? null
+  }
+}
+
+function hasNote(row: KeyValue): boolean {
+  return Boolean(row.note?.trim())
+}
+
+function showNoteSlot(row: KeyValue): boolean {
+  return props.showNotes && (editingNoteId.value === row.id || hasNote(row))
+}
+
+async function openNoteEdit(row: KeyValue) {
+  if (isBlank(row)) return
+  if (editingNoteId.value === row.id) {
+    noteInput.value?.focus()
+    return
+  }
+  if (editingNoteId.value) {
+    const previous = rows.value.find((item) => item.id === editingNoteId.value)
+    if (previous) commitNote(previous)
+  }
+  editingNoteId.value = row.id
+  noteDraft.value = row.note ?? ''
+  await nextTick()
+  noteInput.value?.focus()
+  noteInput.value?.select()
+}
+
+function commitNote(row: KeyValue) {
+  if (editingNoteId.value !== row.id) return
+  const trimmed = noteDraft.value.trim()
+  row.note = trimmed || undefined
+  editingNoteId.value = null
+  noteDraft.value = ''
+}
+
+function onNoteKeydown(row: KeyValue, event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commitNote(row)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    editingNoteId.value = null
+    noteDraft.value = ''
+  }
+}
+
 const fileInput = ref<HTMLInputElement | null>(null)
 const filePickTarget = ref<KeyValue | null>(null)
 const stagingFile = ref(false)
@@ -348,6 +409,7 @@ ensureTrailingRow()
     :class="{
       'with-secrets': allowSecrets,
       'with-multipart-kind': showMultipartKind,
+      'with-notes': showNotes,
       reorderable,
     }"
   >
@@ -377,7 +439,7 @@ ensureTrailingRow()
       <div
         v-for="(row, index) in rows"
         :key="row.id"
-        class="kv-row"
+        class="kv-item"
         :data-reorder-row="reorderable && index < reorderableLength ? '' : undefined"
         :class="{
           blank: isBlank(row),
@@ -389,156 +451,185 @@ ensureTrailingRow()
         }"
         @dragover="onRowDragOver(index, $event)"
       >
-        <button
-          v-if="reorderable && index < reorderableLength"
-          class="ghost drag-handle"
-          draggable="true"
-          :data-row-id="row.id"
-          title="Drag to reorder"
-          aria-label="Drag to reorder, or press arrow up or down"
-          aria-keyshortcuts="ArrowUp ArrowDown"
-          @dragstart="startDrag(LIST, index, $event)"
-          @dragend="endDrag($event)"
-          @keydown="onHandleKeydown(LIST, index, row.id, reorderableLength, $event)"
-        >
-          <span class="material-icons sm">drag_indicator</span>
-        </button>
-        <span v-else-if="reorderable" class="drag-spacer" aria-hidden="true" />
-        <input
-          :id="`${idPrefix}-${index}-enabled`"
-          v-model="row.enabled"
-          type="checkbox"
-          class="kv-toggle"
-          :disabled="!isUsable(row)"
-          :title="
-            isUsable(row)
-              ? row.enabled
-                ? 'Enabled'
-                : 'Disabled'
-              : isBlank(row)
-                ? 'Nothing to enable yet'
-                : row.name.trim() === ''
-                  ? 'Needs a name before it can be used'
-                  : 'Needs a value before it can be used'
-          "
-        />
-        <div
-          v-if="showMultipartKind && !isBlank(row)"
-          class="kv-kind"
-          role="group"
-          :aria-label="`Part ${row.name.trim() || 'type'}: curl -F or --form-string`"
-        >
+        <div class="kv-row">
           <button
-            type="button"
-            class="kv-kind-btn"
-            :class="{ active: !multipartTextOnly(row) }"
-            title="curl -F: @path reads a file from disk"
-            @click="setMultipartTextOnly(row, false)"
+            v-if="reorderable && index < reorderableLength"
+            class="ghost drag-handle"
+            draggable="true"
+            :data-row-id="row.id"
+            title="Drag to reorder"
+            aria-label="Drag to reorder, or press arrow up or down"
+            aria-keyshortcuts="ArrowUp ArrowDown"
+            @dragstart="startDrag(LIST, index, $event)"
+            @dragend="endDrag($event)"
+            @keydown="onHandleKeydown(LIST, index, row.id, reorderableLength, $event)"
           >
-            -F
+            <span class="material-icons sm">drag_indicator</span>
           </button>
-          <button
-            type="button"
-            class="kv-kind-btn"
-            :class="{ active: multipartTextOnly(row) }"
-            title="curl --form-string: value is literal text, @ is not special"
-            @click="setMultipartTextOnly(row, true)"
-          >
-            str
-          </button>
-        </div>
-        <span v-else-if="showMultipartKind" class="kv-kind-spacer" aria-hidden="true" />
-        <input
-          :id="`${idPrefix}-${index}-name`"
-          v-model="row.name"
-          class="mono"
-          :list="listId"
-          :placeholder="namePlaceholder"
-          spellcheck="false"
-          :class="{ warn: isPartial(row) && row.name.trim() === '' }"
-          @focus="selectDefaultName(row, $event)"
-          @input="ensureTrailingRow"
-        />
-        <div class="kv-value">
-          <button
-            v-if="showMultipartKind && !isBlank(row)"
-            type="button"
-            class="ghost kv-modifiers"
-            :class="{ active: hasMultipartModifiers(row) }"
-            title="Part modifiers (;type=, ;filename=)"
-            @click="openMultipartModifiers(row)"
-          >
-            <span class="material-icons sm">tune</span>
-          </button>
-          <button
-            v-if="showFilePicker && !isBlank(row) && !multipartTextOnly(row)"
-            type="button"
-            class="ghost kv-file"
-            :disabled="stagingFile"
-            title="Pick a file — copied to CURLER_HOME staging as an @/path"
-            @click="openFilePicker(row)"
-          >
-            <span class="material-icons sm">attach_file</span>
-          </button>
-          <select
-            v-if="enumChoices(row)"
-            :id="`${idPrefix}-${index}-value`"
-            class="mono kv-enum"
-            :value="enumSelection(row)"
-            :class="{ warn: isPartial(row) && !enumSelection(row) }"
-            @change="onEnumSelect(row, $event)"
-            @keydown="onValueCycleKeydown(row, $event)"
-          >
-            <option value="" disabled>Select…</option>
-            <option v-for="choice in enumChoices(row)" :key="choice" :value="choice">
-              {{ choice }}
-            </option>
-          </select>
+          <span v-else-if="reorderable" class="drag-spacer" aria-hidden="true" />
           <input
-            v-else
-            :id="`${idPrefix}-${index}-value`"
-            :value="valueOf(row)"
+            :id="`${idPrefix}-${index}-enabled`"
+            v-model="row.enabled"
+            type="checkbox"
+            class="kv-toggle"
+            :disabled="!isUsable(row)"
+            :title="
+              isUsable(row)
+                ? row.enabled
+                  ? 'Enabled'
+                  : 'Disabled'
+                : isBlank(row)
+                  ? 'Nothing to enable yet'
+                  : row.name.trim() === ''
+                    ? 'Needs a name before it can be used'
+                    : 'Needs a value before it can be used'
+            "
+          />
+          <div
+            v-if="showMultipartKind && !isBlank(row)"
+            class="kv-kind"
+            role="group"
+            :aria-label="`Part ${row.name.trim() || 'type'}: curl -F or --form-string`"
+          >
+            <button
+              type="button"
+              class="kv-kind-btn"
+              :class="{ active: !multipartTextOnly(row) }"
+              title="curl -F: @path reads a file from disk"
+              @click="setMultipartTextOnly(row, false)"
+            >
+              -F
+            </button>
+            <button
+              type="button"
+              class="kv-kind-btn"
+              :class="{ active: multipartTextOnly(row) }"
+              title="curl --form-string: value is literal text, @ is not special"
+              @click="setMultipartTextOnly(row, true)"
+            >
+              str
+            </button>
+          </div>
+          <span v-else-if="showMultipartKind" class="kv-kind-spacer" aria-hidden="true" />
+          <input
+            :id="`${idPrefix}-${index}-name`"
+            v-model="row.name"
             class="mono"
-            :type="allowSecrets && row.secret ? 'password' : 'text'"
-            :placeholder="valuePlaceholder"
+            :list="listId"
+            :placeholder="namePlaceholder"
             spellcheck="false"
-            :class="{
-              warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
-              error: Boolean(rowAlerts[row.id]),
-            }"
-            :title="rowAlerts[row.id]?.message"
-            @input="onValueInput(row, $event)"
-            @keydown.enter="onValueInput(row, $event)"
-            @keydown="onValueCycleKeydown(row, $event)"
+            :class="{ warn: isPartial(row) && row.name.trim() === '' }"
+            @focus="selectDefaultName(row, $event)"
+            @input="ensureTrailingRow"
           />
-          <VariableIssues
-            v-if="!enumChoices(row) && !rowAlerts[row.id]"
-            class="kv-warn"
-            :issues="issues.get(row.id) ?? []"
-            @fix="(name) => braceRowReference(row, name)"
-          />
-          <span v-else-if="rowAlerts[row.id]" class="kv-alert" :title="rowAlerts[row.id].message">
-            {{ rowAlerts[row.id].message }}
-          </span>
+          <div class="kv-value">
+            <button
+              v-if="showMultipartKind && !isBlank(row)"
+              type="button"
+              class="ghost kv-modifiers"
+              :class="{ active: hasMultipartModifiers(row) }"
+              title="Part modifiers (;type=, ;filename=)"
+              @click="openMultipartModifiers(row)"
+            >
+              <span class="material-icons sm">tune</span>
+            </button>
+            <button
+              v-if="showFilePicker && !isBlank(row) && !multipartTextOnly(row)"
+              type="button"
+              class="ghost kv-file"
+              :disabled="stagingFile"
+              title="Pick a file — copied to CURLER_HOME staging as an @/path"
+              @click="openFilePicker(row)"
+            >
+              <span class="material-icons sm">attach_file</span>
+            </button>
+            <select
+              v-if="enumChoices(row)"
+              :id="`${idPrefix}-${index}-value`"
+              class="mono kv-enum"
+              :value="enumSelection(row)"
+              :class="{ warn: isPartial(row) && !enumSelection(row) }"
+              @change="onEnumSelect(row, $event)"
+              @keydown="onValueCycleKeydown(row, $event)"
+            >
+              <option value="" disabled>Select…</option>
+              <option v-for="choice in enumChoices(row)" :key="choice" :value="choice">
+                {{ choice }}
+              </option>
+            </select>
+            <input
+              v-else
+              :id="`${idPrefix}-${index}-value`"
+              :value="valueOf(row)"
+              class="mono"
+              :type="allowSecrets && row.secret ? 'password' : 'text'"
+              :placeholder="valuePlaceholder"
+              spellcheck="false"
+              :class="{
+                warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
+                error: Boolean(rowAlerts[row.id]),
+              }"
+              :title="rowAlerts[row.id]?.message"
+              @input="onValueInput(row, $event)"
+              @keydown.enter="onValueInput(row, $event)"
+              @keydown="onValueCycleKeydown(row, $event)"
+            />
+            <VariableIssues
+              v-if="!enumChoices(row) && !rowAlerts[row.id]"
+              class="kv-warn"
+              :issues="issues.get(row.id) ?? []"
+              @fix="(name) => braceRowReference(row, name)"
+            />
+            <span v-else-if="rowAlerts[row.id]" class="kv-alert" :title="rowAlerts[row.id].message">
+              {{ rowAlerts[row.id].message }}
+            </span>
+          </div>
+          <button
+            v-if="allowSecrets"
+            class="ghost kv-secret"
+            :class="{ active: row.secret }"
+            title="Secure secret"
+            :disabled="isBlank(row) && !row.secret"
+            @click="toggleSecret(row)"
+          >
+            <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
+          </button>
+          <button
+            v-if="showNotes"
+            type="button"
+            class="ghost kv-note-btn"
+            :class="{ active: hasNote(row) }"
+            title="Note"
+            :disabled="isBlank(row)"
+            @click="openNoteEdit(row)"
+          >
+            <span class="material-icons sm">note_alt</span>
+          </button>
+          <button
+            class="ghost kv-remove"
+            title="Remove"
+            :disabled="index === rows.length - 1 && isBlank(row)"
+            @click="remove(index)"
+          >
+            <span class="material-icons sm">close</span>
+          </button>
         </div>
-        <button
-          v-if="allowSecrets"
-          class="ghost kv-secret"
-          :class="{ active: row.secret }"
-          title="Secure secret"
-          :disabled="isBlank(row) && !row.secret"
-          @click="toggleSecret(row)"
-        >
-          <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
-        </button>
-        <button
-          class="ghost kv-remove"
-          title="Remove"
-          :disabled="index === rows.length - 1 && isBlank(row)"
-          @click="remove(index)"
-        >
-          <span class="material-icons sm">close</span>
-        </button>
+        <div v-if="showNoteSlot(row)" class="kv-note">
+          <input
+            v-if="editingNoteId === row.id"
+            :id="`${idPrefix}-${index}-note`"
+            :ref="(el) => bindNoteInput(el, row.id)"
+            v-model="noteDraft"
+            type="text"
+            class="kv-note-input"
+            placeholder="Short note"
+            maxlength="200"
+            spellcheck="true"
+            @blur="commitNote(row)"
+            @keydown="onNoteKeydown(row, $event)"
+          />
+          <p v-else class="kv-note-text">{{ row.note }}</p>
+        </div>
       </div>
     </component>
 
@@ -572,6 +663,13 @@ ensureTrailingRow()
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.kv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
 }
 
 .kv-row {
@@ -611,6 +709,38 @@ ensureTrailingRow()
   grid-template-columns: 22px 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px;
 }
 
+.kv.with-notes .kv-row {
+  grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
+.kv.with-notes.with-multipart-kind .kv-row {
+  grid-template-columns: 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px;
+}
+
+.kv.reorderable.with-notes .kv-row {
+  grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px;
+}
+
+.kv.reorderable.with-notes.with-multipart-kind .kv-row {
+  grid-template-columns: 22px 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px;
+}
+
+.kv.with-secrets.with-notes .kv-row {
+  grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px 28px;
+}
+
+.kv.with-secrets.with-notes.with-multipart-kind .kv-row {
+  grid-template-columns: 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px 28px;
+}
+
+.kv.reorderable.with-secrets.with-notes .kv-row {
+  grid-template-columns: 22px 24px minmax(140px, 1fr) minmax(180px, 2fr) 28px 28px 28px;
+}
+
+.kv.reorderable.with-secrets.with-notes.with-multipart-kind .kv-row {
+  grid-template-columns: 22px 24px 74px minmax(120px, 1fr) minmax(160px, 2fr) 28px 28px 28px;
+}
+
 .drag-handle {
   opacity: 0;
   padding: 0 1px;
@@ -627,20 +757,20 @@ ensureTrailingRow()
   width: 22px;
 }
 
-.kv-row:hover .drag-handle,
-.kv-row:has(:focus-visible) .drag-handle {
+.kv-item:hover .drag-handle,
+.kv-item:has(:focus-visible) .drag-handle {
   opacity: 1;
 }
 
-.kv-row.dragging {
+.kv-item.dragging {
   opacity: 0.45;
 }
 
-.kv-row.drop-before {
+.kv-item.drop-before {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
-.kv-row.drop-after {
+.kv-item.drop-after {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
@@ -675,11 +805,11 @@ ensureTrailingRow()
 }
 
 /* An untouched row reads as inactive until there is something in it. */
-.kv-row.blank input:not(:focus) {
+.kv-item.blank .kv-row input:not(:focus) {
   opacity: 0.62;
 }
 
-.kv-row.partial input.warn {
+.kv-item.partial .kv-row input.warn {
   border-color: var(--amber-border);
 }
 
@@ -689,16 +819,26 @@ ensureTrailingRow()
   color: var(--amber);
 }
 
-.kv.with-secrets .kv-notice {
+.kv.with-secrets .kv-notice,
+.kv.with-notes .kv-notice {
   margin-left: 58px;
+}
+
+.kv.with-secrets.with-notes .kv-notice {
+  margin-left: 86px;
 }
 
 .kv.reorderable .kv-notice {
   margin-left: 52px;
 }
 
-.kv.reorderable.with-secrets .kv-notice {
+.kv.reorderable.with-secrets .kv-notice,
+.kv.reorderable.with-notes .kv-notice {
   margin-left: 80px;
+}
+
+.kv.reorderable.with-secrets.with-notes .kv-notice {
+  margin-left: 108px;
 }
 
 .kv-kind {
@@ -830,28 +970,71 @@ ensureTrailingRow()
 }
 
 .kv-secret,
+.kv-note-btn,
 .kv-remove {
   display: inline-flex;
   padding: 3px;
   line-height: 1;
 }
 
-.kv-secret {
+.kv-secret,
+.kv-note-btn {
   color: var(--text-faint);
 }
 
-.kv-secret.active {
+.kv-secret.active,
+.kv-note-btn.active {
   color: var(--accent);
 }
 
-.kv-secret:disabled {
+.kv-secret:disabled,
+.kv-note-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
 .kv-remove .material-icons,
-.kv-secret .material-icons {
+.kv-secret .material-icons,
+.kv-note-btn .material-icons {
   vertical-align: 0;
+}
+
+.kv-note {
+  padding: 0 34px 2px 30px;
+  min-width: 0;
+}
+
+.kv.reorderable .kv-note {
+  padding-left: 52px;
+}
+
+.kv.with-secrets.with-notes .kv-note {
+  padding-right: 62px;
+}
+
+.kv-note-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-faint);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.kv-note-input {
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* .kv-row-move,
