@@ -9,12 +9,21 @@ you get back is what curl would have shown you.
 
 ## Quick start
 
+You need **Node.js 22.13+ or 24+**, and npm access to the corporate Artifactory
+mirror (the committed `.npmrc` points there — same setup as other projects on
+this network). On a Mac, Xcode Command Line Tools help if `keytar`'s native
+install falls back to compiling (`xcode-select --install`).
+
 ```bash
 npm install
 npm run dev
 ```
 
 Then open http://localhost:5173.
+
+No `.env` is required. On first launch the app creates `~/.curler/workspace.json`
+with a starter collection and a Local environment; after that it just loads what
+is already there.
 
 `npm run dev` starts two processes: the API server on port 5174 and the Vite dev
 server on 5173, which proxies `/api` through to it. Both ports are configurable,
@@ -497,8 +506,9 @@ control, explicit redirect handling, and accurate timings.
 
 ## Notes
 
-`.npmrc` points at the corporate Artifactory mirror, matching the other projects
-on this machine.
+`.npmrc` points at the corporate Artifactory mirror so installs go through the
+reviewed package feed. Teammates need the same Artifactory access they use for
+other internal Node projects.
 
 Optional `CURLER_UPLOAD_ALLOW` / `CURLER_UPLOAD_DENY` restrict which paths the server will read
 (staging files are always allowed). `CURLER_MAX_UPLOAD_MB` caps each file part and the total

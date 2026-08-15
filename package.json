@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=20.19.0"
+    "node": "^22.13.0 || >=24.0.0"
+  },
+  "overrides": {
+    "nopt": "7.2.1",
+    "abbrev": "2.0.0"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
