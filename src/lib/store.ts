@@ -683,12 +683,14 @@ export function deleteRequest(id: string) {
 }
 
 export function addCollection(name: string) {
-  state.collections.push({
+  const collection = {
     id: uid(),
     name: name.trim() || 'New collection',
     requests: [],
     variables: [],
-  })
+  }
+  state.collections.push(collection)
+  return collection.id
 }
 
 export function renameCollection(id: string, name: string) {

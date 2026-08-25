@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import BuildSidebar from './BuildSidebar.vue'
 import RequestPanel from './RequestPanel.vue'
 import ResponsePanel from './ResponsePanel.vue'
@@ -27,6 +27,7 @@ import {
   activeEnvironment,
   currentRequest,
   isScratch,
+  addCollection,
   replaceCurrent,
   saveCurrentTo,
   settingNumber,
@@ -60,9 +61,18 @@ function openVariables(scope: EditableScope = 'request') {
   showVariables.value = true
 }
 const trace = ref<BuildTrace | null>(null)
+const NEW_COLLECTION = '__new__'
 const showSave = ref(false)
 const saveName = ref('')
 const saveCollectionId = ref('')
+const saveCollectionName = ref('')
+const saveCollectionNameInput = ref<HTMLInputElement | null>(null)
+const creatingCollection = computed(() => saveCollectionId.value === NEW_COLLECTION)
+const canSave = computed(() =>
+  creatingCollection.value
+    ? Boolean(saveCollectionName.value.trim())
+    : Boolean(saveCollectionId.value),
+)
 
 const variableWarnings = computed(() => {
   const resolved = resolveRequest(currentRequest.value, variables.value)
@@ -140,13 +150,23 @@ function onImported(request: RequestModel) {
 
 function openSave() {
   saveName.value = currentRequest.value.name
-  saveCollectionId.value = state.collections[0]?.id ?? ''
+  saveCollectionName.value = ''
+  saveCollectionId.value = state.collections[0]?.id ?? NEW_COLLECTION
   showSave.value = true
 }
 
+function onSaveCollectionChange() {
+  if (creatingCollection.value) {
+    nextTick(() => saveCollectionNameInput.value?.focus())
+  }
+}
+
 function confirmSave() {
-  if (!saveCollectionId.value) return
-  saveCurrentTo(saveCollectionId.value, saveName.value)
+  if (!canSave.value) return
+  const collectionId = creatingCollection.value
+    ? addCollection(saveCollectionName.value)
+    : saveCollectionId.value
+  saveCurrentTo(collectionId, saveName.value)
   showSave.value = false
   flash('Request saved')
 }
@@ -347,7 +367,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </label>
       <label class="field">
         <span class="faint">Collection</span>
-        <select id="save-collection" v-model="saveCollectionId">
+        <select id="save-collection" v-model="saveCollectionId" @change="onSaveCollectionChange">
+          <option :value="NEW_COLLECTION">New</option>
           <option
             v-for="collection in state.collections"
             :key="collection.id"
@@ -357,9 +378,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           </option>
         </select>
       </label>
+      <label v-if="creatingCollection" class="field">
+        <span class="faint">Collection name</span>
+        <input
+          id="save-collection-name"
+          ref="saveCollectionNameInput"
+          v-model="saveCollectionName"
+          placeholder="New collection"
+          @keydown.enter="confirmSave"
+        />
+      </label>
       <template #footer>
         <button @click="showSave = false">Cancel</button>
-        <button class="primary" :disabled="!saveCollectionId" @click="confirmSave">Save</button>
+        <button class="primary" :disabled="!canSave" @click="confirmSave">Save</button>
       </template>
     </ModalShell>
   </div>
