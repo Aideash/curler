@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import ModalShell from './ModalShell.vue'
 import { parseCurl, type ParsedCurl } from '../lib/curl'
+import { composedUrl } from '../lib/query'
 import {
   curlHelpCommandLabel,
   curlHelpHashForCategory,
@@ -85,7 +86,7 @@ function viewHelp() {
       </div>
       <div class="row">
         <span class="label faint">URL</span>
-        <span class="mono break">{{ preview.request.url || '—' }}</span>
+        <span class="mono break">{{ composedUrl(preview.request) || '—' }}</span>
       </div>
       <div class="row">
         <span class="label faint">Headers</span>

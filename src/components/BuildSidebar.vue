@@ -49,7 +49,7 @@ let renameOrigin: HTMLElement | null = null
 const railed = ref(settingBoolean('sidebarCollapsed'))
 const root = ref<HTMLElement | null>(null)
 /** Keep in sync with the overlay breakpoint in this component's styles. */
-const overlaying = window.matchMedia('(max-width: 750px)')
+const overlaying = window.matchMedia('(max-width: 760px)')
 
 function setRailed(value: boolean) {
   railed.value = value
@@ -473,7 +473,7 @@ const {
 
 /* Below this the panel is an overlay rather than a column; the content beside
    it only reserves room for the rail. Kept in step with BuildView's .main. */
-@media screen and (max-width: 750px) {
+@media screen and (max-width: 760px) {
   .sidebar {
     position: absolute;
     left: 0;

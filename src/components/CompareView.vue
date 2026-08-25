@@ -30,7 +30,8 @@ import {
   pathVariablesForCurlCopy,
   type CurlCopyMode,
 } from '../lib/curl'
-import { describeIssues, inspect, resolveUrl } from '../lib/vars'
+import { describeIssues, inspect, resolveRequest } from '../lib/vars'
+import { composedUrl } from '../lib/query'
 import { settingBoolean, settingString, state } from '../lib/store'
 import type { EditableScope, RequestModel } from '../types'
 
@@ -51,7 +52,7 @@ const variablesScope = ref<EditableScope>('collection')
 const lanes = computed(() => compare.lanes)
 const canAdd = computed(() => lanes.value.length < maxLanes())
 const anySending = computed(() => lanes.value.some((lane) => lane.sending))
-const anySendable = computed(() => lanes.value.some((lane) => lane.request.url.trim()))
+const anySendable = computed(() => lanes.value.some((lane) => composedUrl(lane.request).trim()))
 
 const editing = computed<Lane | null>(
   () => lanes.value.find((lane) => lane.id === editingId.value) ?? null,
@@ -64,9 +65,9 @@ const editingUrl = computed(() => {
   if (!lane) return { value: '', issues: [], title: '' }
   // Resolution problems only. A bare `$name` here is literal text that
   // resolves to itself, so flagging the preview as unresolved would be a lie.
-  const issues = inspect(lane.request.url, editingVariables.value, true, false)
+  const issues = inspect(composedUrl(lane.request), editingVariables.value, true, false)
   return {
-    value: resolveUrl(lane.request.url.trim(), editingVariables.value).value,
+    value: resolveRequest(lane.request, editingVariables.value).url,
     issues,
     title: issues.length ? describeIssues(issues) : '',
   }
@@ -284,8 +285,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         v-if="tab === 'body' && diff && diffReady"
         :left="bodyFor(leftLane)"
         :right="bodyFor(rightLane)"
-        :left-label="`${leftLane?.label} ${leftLane?.request.url || 'lane'}`"
-        :right-label="`${rightLane?.label} ${rightLane?.request.url || 'lane'}`"
+        :left-label="`${leftLane?.label} ${(leftLane ? composedUrl(leftLane.request) : '') || 'lane'}`"
+        :right-label="`${rightLane?.label} ${(rightLane ? composedUrl(rightLane.request) : '') || 'lane'}`"
         :normalize="normalize"
       />
 
@@ -313,8 +314,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <div class="cell label-cell">{{ tab === 'meta' ? 'Property' : 'Header' }}</div>
             <div v-for="lane in lanes" :key="lane.id" class="cell">
               <span class="label">{{ lane.label }}</span>
-              <span class="col-url mono faint" :title="lane.request.url">{{
-                lane.request.url || '—'
+              <span class="col-url mono faint" :title="composedUrl(lane.request)">{{
+                composedUrl(lane.request) || '—'
               }}</span>
             </div>
           </div>

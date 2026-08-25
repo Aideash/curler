@@ -4,6 +4,7 @@ const h = createHarness('terminal flags')
 const { modules, close } = await loadModules([
   '/src/lib/terminalFlags.ts',
   '/src/lib/curl.ts',
+  '/src/lib/store.ts',
   '/src/types.ts',
 ])
 

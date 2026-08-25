@@ -52,6 +52,8 @@ const props = withDefaults(
     showFilePicker?: boolean
     /** Offer a short note under each row (variable definitions). */
     showNotes?: boolean
+    /** A name is enough to enable the row, so empty values can be sent (`flag=`). */
+    allowEmptyValues?: boolean
   }>(),
   {
     nameOptions: () => [],
@@ -69,6 +71,7 @@ const props = withDefaults(
     showMultipartKind: false,
     showFilePicker: false,
     showNotes: false,
+    allowEmptyValues: false,
   },
 )
 
@@ -107,10 +110,12 @@ function valueOf(row: KeyValue): string {
 
 /**
  * A row is only sent once it has both halves, so that is what the checkbox
- * tracks. Anything short of it is inert.
+ * tracks. Anything short of it is inert. Query params are the exception: a
+ * name with an empty value is still `flag=` on the wire.
  */
 function isUsable(row: KeyValue): boolean {
   if (row.name.trim() === '') return false
+  if (props.allowEmptyValues) return true
   if (valueOf(row).trim() !== '') return true
   return row.defined === true
 }

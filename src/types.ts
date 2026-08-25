@@ -85,6 +85,8 @@ export interface RequestModel {
   name: string
   method: HttpMethod
   url: string
+  /** Query-string rows. `url` holds origin, path and hash only. */
+  query: KeyValue[]
   headers: KeyValue[]
   body: RequestBody
   options: RequestOptions

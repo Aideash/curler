@@ -117,6 +117,7 @@ watch(
           <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
           <span class="action-button-text">{{ copied ? 'Copied' : 'Copy' }}</span>
         </button>
+        <span v-if="tab === 'body' && (copyEnabled || canPretty)" class="separator" />
         <div class="tabs">
           <button
             class="ghost tab"
@@ -287,6 +288,14 @@ input {
 
 .reset {
   margin-left: auto;
+}
+
+.separator {
+  width: 1px;
+  height: 1.5lh;
+  align-self: center;
+  background: var(--border);
+  margin: 0px;
 }
 
 .final-url {

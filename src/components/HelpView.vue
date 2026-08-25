@@ -97,10 +97,15 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         <section id="requests">
           <h2>Building requests</h2>
           <p>
-            Set the method and URL at the top, then use the tabs below to configure headers, body,
-            variables, and options.
+            Set the method and URL at the top, then use the tabs below to configure query params,
+            headers, body, variables, and options.
           </p>
           <ul>
+            <li>
+              <strong>Params</strong> — query-string rows that stay in sync with the URL. Toggle a
+              row off to keep it without sending it. Empty values are sent as
+              <code class="mono">flag=</code>.
+            </li>
             <li>
               <strong>Headers</strong> — add rows manually, or use the quick-add menu for common
               presets like “JSON API” or “Bearer token”.
@@ -145,8 +150,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           <h2>Variables</h2>
           <p>
             Reference a variable as <code class="mono">${NAME}</code> anywhere in a request — URL,
-            headers, and body. The braces are required; a bare <code class="mono">$NAME</code> is
-            literal text.
+            query params, headers, and body. The braces are required; a bare
+            <code class="mono">$NAME</code> is literal text.
           </p>
           <p>
             In URLs you can also write <code class="mono">:name</code> for path parameters, e.g.

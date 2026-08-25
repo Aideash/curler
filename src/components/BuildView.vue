@@ -416,7 +416,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 /* Where the sidebar leaves the flow and becomes an overlay, so only the rail
    it collapses to is worth reserving. Kept in step with Sidebar's own query. */
-@media screen and (max-width: 750px) {
+@media screen and (max-width: 760px) {
   .main {
     margin-left: var(--rail-width);
   }

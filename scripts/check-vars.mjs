@@ -5,6 +5,7 @@ const { modules, close } = await loadModules([
   '/src/lib/curl.ts',
   '/src/lib/graphql.ts',
   '/src/lib/store.ts',
+  '/src/lib/query.ts',
   '/src/types.ts',
 ])
 
@@ -28,6 +29,11 @@ const {
   buildGraphqlBody,
   parseCurl,
   state,
+  splitUrl,
+  composedUrl,
+  applyComposedUrl,
+  appendEncodedQuery,
+  encodeQueryComponent,
 } = modules
 const { group, expect, detail, summary } = createHarness('variables')
 
@@ -745,6 +751,106 @@ group('request readiness for an environment')
 
   const literal = newRequest({ url: 'https://api.test/ping' })
   expect('no references means ready', requestVariableIssues(literal, {}), [])
+}
+
+group('query string rows')
+{
+  expect(
+    'placeholder-aware split ignores ? inside ${BASE_URL}',
+    splitUrl('${BASE_URL}/things?a=1'),
+    { base: '${BASE_URL}/things', hash: '', pairs: [{ name: 'a', value: '1' }] },
+  )
+  expect(
+    'hash stays on the path side',
+    splitUrl('https://example.com/x?a=1#frag'),
+    { base: 'https://example.com/x', hash: '#frag', pairs: [{ name: 'a', value: '1' }] },
+  )
+  expect(
+    'duplicate keys are kept',
+    splitUrl('https://example.com?id=1&id=2').pairs,
+    [
+      { name: 'id', value: '1' },
+      { name: 'id', value: '2' },
+    ],
+  )
+  expect(
+    'percent-decoding is for display only',
+    splitUrl('https://example.com?q=hello%20world').pairs,
+    [{ name: 'q', value: 'hello world' }],
+  )
+
+  const extracted = newRequest({ url: 'https://api.example.com/search?q=hello&flag=' })
+  expect('newRequest splits query off the url', extracted.url, 'https://api.example.com/search')
+  expect(
+    'and fills the table',
+    extracted.query.map((row) => [row.name, row.value, row.enabled]),
+    [
+      ['q', 'hello', true],
+      ['flag', '', true],
+    ],
+  )
+  expect('composed url is the template', composedUrl(extracted), 'https://api.example.com/search?q=hello&flag=')
+
+  const toggled = newRequest({ url: 'https://example.com/x?keep=1&skip=2' })
+  toggled.query.find((row) => row.name === 'skip').enabled = false
+  expect('disabled rows drop out of the url', composedUrl(toggled), 'https://example.com/x?keep=1')
+  expect(
+    'and out of the sent url',
+    resolveRequest(toggled, {}).url,
+    'https://example.com/x?keep=1',
+  )
+  expect('copy as curl omits disabled params', toCurl(toggled).includes('skip='), false)
+  expect('copy as curl keeps enabled params', toCurl(toggled).includes('keep=1'), true)
+
+  applyComposedUrl(toggled, 'https://example.com/x?keep=1&extra=3')
+  expect(
+    'url edits replace enabled rows and keep disabled ones',
+    toggled.query.map((row) => [row.name, row.value, row.enabled]),
+    [
+      ['keep', '1', true],
+      ['extra', '3', true],
+      ['skip', '2', false],
+    ],
+  )
+
+  const vars = { BASE_URL: 'https://api.example.com/search?q=preset', id: '42', Q: 'hello world' }
+  const merged = newRequest({
+    url: '${BASE_URL}',
+    query: rows([['page', '2']]),
+  })
+  expect(
+    'resolved base that already has a query joins with &',
+    resolveRequest(merged, vars).url,
+    'https://api.example.com/search?q=preset&page=2',
+  )
+
+  const templated = newRequest({
+    url: 'https://api.example.com/items/:id',
+    query: rows([
+      ['q', '${Q}'],
+      ['only', ':id'],
+    ]),
+  })
+  expect(
+    '${} and :id in query values are resolved then encoded',
+    resolveRequest(templated, vars).url,
+    'https://api.example.com/items/42?q=hello%20world&only=42',
+  )
+}
+
+group('query string encoding and placeholders')
+{
+  expect('spaces encode', encodeQueryComponent('hello world'), 'hello%20world')
+  expect(
+    'placeholders survive encoding',
+    encodeQueryComponent('pre${TOKEN}post'),
+    'pre${TOKEN}post',
+  )
+  expect(
+    'append onto a resolved url that already has a query',
+    appendEncodedQuery('https://api.example.com/search?q=x', rows([['page', '2']]), (value) => value),
+    'https://api.example.com/search?q=x&page=2',
+  )
 }
 
 const failures = summary()

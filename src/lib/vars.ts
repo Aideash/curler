@@ -1,6 +1,7 @@
 import type { KeyValue, RequestModel, Scope } from '../types'
 import { SECRET_REDACTED } from './secrets'
 import { buildGraphqlBody } from './graphql'
+import { appendEncodedQuery, composedUrl, effectiveQueryRows, requestPath } from './query'
 
 /**
  * Matches `${NAME}`, and only that. A bare `$NAME` is literal text, because a
@@ -122,6 +123,11 @@ function substitute(
 
 export function resolve(input: string, variables: Record<string, string>): Resolution {
   return substitute(input, variables, false)
+}
+
+/** `${NAME}` and `:name`, without forcing a scheme. For query names and values. */
+export function resolveUrlParts(input: string, variables: Record<string, string>): Resolution {
+  return substitute(input, variables, true)
 }
 
 /**
@@ -263,7 +269,7 @@ export function traceRequest(request: RequestModel, set: VariableSet): BuildTrac
     }
   }
 
-  noteUsage(request.url, 'URL', true)
+  noteUsage(composedUrl(request), 'URL', true)
 
   for (const header of request.headers) {
     if (!header.enabled) continue
@@ -397,7 +403,11 @@ export function resolveRequest(
 
   return {
     method: request.method,
-    url: collect(resolveUrl(request.url.trim(), variables)),
+    url: appendEncodedQuery(
+      collect(resolveUrl(requestPath(request).trim(), variables)),
+      effectiveQueryRows(request),
+      (input) => collect(resolveUrlParts(input, variables)),
+    ),
     headers,
     body,
     multipart,

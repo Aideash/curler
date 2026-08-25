@@ -3,8 +3,9 @@ import { emptyKeyValue, uid, type HttpMethod, type KeyValue, type RequestModel }
 import { newRequest } from './store'
 import { emptyWorkspace, getSettingNumber } from './settings'
 import { parseGraphqlBody, buildGraphqlBody } from './graphql'
-import { ensureDefaultScheme, resolve, resolveUrl, type VariableSet } from './vars'
+import { ensureDefaultScheme, resolve, resolveUrl, resolveUrlParts, type VariableSet } from './vars'
 import { TERMINAL_FLAGS, terminalFlagArgs, terminalFlagBySpelling } from './terminalFlags'
+import { appendEncodedQuery, effectiveQueryRows, normalizeRequestUrl, requestPath } from './query'
 
 /** Long flags that take an argument, for the line-wrapping pass in `toCurl`. */
 const VALUED_LONG_FLAGS = new Set([
@@ -562,6 +563,7 @@ export function parseCurl(input: string): ParsedCurl {
   }
 
   if (request.url) request.url = ensureDefaultScheme(request.url)
+  normalizeRequestUrl(request)
 
   if (!request.url && !redirectToHelp) warnings.push('No URL was found in the command.')
   if (request.headers.length === 0) request.headers.push(emptyKeyValue())
@@ -742,7 +744,13 @@ export function toCurl(
   const parts: string[] = ['curl']
 
   if (request.method !== 'GET') parts.push('-X', request.method)
-  parts.push(quote(applyUrl(apply(request.url || ''))))
+
+  const applyPart = (input: string) => {
+    const substituted = apply(input)
+    return pathVariables ? resolveUrlParts(substituted, pathVariables).value : substituted
+  }
+  const path = applyUrl(apply(requestPath(request)))
+  parts.push(quote(appendEncodedQuery(path, effectiveQueryRows(request), applyPart)))
 
   for (const header of request.headers) {
     if (!header.enabled || !header.name.trim() || !header.value.trim()) continue

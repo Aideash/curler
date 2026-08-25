@@ -32,6 +32,7 @@ import {
   getSettingString,
 } from './settings'
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
+import { normalizeRequestUrl } from './query'
 import {
   getThemePreference,
   readCachedThemePreference,
@@ -151,7 +152,7 @@ export function readEffectiveSettings(): Partial<UserSetting> {
 
 export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
   const ws = workspaceFromState()
-  return {
+  const request: RequestModel = {
     id: uid(),
     name: getSettingString('defaultRequestName', ws),
     method: getSettingString('defaultHttpMethod', ws) as HttpMethod,
@@ -173,7 +174,10 @@ export function newRequest(partial: Partial<RequestModel> = {}): RequestModel {
     variables: [],
     terminalFlags: {},
     ...partial,
+    query: partial.query ?? [],
   }
+  normalizeRequestUrl(request)
+  return request
 }
 
 /** Rebuild the scratch request once workspace settings are available. */
@@ -236,7 +240,7 @@ function defaultWorkspace() {
  * no way to tell that apart from an old reference, so the editor asks rather
  * than guessing.
  *
- * Header and form rows have both halves rewritten, since `resolveRequest`
+ * Header, query, and form rows have both halves rewritten, since `resolveRequest`
  * substitutes names as well as values. Variable rows are left out entirely: a
  * variable's value is replacement text, never resolved in its own right.
  *
@@ -248,6 +252,7 @@ export function braceRequestReferences(request: RequestModel) {
 
   for (const rows of [
     request.headers,
+    request.query,
     request.body?.form,
     request.body?.multipart,
     request.body?.graphql?.variables,
@@ -279,6 +284,7 @@ function migrate(parsed: Record<string, unknown>) {
     collection.requests ??= []
     for (const request of collection.requests) {
       request.variables ??= []
+      request.query ??= []
       request.terminalFlags ??= {}
       // A hand-edited workspace may be missing options entirely, and throwing
       // here would take the whole load down with it.
@@ -302,6 +308,7 @@ function migrate(parsed: Record<string, unknown>) {
       }
       delete (request.body as unknown as Record<string, unknown>).graphqlVariables
       braceRequestReferences(request)
+      normalizeRequestUrl(request)
     }
   }
 

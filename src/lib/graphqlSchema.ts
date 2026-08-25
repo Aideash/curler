@@ -7,13 +7,13 @@ import {
 import { type RequestModel } from '../types'
 import { newRequest } from './store'
 import { performSend } from './send'
-import { resolveUrl, type VariableSet } from './vars'
+import { resolveRequest, type VariableSet } from './vars'
 
 const cache = new Map<string, GraphQLSchema>()
 const inFlight = new Map<string, Promise<GraphQLSchema>>()
 
 export function schemaCacheKey(request: RequestModel, variableSet: VariableSet): string {
-  return resolveUrl(request.url.trim(), variableSet.values).value
+  return resolveRequest(request, variableSet.values).url
 }
 
 export function getCachedSchema(key: string): GraphQLSchema | undefined {

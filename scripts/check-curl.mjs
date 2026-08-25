@@ -1,7 +1,11 @@
 import { createHarness, loadModules } from './harness.mjs'
 
-const { modules, close } = await loadModules(['/src/lib/curl.ts', '/src/lib/graphql.ts'])
-const { parseCurl, toCurl } = modules
+const { modules, close } = await loadModules([
+  '/src/lib/curl.ts',
+  '/src/lib/graphql.ts',
+  '/src/lib/query.ts',
+])
+const { parseCurl, toCurl, composedUrl } = modules
 const { buildGraphqlBody } = modules
 const { group, detail, expect, pass, fail, summary } = createHarness('curl round-trip')
 
@@ -30,6 +34,18 @@ const cases = [
   [
     '--get promotes data to query string',
     `curl -G --data-urlencode 'q=hello world' https://api.example.com/search`,
+    { url: 'https://api.example.com/search', query: [['q', 'hello world']] },
+  ],
+  [
+    'query string on the url lands in the table',
+    `curl 'https://api.example.com/v1/things?active=true&page=2'`,
+    {
+      url: 'https://api.example.com/v1/things',
+      query: [
+        ['active', 'true'],
+        ['page', '2'],
+      ],
+    },
   ],
   [
     'braced variable and max-time',
@@ -130,6 +146,12 @@ for (const [label, input, wanted] of cases) {
 
   if (wanted?.method !== undefined) expect('method', request.method, wanted.method)
   if (wanted?.url !== undefined) expect('url', request.url, wanted.url)
+  if (wanted?.query !== undefined) {
+    const got = request.query
+      .filter((row) => row.name.trim())
+      .map((row) => [row.name, row.value])
+    expect('query', got, wanted.query)
+  }
   if (wanted?.headers !== undefined) expect('headers', headers, wanted.headers)
   if (wanted?.bodyMode !== undefined) expect('body mode', request.body.mode, wanted.bodyMode)
   if (wanted?.body !== undefined) {
@@ -190,15 +212,15 @@ for (const [label, input, wanted] of cases) {
   const roundTrip = parseCurl(toCurl(request)).request
   const stable =
     roundTrip.method === request.method &&
-    roundTrip.url === request.url &&
+    composedUrl(roundTrip) === composedUrl(request) &&
     wireBody(roundTrip) === wireBody(request)
   if (stable) {
     pass('round-trips unchanged')
   } else {
     fail(
       'round-trip mismatch',
-      `got    ${roundTrip.method} ${roundTrip.url} ${wireBody(roundTrip)}`,
-      `wanted ${request.method} ${request.url} ${wireBody(request)}`,
+      `got    ${roundTrip.method} ${composedUrl(roundTrip)} ${wireBody(roundTrip)}`,
+      `wanted ${request.method} ${composedUrl(request)} ${wireBody(request)}`,
     )
   }
 }

@@ -23,6 +23,7 @@ import {
 } from '../lib/compare'
 import { state, settingNumber } from '../lib/store'
 import { HTTP_METHODS, type HttpMethod, type RequestModel } from '../types'
+import { useComposedUrlField } from '../composables/useComposedUrlField'
 
 const props = defineProps<{
   lane: Lane
@@ -66,6 +67,14 @@ const sourceName = computed(() => {
 })
 
 const requestFilter = ref('')
+
+const {
+  display: urlDisplay,
+  focus: onUrlFocus,
+  input: onUrlInput,
+  blur: onUrlBlur,
+  commit: commitUrl,
+} = useComposedUrlField(() => laneById()?.request ?? props.lane.request)
 
 const filteredSavedRequests = computed(() => {
   const needle = requestFilter.value.trim().toLowerCase()
@@ -111,11 +120,6 @@ function setMethod(method: HttpMethod) {
   const found = laneById()
   if (found) found.request.method = method
 }
-
-function setUrl(url: string) {
-  const found = laneById()
-  if (found) found.request.url = url
-}
 </script>
 
 <template>
@@ -136,12 +140,14 @@ function setUrl(url: string) {
 
       <input
         :id="`${idStem}-url`"
-        :value="lane.request.url"
+        :value="urlDisplay"
         class="url mono"
         placeholder="${BASE_URL}/things"
         spellcheck="false"
-        @input="setUrl(($event.target as HTMLInputElement).value)"
-        @keydown.enter="sendLane(lane.id)"
+        @focus="onUrlFocus"
+        @input="onUrlInput(($event.target as HTMLInputElement).value)"
+        @blur="onUrlBlur"
+        @keydown.enter="(commitUrl(), sendLane(lane.id))"
       />
 
       <button
@@ -155,9 +161,9 @@ function setUrl(url: string) {
 
       <button
         class="primary send"
-        :disabled="lane.sending || !lane.request.url.trim()"
+        :disabled="lane.sending || !urlDisplay.trim()"
         :title="`Send lane ${lane.label} on its own`"
-        @click="sendLane(lane.id)"
+        @click="(commitUrl(), sendLane(lane.id))"
       >
         <span class="material-icons sm">{{ lane.sending ? 'hourglass_top' : 'send' }}</span>
       </button>

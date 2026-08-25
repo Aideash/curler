@@ -17,6 +17,8 @@ import {
 } from '../lib/terminalFlags'
 import { secretCache, settingBoolean, settingNumber } from '../lib/store'
 import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
+import { enabledQueryCount } from '../lib/query'
+import { useComposedUrlField } from '../composables/useComposedUrlField'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
 import { resolveVariableEnumOptions } from '../lib/graphqlQueryBuilder'
@@ -62,7 +64,7 @@ const emit = defineEmits<{
   openGraphqlBuilder: []
 }>()
 
-type Tab = 'headers' | 'body' | 'vars' | 'options'
+type Tab = 'params' | 'headers' | 'body' | 'vars' | 'options'
 const tab = ref<Tab>('headers')
 const bodyEditor = ref<InstanceType<typeof CodeEditor>>()
 const bodyValidity = ref({ valid: true, message: '' })
@@ -200,22 +202,48 @@ const enabledHeaderCount = computed(
   () => request.value.headers.filter((h) => h.enabled && h.name.trim()).length,
 )
 
+const queryCount = computed(() => enabledQueryCount(request.value.query))
+
+watch(
+  () => request.value,
+  (req) => {
+    if (!Array.isArray(req.query)) req.query = []
+  },
+  { immediate: true },
+)
+
+const {
+  display: urlDisplay,
+  focus: onUrlFocus,
+  input: onUrlInput,
+  blur: onUrlBlur,
+  commit: commitUrl,
+  apply: applyUrlField,
+} = useComposedUrlField(request)
+
 /** Remount row editors when the backing request is swapped (sidebar switch). */
 const editorKey = computed(() => request.value.id)
 
 // Path parameters only mean anything in a URL, so only the URL is checked
-// for them.
-const urlIssues = computed(() => inspect(request.value.url, props.variables, true))
+// for them. The composed template includes enabled query rows.
+const urlIssues = computed(() => inspect(urlDisplay.value, props.variables, true))
 
 function braceUrlReference(name: string) {
-  request.value.url = braceBareReferences(request.value.url, name)
+  applyUrlField(braceBareReferences(urlDisplay.value, name))
 }
+
+// For button.query-btn
+//
+// function openParams() {
+//   detailsExpanded.value = true
+//   tab.value = 'params'
+// }
 
 const requestVarCount = computed(
   () => request.value.variables.filter((v) => rowContributes(v, secretCache)).length,
 )
 
-const canSend = computed(() => request.value.url.trim().length > 0 && !props.sending)
+const canSend = computed(() => urlDisplay.value.trim().length > 0 && !props.sending)
 
 function applyHeader(name: string, value: string) {
   const existing = request.value.headers.find(
@@ -321,16 +349,32 @@ const flagPreview = computed(() =>
       <div class="url-field">
         <input
           id="request-url"
-          v-model="request.url"
+          :value="urlDisplay"
           class="mono"
           placeholder="https://api.example.com/v1/things  or  ${BASE_URL}/things/:id"
           spellcheck="false"
-          @keydown.enter="canSend && emit('send')"
+          @focus="onUrlFocus"
+          @input="onUrlInput(($event.target as HTMLInputElement).value)"
+          @blur="onUrlBlur"
+          @keydown.enter="(commitUrl(), canSend && emit('send'))"
         />
         <VariableIssues class="url-warn" :issues="urlIssues" @fix="braceUrlReference" />
       </div>
 
-      <button class="primary send" :disabled="!canSend" @click="emit('send')">
+      <!-- <button
+        type="button"
+        class="ghost query-btn"
+        :class="{ active: queryCount > 0 }"
+        :title="
+          queryCount ? `${queryCount} query param${queryCount === 1 ? '' : 's'}` : 'Query params'
+        "
+        @click="openParams"
+      >
+        <span class="mono">?</span>
+        <span v-if="queryCount" class="badge">{{ queryCount }}</span>
+      </button> -->
+
+      <button class="primary send" :disabled="!canSend" @click="(commitUrl(), emit('send'))">
         <span class="material-icons sm">{{ sending ? 'hourglass_top' : 'send' }}</span>
         {{ sending ? 'Sending…' : 'Send' }}
       </button>
@@ -349,6 +393,11 @@ const flagPreview = computed(() =>
       <div :class="collapsible ? 'request-details' : undefined">
         <div class="toolbar">
           <div class="tabs">
+            <button class="ghost tab" :class="{ active: tab === 'params' }" @click="tab = 'params'">
+              Params
+              <span v-if="queryCount" class="badge">{{ queryCount }}</span>
+            </button>
+            <span class="separator" />
             <button
               class="ghost tab"
               :class="{ active: tab === 'headers' }"
@@ -415,6 +464,27 @@ const flagPreview = computed(() =>
         </div>
 
         <div class="panel-body">
+          <!-- Params -------------------------------------------------------- -->
+          <div v-show="tab === 'params'" class="pane">
+            <div class="pane-head">
+              <span class="muted">Query string</span>
+            </div>
+            <p class="pane-hint faint">
+              Enabled rows appear in the URL. Toggle one off to keep it without sending it.
+            </p>
+            <KeyValueEditor
+              :key="editorKey"
+              v-model:rows="request.query"
+              :variables="variables"
+              list-id="query-names"
+              id-prefix="query"
+              name-placeholder="Key"
+              value-placeholder="Value"
+              reorderable
+              allow-empty-values
+            />
+          </div>
+
           <!-- Headers ------------------------------------------------------- -->
           <div v-show="tab === 'headers'" class="pane">
             <div class="pane-head">
@@ -938,6 +1008,25 @@ const flagPreview = computed(() =>
   width: 100%;
 }
 
+.query-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 40px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.query-btn.active {
+  color: var(--accent);
+}
+
+.query-btn .badge {
+  margin-left: 2px;
+}
+
 .url-warn {
   position: absolute;
   right: 10px;
@@ -987,6 +1076,14 @@ const flagPreview = computed(() =>
   gap: 2px;
 }
 
+.separator {
+  width: 1px;
+  height: 1.5lh;
+  align-self: center;
+  background: var(--border);
+  margin: 0 3px;
+}
+
 .tab {
   border-radius: 0;
   padding: 8px 12px;
@@ -996,6 +1093,10 @@ const flagPreview = computed(() =>
 .tab.active {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+
+.tab.active:hover {
+  border-bottom-color: rgb(from var(--accent) r g b / 0.2);
 }
 
 .preset-item.copy-type {

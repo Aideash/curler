@@ -42,7 +42,7 @@
   white-space: nowrap;
 }
 
-@media screen and (max-width: 750px) {
+@media screen and (max-width: 760px) {
   .title-bar :deep(.btn-label) {
     display: none;
   }
