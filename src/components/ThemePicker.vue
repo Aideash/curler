@@ -2,11 +2,25 @@
 import { computed, ref } from 'vue'
 import PopMenu from './PopMenu.vue'
 import SettingsDialog from './SettingsDialog.vue'
-import { pickTheme } from '../lib/store'
+import { pickContrast, pickTheme } from '../lib/store'
 import { useTheme } from '../composables/useTheme'
 import { getThemeById } from '../themes/definitions'
+import type { ContrastPreference } from '../themes/contrast'
 
-const { preference, resolvedThemeId, themes, systemPreference } = useTheme()
+const {
+  preference,
+  resolvedThemeId,
+  contrastPreference,
+  contrastLevels,
+  themes,
+  systemPreference,
+} = useTheme()
+
+const contrastCopy: Record<ContrastPreference, { name: string; hint: string; icon: string }> = {
+  high: { name: 'High', hint: 'Stronger chrome and comments', icon: 'contrast' },
+  medium: { name: 'Medium', hint: 'Theme default', icon: 'tonality' },
+  low: { name: 'Low', hint: 'Softer labels', icon: 'brightness_low' },
+}
 
 const siteSettingsOpen = ref(false)
 
@@ -36,7 +50,7 @@ function openSiteSettings(closeMenu: () => void) {
     <template #default="{ close }">
       <div class="settings-menu">
         <button class="menu-option" @click="openSiteSettings(close)">
-          <span class="material-icons sm menu-option__glyph">tune</span>
+          <span class="material-icons sm menu-option__glyph" aria-hidden="true">tune</span>
           <span class="menu-option__text">
             <span class="menu-option__name">Site settings</span>
             <span class="menu-option__hint">Defaults, limits, and behaviour</span>
@@ -57,12 +71,20 @@ function openSiteSettings(closeMenu: () => void) {
             }
           "
         >
-          <span class="material-icons sm menu-option__glyph">brightness_auto</span>
+          <span class="material-icons sm menu-option__glyph" aria-hidden="true"
+            >brightness_auto</span
+          >
           <span class="menu-option__text">
             <span class="menu-option__name">System default</span>
             <span class="menu-option__hint">{{ systemLabel }}</span>
           </span>
-          <span v-if="preference === systemPreference" class="material-icons sm tick"> check </span>
+          <span
+            v-if="preference === systemPreference"
+            class="material-icons sm tick"
+            aria-hidden="true"
+          >
+            check
+          </span>
         </button>
 
         <div class="menu-rule" />
@@ -84,7 +106,36 @@ function openSiteSettings(closeMenu: () => void) {
             <span class="menu-option__name">{{ theme.name }}</span>
             <span class="menu-option__hint">{{ theme.description }}</span>
           </span>
-          <span v-if="preference === theme.id" class="material-icons sm tick">check</span>
+          <span v-if="preference === theme.id" class="material-icons sm tick" aria-hidden="true"
+            >check</span
+          >
+        </button>
+
+        <div class="menu-rule" />
+
+        <div class="menu-heading">Contrast</div>
+
+        <button
+          v-for="level in contrastLevels"
+          :key="level"
+          class="menu-option"
+          :class="{ active: contrastPreference === level }"
+          @click="pickContrast(level)"
+        >
+          <span class="material-icons sm menu-option__glyph" aria-hidden="true">{{
+            contrastCopy[level].icon
+          }}</span>
+          <span class="menu-option__text">
+            <span class="menu-option__name">{{ contrastCopy[level].name }}</span>
+            <span class="menu-option__hint">{{ contrastCopy[level].hint }}</span>
+          </span>
+          <span
+            v-if="contrastPreference === level"
+            class="material-icons sm tick"
+            aria-hidden="true"
+          >
+            check
+          </span>
         </button>
       </div>
     </template>

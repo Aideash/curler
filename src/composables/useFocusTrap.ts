@@ -4,13 +4,15 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
 
 export function queryFocusable(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)]
+  // `button` matches even with tabindex="-1", which would put roving-tabindex
+  // widgets back into sequential Tab order. tabIndex < 0 means programmatic only.
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.tabIndex >= 0)
 }
 
-export type FocusBoundary = 'close' | 'loop'
+export type FocusBoundary = 'close' | 'loop' | 'none'
 
 export interface UseFocusTrapOptions {
-  /** close: tab past an edge calls onLeave; loop: wrap to the other end */
+  /** close: tab past an edge calls onLeave; loop: wrap; none: initial focus + restore only */
   boundary: FocusBoundary
   onLeave?: () => void
   /** Where to send focus when the trap is released; falls back to the pre-open focus. */
@@ -79,7 +81,7 @@ export function useFocusTrap(
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (event.key !== 'Tab') return
+    if (options.boundary === 'none' || event.key !== 'Tab') return
     const root = container.value
     if (!root) return
 
@@ -123,11 +125,15 @@ export function useFocusTrap(
       if (root) focusInitial(root)
     })
 
-    document.addEventListener('keydown', onKeydown, true)
+    if (options.boundary !== 'none') document.addEventListener('keydown', onKeydown, true)
+  }
+
+  function suppressRestore() {
+    skipRestore = true
   }
 
   function deactivate() {
-    document.removeEventListener('keydown', onKeydown, true)
+    if (options.boundary !== 'none') document.removeEventListener('keydown', onKeydown, true)
 
     if (!skipRestore) {
       const target = options.restoreTo?.value ?? previousFocus
@@ -135,6 +141,7 @@ export function useFocusTrap(
     }
 
     previousFocus = null
+    skipRestore = false
   }
 
   if (options.active) {
@@ -151,5 +158,5 @@ export function useFocusTrap(
     onBeforeUnmount(deactivate)
   }
 
-  return { activate, deactivate }
+  return { activate, deactivate, suppressRestore }
 }

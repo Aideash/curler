@@ -48,7 +48,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   <div class="faux-terminal mono">
     <p class="cmd-line">
       <span style="color: var(--syntax-comment)">$</span> curl --help
-      <select v-model="activePageKey">
+      <select v-model="activePageKey" aria-label="Curl help category">
         <option v-for="option in pageOptions" :key="option.key || 'main'" :value="option.key">
           {{ option.label }}
         </option>
@@ -60,8 +60,13 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         {{ item.label }}
       </span>
     </p>
-    <button class="ghost copy-button" title="Copy as curl" @click="copyActivePageToClipboard">
-      <span class="material-icons sm">content_copy</span>
+    <button
+      class="ghost copy-button"
+      title="Copy as curl"
+      aria-label="Copy as curl"
+      @click="copyActivePageToClipboard"
+    >
+      <span class="material-icons sm" aria-hidden="true">content_copy</span>
     </button>
   </div>
 </template>

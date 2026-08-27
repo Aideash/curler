@@ -1,7 +1,11 @@
 import { createHarness, loadModules } from './harness.mjs'
 
-const { modules, close } = await loadModules(['/src/themes/definitions.ts'])
+const { modules, close } = await loadModules([
+  '/src/themes/definitions.ts',
+  '/src/themes/contrast.ts',
+])
 const { themes, getThemeList } = modules
+const { tokensForContrast, parseContrastPreference, CONTRAST_DEFAULT } = modules
 const { group, expect, detail, pass, fail, summary } = createHarness('themes')
 
 function channel(value) {
@@ -89,6 +93,25 @@ for (const theme of getThemeList()) {
   } = theme.tokens
   expect('arguments are not painted as fields', argument === key, false)
   expect('variables are not painted as fields', variable === key, false)
+}
+
+group('contrast remaps')
+
+expect('unknown values fall back to medium', parseContrastPreference('vivid'), CONTRAST_DEFAULT)
+expect('null falls back to medium', parseContrastPreference(null), 'medium')
+
+for (const theme of getThemeList()) {
+  const medium = tokensForContrast(theme.tokens, 'medium')
+  expect(`${theme.id} medium is the raw tokens`, medium === theme.tokens, true)
+
+  const high = tokensForContrast(theme.tokens, 'high')
+  expect(`${theme.id} high lifts faint to dim`, high['text-faint'], theme.tokens['text-dim'])
+  expect(`${theme.id} high lifts comments to dim`, high['syntax-comment'], theme.tokens['text-dim'])
+  expect(`${theme.id} high leaves body text`, high.text, theme.tokens.text)
+
+  const low = tokensForContrast(theme.tokens, 'low')
+  expect(`${theme.id} low drops dim to faint`, low['text-dim'], theme.tokens['text-faint'])
+  expect(`${theme.id} low leaves body text`, low.text, theme.tokens.text)
 }
 
 const failures = summary()

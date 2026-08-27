@@ -200,10 +200,10 @@ function cancel() {
       <ThemePicker />
     </TitleBar>
 
-    <p v-if="graphqlBuilder.schemaError" class="banner error">
+    <p v-if="graphqlBuilder.schemaError" class="banner error" role="alert">
       {{ graphqlBuilder.schemaError }}
     </p>
-    <p v-if="builderError" class="banner error">{{ builderError }}</p>
+    <p v-if="builderError" class="banner error" role="alert">{{ builderError }}</p>
 
     <div class="workspace">
       <aside id="graphql-explorer" class="explorer-pane" tabindex="-1">
@@ -213,6 +213,7 @@ function cancel() {
             class="filter"
             type="search"
             :placeholder="showArguments ? 'Filter fields and arguments…' : 'Filter fields…'"
+            :aria-label="showArguments ? 'Filter fields and arguments' : 'Filter fields'"
             :disabled="!schema"
           />
         </div>
@@ -238,8 +239,8 @@ function cancel() {
         <div class="pane-head">
           <span class="section-label">Query</span>
           <div class="pane-head-right">
-            <span v-if="!queryValidity.valid" class="invalid">
-              <span class="material-icons sm">error_outline</span>
+            <span v-if="!queryValidity.valid" class="invalid" role="status">
+              <span class="material-icons sm" aria-hidden="true">error_outline</span>
               {{ queryValidity.message }}
             </span>
             <span v-else-if="schema && draft.graphql.query.trim()" class="valid">
@@ -251,7 +252,7 @@ function cancel() {
               Valid syntax
             </span>
             <button class="ghost clear-button" title="Clear Panel" @click="clearPanel">
-              <span class="material-icons sm">clear</span>
+              <span class="material-icons sm" aria-hidden="true">clear</span>
               <span class="label">Clear</span>
             </button>
           </div>
@@ -260,6 +261,7 @@ function cancel() {
           <CodeEditor
             :model-value="draft.graphql.query"
             language="graphql"
+            aria-label="GraphQL query"
             :schema="schema"
             :graphql-operation="activeOperation"
             placeholder="query { }"

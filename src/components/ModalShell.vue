@@ -34,8 +34,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       >
         <header>
           <h2 :id="titleId">{{ title }}</h2>
-          <button class="ghost close" title="Close" @click="emit('close')">
-            <span class="material-icons">close</span>
+          <button
+            class="ghost close"
+            type="button"
+            title="Close"
+            aria-label="Close"
+            @click="emit('close')"
+          >
+            <span class="material-icons" aria-hidden="true">close</span>
           </button>
         </header>
         <div class="modal-body">

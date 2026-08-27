@@ -55,9 +55,11 @@ function nestingKind(field: SchemaInputFieldNode): 'input' | 'enum' | null {
           type="button"
           class="ghost expand"
           :title="isExpanded(field.name) ? 'Collapse' : 'Expand'"
+          :aria-label="isExpanded(field.name) ? `Collapse ${field.name}` : `Expand ${field.name}`"
+          :aria-expanded="isExpanded(field.name)"
           @click.stop="emit('toggle', fieldKey(field.name))"
         >
-          <span class="material-icons sm">{{
+          <span class="material-icons sm" aria-hidden="true">{{
             isExpanded(field.name) ? 'expand_more' : 'chevron_right'
           }}</span>
         </button>

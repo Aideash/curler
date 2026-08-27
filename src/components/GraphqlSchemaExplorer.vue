@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from 'vue'
+import { computed, provide, ref, useId, watch } from 'vue'
 import type { GraphQLSchema } from 'graphql'
 import SchemaTreeLevel from './SchemaTreeLevel.vue'
 import {
@@ -7,6 +7,7 @@ import {
   INSERT_BLOCKED_MESSAGE,
   useRapidClickHint,
 } from '../composables/useRapidClickHint'
+import { onTablistKeydown } from '../composables/useTablist'
 import {
   availableOperations,
   buildQueryPresence,
@@ -55,6 +56,11 @@ const emit = defineEmits<{
 
 const operations = computed(() => availableOperations(props.schema))
 const activeOp = defineModel<RootOperation>('activeOperation', { default: 'query' })
+const tabsId = useId()
+function opTabId(op: RootOperation) {
+  return `${tabsId}-${op}`
+}
+const opPanelId = `${tabsId}-tree`
 const expanded = ref<Set<string>>(new Set())
 const expandedArgs = ref<Set<string>>(new Set())
 const expandedInput = ref<Set<string>>(new Set())
@@ -258,23 +264,38 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
 <template>
   <div class="schema-explorer">
     <div v-if="operations.length > 1" class="op-tabs">
-      <button
-        v-for="op in operations"
-        :key="op"
-        class="ghost tab"
-        :class="{ active: activeOp === op }"
-        @click="activeOp = op"
+      <div
+        class="op-tablist"
+        role="tablist"
+        aria-label="Root operations"
+        @keydown="onTablistKeydown"
       >
-        {{ op }}
-      </button>
+        <button
+          v-for="op in operations"
+          :id="opTabId(op)"
+          :key="op"
+          type="button"
+          class="ghost tab"
+          :class="{ active: activeOp === op }"
+          role="tab"
+          :aria-selected="activeOp === op"
+          :aria-controls="opPanelId"
+          :tabindex="activeOp === op ? 0 : -1"
+          @click="activeOp = op"
+        >
+          {{ op }}
+        </button>
+      </div>
       <button
         v-if="operations.length"
         class="ghost show-more-button"
         :class="{ expanded: showExplorerControls }"
         :title="showExplorerControls ? 'Hide options' : 'Show options'"
+        :aria-label="showExplorerControls ? 'Hide options' : 'Show options'"
+        :aria-expanded="showExplorerControls"
         @click="showExplorerControls = !showExplorerControls"
       >
-        <span class="material-icons sm"> expand_more </span>
+        <span class="material-icons sm" aria-hidden="true"> expand_more </span>
       </button>
     </div>
 
@@ -286,9 +307,13 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
             class="ghost sort-toggle"
             :class="{ active: sortMode === 'alphabetical' }"
             :title="sortMode === 'alphabetical' ? 'Sort by schema order' : 'Sort alphabetically'"
+            :aria-label="
+              sortMode === 'alphabetical' ? 'Sort by schema order' : 'Sort alphabetically'
+            "
+            :aria-pressed="sortMode === 'alphabetical'"
             @click="sortMode = sortMode === 'schema' ? 'alphabetical' : 'schema'"
           >
-            <span class="material-icons sm">{{
+            <span class="material-icons sm" aria-hidden="true">{{
               sortMode === 'alphabetical' ? 'sort_by_alpha' : 'sort'
             }}</span>
           </button>
@@ -331,7 +356,13 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
 
     <div v-if="!operations.length" class="empty faint">Schema has no root operations.</div>
 
-    <div v-else class="tree">
+    <div
+      v-else
+      :id="operations.length > 1 ? opPanelId : undefined"
+      class="tree"
+      :role="operations.length > 1 ? 'tabpanel' : undefined"
+      :aria-labelledby="operations.length > 1 ? opTabId(activeOp) : undefined"
+    >
       <SchemaTreeLevel
         :operation="activeOp"
         :parent-path="[]"
@@ -409,6 +440,14 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
   flex-shrink: 0;
 }
 
+.op-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
 .tab {
   text-transform: capitalize;
   font-size: 12px;
@@ -439,7 +478,7 @@ function onFragmentInsert(operation: RootOperation, fieldPath: PathSegment[], ty
   background: color-mix(in srgb, var(--danger, #c00) 8%, transparent);
 }
 
-.op-tabs .tab:last-of-type {
+.op-tablist .tab:last-of-type {
   margin-right: auto;
 }
 

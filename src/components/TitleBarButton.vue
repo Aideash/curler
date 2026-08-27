@@ -22,10 +22,11 @@ const tooltip = computed(() => props.title ?? props.label)
   <button
     :class="[variant, { back }]"
     :title="tooltip"
+    :aria-label="label"
     :disabled="disabled"
     @click="emit('click', $event)"
   >
-    <span v-if="icon" class="material-icons sm">{{ icon }}</span>
+    <span v-if="icon" class="material-icons sm" aria-hidden="true">{{ icon }}</span>
     <span class="btn-label">{{ label }}</span>
   </button>
 </template>

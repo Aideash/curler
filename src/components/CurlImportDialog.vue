@@ -57,6 +57,7 @@ function viewHelp() {
       class="mono input"
       rows="8"
       spellcheck="false"
+      aria-label="curl command"
       placeholder="curl -X POST 'https://api.example.com/v1/things' \
   -H 'Content-Type: application/json' \
   -H 'x-api-key: $API_KEY' \
@@ -100,7 +101,7 @@ function viewHelp() {
       </div>
     </div>
 
-    <ul v-if="preview?.warnings.length && !preview?.redirectToHelp" class="warnings">
+    <ul v-if="preview?.warnings.length && !preview?.redirectToHelp" class="warnings" role="status">
       <li v-for="(warning, index) in preview.warnings" :key="index">{{ warning }}</li>
     </ul>
 

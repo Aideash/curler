@@ -469,7 +469,7 @@ ensureTrailingRow()
             @dragend="endDrag($event)"
             @keydown="onHandleKeydown(LIST, index, row.id, reorderableLength, $event)"
           >
-            <span class="material-icons sm">drag_indicator</span>
+            <span class="material-icons sm" aria-hidden="true">drag_indicator</span>
           </button>
           <span v-else-if="reorderable" class="drag-spacer" aria-hidden="true" />
           <input
@@ -478,6 +478,11 @@ ensureTrailingRow()
             type="checkbox"
             class="kv-toggle"
             :disabled="!isUsable(row)"
+            :aria-label="
+              row.name.trim()
+                ? `Include ${row.name.trim()}`
+                : `Include ${namePlaceholder.toLowerCase()} row ${index + 1}`
+            "
             :title="
               isUsable(row)
                 ? row.enabled
@@ -501,6 +506,8 @@ ensureTrailingRow()
               class="kv-kind-btn"
               :class="{ active: !multipartTextOnly(row) }"
               title="curl -F: @path reads a file from disk"
+              :aria-pressed="!multipartTextOnly(row)"
+              aria-label="curl -F: @path reads a file from disk"
               @click="setMultipartTextOnly(row, false)"
             >
               -F
@@ -510,6 +517,8 @@ ensureTrailingRow()
               class="kv-kind-btn"
               :class="{ active: multipartTextOnly(row) }"
               title="curl --form-string: value is literal text, @ is not special"
+              :aria-pressed="multipartTextOnly(row)"
+              aria-label="curl --form-string: value is literal text, @ is not special"
               @click="setMultipartTextOnly(row, true)"
             >
               str
@@ -522,6 +531,7 @@ ensureTrailingRow()
             class="mono"
             :list="listId"
             :placeholder="namePlaceholder"
+            :aria-label="`${namePlaceholder}, row ${index + 1}`"
             spellcheck="false"
             :class="{ warn: isPartial(row) && row.name.trim() === '' }"
             @focus="selectDefaultName(row, $event)"
@@ -534,9 +544,10 @@ ensureTrailingRow()
               class="ghost kv-modifiers"
               :class="{ active: hasMultipartModifiers(row) }"
               title="Part modifiers (;type=, ;filename=)"
+              aria-label="Part modifiers"
               @click="openMultipartModifiers(row)"
             >
-              <span class="material-icons sm">tune</span>
+              <span class="material-icons sm" aria-hidden="true">tune</span>
             </button>
             <button
               v-if="showFilePicker && !isBlank(row) && !multipartTextOnly(row)"
@@ -544,15 +555,17 @@ ensureTrailingRow()
               class="ghost kv-file"
               :disabled="stagingFile"
               title="Pick a file — copied to CURLER_HOME staging as an @/path"
+              aria-label="Attach a file"
               @click="openFilePicker(row)"
             >
-              <span class="material-icons sm">attach_file</span>
+              <span class="material-icons sm" aria-hidden="true">attach_file</span>
             </button>
             <select
               v-if="enumChoices(row)"
               :id="`${idPrefix}-${index}-value`"
               class="mono kv-enum"
               :value="enumSelection(row)"
+              :aria-label="`${valuePlaceholder}, row ${index + 1}`"
               :class="{ warn: isPartial(row) && !enumSelection(row) }"
               @change="onEnumSelect(row, $event)"
               @keydown="onValueCycleKeydown(row, $event)"
@@ -569,6 +582,7 @@ ensureTrailingRow()
               class="mono"
               :type="allowSecrets && row.secret ? 'password' : 'text'"
               :placeholder="valuePlaceholder"
+              :aria-label="`${valuePlaceholder}, row ${index + 1}`"
               spellcheck="false"
               :class="{
                 warn: issues.has(row.id) || (isPartial(row) && valueOf(row).trim() === ''),
@@ -594,10 +608,14 @@ ensureTrailingRow()
             class="ghost kv-secret"
             :class="{ active: row.secret }"
             title="Secure secret"
+            aria-label="Secure secret"
+            :aria-pressed="row.secret"
             :disabled="isBlank(row) && !row.secret"
             @click="toggleSecret(row)"
           >
-            <span class="material-icons sm">{{ row.secret ? 'lock' : 'lock_open' }}</span>
+            <span class="material-icons sm" aria-hidden="true">{{
+              row.secret ? 'lock' : 'lock_open'
+            }}</span>
           </button>
           <button
             v-if="showNotes"
@@ -605,18 +623,21 @@ ensureTrailingRow()
             class="ghost kv-note-btn"
             :class="{ active: hasNote(row) }"
             title="Note"
+            aria-label="Note"
+            :aria-pressed="hasNote(row)"
             :disabled="isBlank(row)"
             @click="openNoteEdit(row)"
           >
-            <span class="material-icons sm">note_alt</span>
+            <span class="material-icons sm" aria-hidden="true">note_alt</span>
           </button>
           <button
             class="ghost kv-remove"
             title="Remove"
+            aria-label="Remove row"
             :disabled="index === rows.length - 1 && isBlank(row)"
             @click="remove(index)"
           >
-            <span class="material-icons sm">close</span>
+            <span class="material-icons sm" aria-hidden="true">close</span>
           </button>
         </div>
         <div v-if="showNoteSlot(row)" class="kv-note">
@@ -628,6 +649,7 @@ ensureTrailingRow()
             type="text"
             class="kv-note-input"
             placeholder="Short note"
+            aria-label="Row note"
             maxlength="200"
             spellcheck="true"
             @blur="commitNote(row)"

@@ -71,22 +71,21 @@ async function confirmRestore() {
       so you can restore again to undo.
     </p>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-    <p v-else-if="loading" class="faint">Loading backups…</p>
+    <p v-else-if="loading" class="faint" role="status">Loading backups…</p>
 
     <p v-else-if="!backups.length" class="faint">
       No backups yet. Snapshots are created automatically when your workspace changes.
     </p>
 
-    <ul v-else class="backup-list" role="listbox" aria-label="Workspace backups">
+    <ul v-else class="backup-list" aria-label="Workspace backups">
       <li v-for="backup in backups" :key="backup.name">
         <button
           type="button"
           class="backup"
           :class="{ selected: selected === backup.name }"
-          role="option"
-          :aria-selected="selected === backup.name"
+          :aria-pressed="selected === backup.name"
           @click="selected = backup.name"
         >
           <span class="when">{{ formatWhen(backup.createdAt) }}</span>

@@ -114,6 +114,7 @@ export type SettingName =
   | 'showRequestEditIcons'
   | 'showCollectionEditIcons'
   | 'themePreference'
+  | 'contrastPreference'
   | 'sidebarCollapsed'
   | 'graphqlArgInsertMode'
   | 'graphqlSchemaSort'

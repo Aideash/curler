@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import CodeEditor from './CodeEditor.vue'
 import { responseEditorLanguage } from '../lib/response'
+import { onTablistKeydown } from '../composables/useTablist'
 import type { HttpResponse } from '../types'
 
 const props = defineProps<{
@@ -13,6 +14,11 @@ const props = defineProps<{
 type SvgMode = 'text' | 'preview'
 
 const svgMode = ref<SvgMode>('text')
+const svgTabsId = useId()
+function svgTabId(mode: SvgMode) {
+  return `${svgTabsId}-${mode}`
+}
+const svgPanelId = `${svgTabsId}-panel`
 const previewUrl = ref<string | null>(null)
 const imageBackground = ref<'white' | 'black' | 'checkered'>('checkered')
 
@@ -66,19 +72,35 @@ onBeforeUnmount(revokeObjectUrl)
     <p v-if="response.bodySkipped" class="placeholder faint">{{ response.body }}</p>
 
     <template v-else-if="response.bodyPreview && response.bodyBase64 && previewUrl">
-      <div v-if="isSvg" class="svg-toolbar">
+      <div
+        v-if="isSvg"
+        class="svg-toolbar"
+        role="tablist"
+        aria-label="SVG view"
+        @keydown="onTablistKeydown"
+      >
         <button
+          :id="svgTabId('text')"
           class="ghost mode"
           :class="{ active: svgMode === 'text' }"
           type="button"
+          role="tab"
+          :aria-selected="svgMode === 'text'"
+          :aria-controls="svgPanelId"
+          :tabindex="svgMode === 'text' ? 0 : -1"
           @click="svgMode = 'text'"
         >
           Source
         </button>
         <button
+          :id="svgTabId('preview')"
           class="ghost mode"
           :class="{ active: svgMode === 'preview' }"
           type="button"
+          role="tab"
+          :aria-selected="svgMode === 'preview'"
+          :aria-controls="svgPanelId"
+          :tabindex="svgMode === 'preview' ? 0 : -1"
           @click="svgMode = 'preview'"
         >
           Preview
@@ -86,34 +108,40 @@ onBeforeUnmount(revokeObjectUrl)
       </div>
 
       <div
-        v-if="response.bodyPreview === 'image' || (isSvg && svgMode === 'preview')"
-        class="image-toolbar"
+        :id="isSvg ? svgPanelId : undefined"
+        :role="isSvg ? 'tabpanel' : undefined"
+        :aria-labelledby="isSvg ? svgTabId(svgMode) : undefined"
       >
-        <label for="image-background-select">Background: </label>
-        <select id="image-background-select" v-model="imageBackground">
-          <option value="white">White</option>
-          <option value="black">Black</option>
-          <option value="checkered">Checkered</option>
-        </select>
-      </div>
+        <div
+          v-if="response.bodyPreview === 'image' || (isSvg && svgMode === 'preview')"
+          class="image-toolbar"
+        >
+          <label for="image-background-select">Background: </label>
+          <select id="image-background-select" v-model="imageBackground">
+            <option value="white">White</option>
+            <option value="black">Black</option>
+            <option value="checkered">Checkered</option>
+          </select>
+        </div>
 
-      <img
-        v-if="response.bodyPreview === 'image' || (isSvg && svgMode === 'preview')"
-        class="media image"
-        :class="'image-background-' + imageBackground"
-        :src="previewUrl"
-        :alt="response.bodyMime ?? 'Response image'"
-      />
+        <img
+          v-if="response.bodyPreview === 'image' || (isSvg && svgMode === 'preview')"
+          class="media image"
+          :class="'image-background-' + imageBackground"
+          :src="previewUrl"
+          :alt="response.bodyMime ?? 'Response image'"
+        />
 
-      <video
-        v-else-if="response.bodyPreview === 'video'"
-        class="media video"
-        :src="previewUrl"
-        controls
-        preload="metadata"
-      />
+        <video
+          v-else-if="response.bodyPreview === 'video'"
+          class="media video"
+          :src="previewUrl"
+          controls
+          preload="metadata"
+          :aria-label="response.bodyMime ?? 'Response video'"
+        />
 
-      <!-- <div
+        <!-- <div
         v-if="response.bodyPreview === 'image' || (isSvg && svgMode === 'preview')"
         class="media image-preview"
       >
@@ -126,16 +154,18 @@ onBeforeUnmount(revokeObjectUrl)
         </div>
       </div> -->
 
-      <audio
-        v-else-if="response.bodyPreview === 'audio'"
-        class="media audio"
-        :src="previewUrl"
-        controls
-        preload="metadata"
-      />
+        <audio
+          v-else-if="response.bodyPreview === 'audio'"
+          class="media audio"
+          :src="previewUrl"
+          controls
+          preload="metadata"
+          :aria-label="response.bodyMime ?? 'Response audio'"
+        />
 
-      <div v-if="isSvg && svgMode === 'text'" class="editor-wrap">
-        <CodeEditor :model-value="svgSource" language="text" readonly />
+        <div v-if="isSvg && svgMode === 'text'" class="editor-wrap">
+          <CodeEditor :model-value="svgSource" language="text" aria-label="SVG source" readonly />
+        </div>
       </div>
     </template>
 
@@ -143,7 +173,12 @@ onBeforeUnmount(revokeObjectUrl)
     <p v-else-if="!response.body" class="placeholder faint">Empty response body.</p>
 
     <div v-else class="editor-wrap">
-      <CodeEditor :model-value="displayBody" :language="editorLanguage" readonly />
+      <CodeEditor
+        :model-value="displayBody"
+        :language="editorLanguage"
+        aria-label="Response body"
+        readonly
+      />
     </div>
     <!-- <div style="display: none">
       <svg xmlns="http://www.w3.org/2000/svg" version="1.1">

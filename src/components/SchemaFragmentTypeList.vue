@@ -197,9 +197,15 @@ function onFragmentTypeClick(event: MouseEvent, typeName: string) {
           type="button"
           class="ghost expand"
           :title="isFragmentExpanded(fragment.typeName) ? 'Collapse' : 'Expand'"
+          :aria-label="
+            isFragmentExpanded(fragment.typeName)
+              ? `Collapse fragment ${fragment.typeName}`
+              : `Expand fragment ${fragment.typeName}`
+          "
+          :aria-expanded="isFragmentExpanded(fragment.typeName)"
           @click.stop="emit('toggleFragment', fragmentKey(fragment.typeName))"
         >
-          <span class="material-icons sm">{{
+          <span class="material-icons sm" aria-hidden="true">{{
             isFragmentExpanded(fragment.typeName) ? 'expand_more' : 'chevron_right'
           }}</span>
         </button>
@@ -235,9 +241,15 @@ function onFragmentTypeClick(event: MouseEvent, typeName: string) {
               type="button"
               class="ghost expand"
               :title="isFieldSectionExpanded(fragment.typeName, field) ? 'Collapse' : 'Expand'"
+              :aria-label="
+                isFieldSectionExpanded(fragment.typeName, field)
+                  ? `Collapse ${field.name}`
+                  : `Expand ${field.name}`
+              "
+              :aria-expanded="isFieldSectionExpanded(fragment.typeName, field)"
               @click.stop="toggleFieldSection(fragment.typeName, field)"
             >
-              <span class="material-icons sm">{{
+              <span class="material-icons sm" aria-hidden="true">{{
                 isFieldSectionExpanded(fragment.typeName, field) ? 'expand_more' : 'chevron_right'
               }}</span>
             </button>
@@ -285,9 +297,15 @@ function onFragmentTypeClick(event: MouseEvent, typeName: string) {
                   type="button"
                   class="ghost expand"
                   :title="isArgExpanded(fragment.typeName, field, arg) ? 'Collapse' : 'Expand'"
+                  :aria-label="
+                    isArgExpanded(fragment.typeName, field, arg)
+                      ? `Collapse argument ${arg.name}`
+                      : `Expand argument ${arg.name}`
+                  "
+                  :aria-expanded="isArgExpanded(fragment.typeName, field, arg)"
                   @click.stop="emit('toggleArg', argExpandKey(fragment.typeName, field, arg))"
                 >
-                  <span class="material-icons sm">{{
+                  <span class="material-icons sm" aria-hidden="true">{{
                     isArgExpanded(fragment.typeName, field, arg) ? 'expand_more' : 'chevron_right'
                   }}</span>
                 </button>

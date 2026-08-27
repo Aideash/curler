@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import CompareLane from './CompareLane.vue'
 import DiffView from './DiffView.vue'
 import RequestPanel from './RequestPanel.vue'
@@ -11,6 +11,7 @@ import TitleBarButton from './TitleBarButton.vue'
 import VariablesDialog from './VariablesDialog.vue'
 import CurlImportDialog from './CurlImportDialog.vue'
 import { navigate } from '../composables/useRoute'
+import { onTablistKeydown } from '../composables/useTablist'
 import { compareHeaders, compareMeta } from '../lib/diff'
 import { isJsonResponse, prettyBody } from '../lib/response'
 import {
@@ -37,6 +38,11 @@ import type { EditableScope, RequestModel } from '../types'
 
 type Tab = 'body' | 'headers' | 'meta'
 const tab = ref<Tab>(settingString('compareActiveTab') as Tab)
+const tabsId = useId()
+function compareTabId(name: Tab) {
+  return `${tabsId}-${name}`
+}
+const comparePanelId = 'compare-content'
 
 const diff = ref(settingBoolean('compareShowDiff'))
 /** JSON key sorting. On by default: it is the difference between a readable diff and noise. */
@@ -214,14 +220,44 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </TitleBar>
 
     <div id="compare-toolbar" class="toolbar" tabindex="-1">
-      <div class="tabs">
-        <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
+      <div class="tabs" role="tablist" aria-label="Compare sections" @keydown="onTablistKeydown">
+        <button
+          :id="compareTabId('body')"
+          type="button"
+          class="ghost tab"
+          :class="{ active: tab === 'body' }"
+          role="tab"
+          :aria-selected="tab === 'body'"
+          :aria-controls="comparePanelId"
+          :tabindex="tab === 'body' ? 0 : -1"
+          @click="tab = 'body'"
+        >
           Body
         </button>
-        <button class="ghost tab" :class="{ active: tab === 'headers' }" @click="tab = 'headers'">
+        <button
+          :id="compareTabId('headers')"
+          type="button"
+          class="ghost tab"
+          :class="{ active: tab === 'headers' }"
+          role="tab"
+          :aria-selected="tab === 'headers'"
+          :aria-controls="comparePanelId"
+          :tabindex="tab === 'headers' ? 0 : -1"
+          @click="tab = 'headers'"
+        >
           Headers
         </button>
-        <button class="ghost tab" :class="{ active: tab === 'meta' }" @click="tab = 'meta'">
+        <button
+          :id="compareTabId('meta')"
+          type="button"
+          class="ghost tab"
+          :class="{ active: tab === 'meta' }"
+          role="tab"
+          :aria-selected="tab === 'meta'"
+          :aria-controls="comparePanelId"
+          :tabindex="tab === 'meta' ? 0 : -1"
+          @click="tab = 'meta'"
+        >
           Meta
         </button>
       </div>
@@ -254,6 +290,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               v-model="leftId"
               class="pair"
               title="Left side of the diff"
+              aria-label="Left side of the diff"
             >
               <option v-for="lane in lanes" :key="lane.id" :value="lane.id">
                 {{ lane.label }}
@@ -265,6 +302,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
               v-model="rightId"
               class="pair"
               title="Right side of the diff"
+              aria-label="Right side of the diff"
             >
               <option
                 v-for="lane in lanes.filter((item) => item.id !== leftId)"
@@ -279,7 +317,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </div>
     </div>
 
-    <div id="compare-content" class="compare-content" tabindex="-1">
+    <div
+      id="compare-content"
+      class="compare-content"
+      tabindex="-1"
+      role="tabpanel"
+      :aria-labelledby="compareTabId(tab)"
+    >
       <!-- Body, as a diff ------------------------------------------------- -->
       <DiffView
         v-if="tab === 'body' && diff && diffReady"

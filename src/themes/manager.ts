@@ -1,4 +1,11 @@
 import {
+  CONTRAST_DEFAULT,
+  CONTRAST_STORAGE_KEY,
+  parseContrastPreference,
+  tokensForContrast,
+  type ContrastPreference,
+} from './contrast'
+import {
   SYSTEM_PREFERENCE,
   THEME_STORAGE_KEY,
   getThemeById,
@@ -8,6 +15,7 @@ import {
 
 /** Either a concrete theme id or the literal `system`. */
 export type ThemePreference = string
+export type { ContrastPreference }
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
@@ -35,6 +43,23 @@ export function writeCachedThemePreference(preference: ThemePreference): void {
   }
 }
 
+export function readCachedContrastPreference(): ContrastPreference {
+  try {
+    return parseContrastPreference(localStorage.getItem(CONTRAST_STORAGE_KEY))
+  } catch {
+    // Same as a missing key: Medium is the default look.
+  }
+  return CONTRAST_DEFAULT
+}
+
+export function writeCachedContrastPreference(preference: ContrastPreference): void {
+  try {
+    localStorage.setItem(CONTRAST_STORAGE_KEY, preference)
+  } catch {
+    // A contrast that does not survive a reload still beats a crash.
+  }
+}
+
 export function resolveThemeId(preference: ThemePreference): string {
   if (preference === SYSTEM_PREFERENCE) return systemPrefersDark() ? 'dark' : 'light'
   return getThemeById(preference) ? preference : 'dark'
@@ -43,17 +68,20 @@ export function resolveThemeId(preference: ThemePreference): string {
 export function applyTheme(themeId: string): Theme {
   const theme = getThemeById(themeId) ?? themes.dark
   const root = document.documentElement
+  const tokens = tokensForContrast(theme.tokens, activeContrast)
 
-  for (const [token, value] of Object.entries(theme.tokens)) {
+  for (const [token, value] of Object.entries(tokens)) {
     root.style.setProperty(`--${token}`, value)
   }
 
   root.dataset.theme = theme.id
+  root.dataset.contrast = activeContrast
   root.style.colorScheme = theme.colorScheme
   return theme
 }
 
 let activePreference: ThemePreference = SYSTEM_PREFERENCE
+let activeContrast: ContrastPreference = CONTRAST_DEFAULT
 let mediaQuery: MediaQueryList | null = null
 let mediaHandler: (() => void) | null = null
 
@@ -104,8 +132,26 @@ export function getResolvedThemeId(): string {
   return resolveThemeId(activePreference)
 }
 
+/** Apply a contrast level in the UI and cache it for the next first paint. */
+export function setContrastPreference(preference: string): void {
+  activeContrast = parseContrastPreference(preference)
+  writeCachedContrastPreference(activeContrast)
+  applyTheme(resolveThemeId(activePreference))
+  notify()
+}
+
+export function getContrastPreference(): ContrastPreference {
+  return activeContrast
+}
+
+/**
+ * Paint from the browser cache before Vue mounts. Theme and contrast share this
+ * tick so the first frame already matches the last visit — no workspace wait,
+ * no second pass that would flash.
+ */
 export function initTheme(): void {
   activePreference = readCachedThemePreference()
+  activeContrast = readCachedContrastPreference()
   applyTheme(resolveThemeId(activePreference))
   syncSystemListener()
   // Subscribers are registered during module evaluation, which happens before

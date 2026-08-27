@@ -22,6 +22,11 @@ const SETTING_META: Record<
     title: 'Theme',
     description: 'Color theme on load: a built-in theme id, or "system" to follow the OS.',
   },
+  contrastPreference: {
+    type: 'string',
+    title: 'Contrast',
+    description: 'Chrome contrast on load: "high", "medium", or "low".',
+  },
   sidebarCollapsed: {
     type: 'boolean',
     title: 'Sidebar collapsed',
@@ -282,6 +287,11 @@ export const SETTING_STRING_OPTIONS: Partial<
   Record<SettingName, readonly { value: string; label: string }[]>
 > = {
   themePreference: [{ value: 'system', label: 'System default' }],
+  contrastPreference: [
+    { value: 'high', label: 'High' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'low', label: 'Low' },
+  ],
   graphqlArgInsertMode: [
     { value: 'placeholder', label: 'Placeholder' },
     { value: 'required-vars', label: 'Required variables' },

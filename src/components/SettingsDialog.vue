@@ -9,6 +9,7 @@ import {
   defaultUserSettings,
 } from '../lib/settings'
 import { applyWorkspaceSettings, readEffectiveSettings } from '../lib/store'
+import { getContrastPreference, getThemePreference } from '../themes/manager'
 import type { Setting, SettingName, SettingValue } from '../types'
 
 const emit = defineEmits<{ close: [] }>()
@@ -30,14 +31,18 @@ function stringOptions(setting: Setting): { value: string; label: string }[] {
 }
 
 function save() {
-  const { themePreference: _theme, ...values } = draft
-  applyWorkspaceSettings(values)
+  const { themePreference: _theme, contrastPreference: _contrast, ...values } = draft
+  applyWorkspaceSettings({
+    ...values,
+    themePreference: getThemePreference(),
+    contrastPreference: getContrastPreference(),
+  })
   emit('close')
 }
 
 function resetAll() {
   for (const setting of defaultSettings) {
-    if (setting.name === 'themePreference') continue
+    if (setting.name === 'themePreference' || setting.name === 'contrastPreference') continue
     draft[setting.name] = defaultUserSettings[setting.name]
   }
 }
@@ -47,7 +52,7 @@ function resetAll() {
   <ModalShell title="Site settings" width="760px" @close="emit('close')">
     <p class="lead">
       Values are saved with your workspace. Some only apply on the next page load or when you create
-      a new request. Theme is changed from the gear menu.
+      a new request. Theme and contrast are changed from the gear menu.
     </p>
 
     <div class="groups">

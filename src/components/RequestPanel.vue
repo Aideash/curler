@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue'
+import { computed, ref, shallowRef, useId, watch } from 'vue'
 import CodeEditor from './CodeEditor.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import PopMenu from './PopMenu.vue'
@@ -19,6 +19,7 @@ import { secretCache, settingBoolean, settingNumber } from '../lib/store'
 import { braceBareReferences, inspect, rowContributes, type VariableSet } from '../lib/vars'
 import { enabledQueryCount } from '../lib/query'
 import { useComposedUrlField } from '../composables/useComposedUrlField'
+import { onTablistKeydown } from '../composables/useTablist'
 import { parseGraphqlBody, serializeGraphqlBody } from '../lib/graphql'
 import { fetchSchema, getCachedSchema, schemaCacheKey } from '../lib/graphqlSchema'
 import { resolveVariableEnumOptions } from '../lib/graphqlQueryBuilder'
@@ -66,6 +67,13 @@ const emit = defineEmits<{
 
 type Tab = 'params' | 'headers' | 'body' | 'vars' | 'options'
 const tab = ref<Tab>('headers')
+const tabsId = useId()
+function requestTabId(name: Tab) {
+  return `${tabsId}-${name}`
+}
+function requestPanelId(name: Tab) {
+  return `${tabsId}-panel-${name}`
+}
 const bodyEditor = ref<InstanceType<typeof CodeEditor>>()
 const bodyValidity = ref({ valid: true, message: '' })
 const graphqlQueryValidity = ref({ valid: true, message: '' })
@@ -339,6 +347,7 @@ const flagPreview = computed(() =>
         :value="request.method"
         class="method"
         :class="request.method.toLowerCase()"
+        aria-label="HTTP method"
         @input="setMethod(($event.target as HTMLSelectElement).value as HttpMethod)"
       >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">
@@ -353,6 +362,7 @@ const flagPreview = computed(() =>
           class="mono"
           placeholder="https://api.example.com/v1/things  or  ${BASE_URL}/things/:id"
           spellcheck="false"
+          aria-label="Request URL"
           @focus="onUrlFocus"
           @input="onUrlInput(($event.target as HTMLInputElement).value)"
           @blur="onUrlBlur"
@@ -374,8 +384,15 @@ const flagPreview = computed(() =>
         <span v-if="queryCount" class="badge">{{ queryCount }}</span>
       </button> -->
 
-      <button class="primary send" :disabled="!canSend" @click="(commitUrl(), emit('send'))">
-        <span class="material-icons sm">{{ sending ? 'hourglass_top' : 'send' }}</span>
+      <button
+        class="primary send"
+        :disabled="!canSend"
+        :aria-busy="sending || undefined"
+        @click="(commitUrl(), emit('send'))"
+      >
+        <span class="material-icons sm" aria-hidden="true">{{
+          sending ? 'hourglass_top' : 'send'
+        }}</span>
         {{ sending ? 'Sending…' : 'Send' }}
       </button>
     </div>
@@ -392,33 +409,80 @@ const flagPreview = computed(() =>
     >
       <div :class="collapsible ? 'request-details' : undefined">
         <div class="toolbar">
-          <div class="tabs">
-            <button class="ghost tab" :class="{ active: tab === 'params' }" @click="tab = 'params'">
+          <div
+            class="tabs"
+            role="tablist"
+            aria-label="Request sections"
+            @keydown="onTablistKeydown"
+          >
+            <button
+              :id="requestTabId('params')"
+              type="button"
+              class="ghost tab"
+              :class="{ active: tab === 'params' }"
+              role="tab"
+              :aria-selected="tab === 'params'"
+              :aria-controls="requestPanelId('params')"
+              :tabindex="tab === 'params' ? 0 : -1"
+              @click="tab = 'params'"
+            >
               Params
               <span v-if="queryCount" class="badge">{{ queryCount }}</span>
             </button>
             <span class="separator" />
             <button
+              :id="requestTabId('headers')"
+              type="button"
               class="ghost tab"
               :class="{ active: tab === 'headers' }"
+              role="tab"
+              :aria-selected="tab === 'headers'"
+              :aria-controls="requestPanelId('headers')"
+              :tabindex="tab === 'headers' ? 0 : -1"
               @click="tab = 'headers'"
             >
               Headers
               <span v-if="enabledHeaderCount" class="badge">{{ enabledHeaderCount }}</span>
             </button>
-            <button class="ghost tab" :class="{ active: tab === 'body' }" @click="tab = 'body'">
+            <button
+              :id="requestTabId('body')"
+              type="button"
+              class="ghost tab"
+              :class="{ active: tab === 'body' }"
+              role="tab"
+              :aria-selected="tab === 'body'"
+              :aria-controls="requestPanelId('body')"
+              :tabindex="tab === 'body' ? 0 : -1"
+              @click="tab = 'body'"
+            >
               Body
               <span v-if="request.body.mode !== 'none'" class="badge">
                 {{ request.body.mode }}
               </span>
             </button>
-            <button class="ghost tab" :class="{ active: tab === 'vars' }" @click="tab = 'vars'">
+            <button
+              :id="requestTabId('vars')"
+              type="button"
+              class="ghost tab"
+              :class="{ active: tab === 'vars' }"
+              role="tab"
+              :aria-selected="tab === 'vars'"
+              :aria-controls="requestPanelId('vars')"
+              :tabindex="tab === 'vars' ? 0 : -1"
+              @click="tab = 'vars'"
+            >
               Vars
               <span v-if="requestVarCount" class="badge">{{ requestVarCount }}</span>
             </button>
             <button
+              :id="requestTabId('options')"
+              type="button"
               class="ghost tab"
               :class="{ active: tab === 'options' }"
+              role="tab"
+              :aria-selected="tab === 'options'"
+              :aria-controls="requestPanelId('options')"
+              :tabindex="tab === 'options' ? 0 : -1"
               @click="tab = 'options'"
             >
               Options
@@ -427,7 +491,7 @@ const flagPreview = computed(() =>
 
           <div class="toolbar-actions">
             <button class="ghost" title="Paste a curl command" @click="emit('importCurl')">
-              <span class="material-icons sm">content_paste_go</span>
+              <span class="material-icons sm" aria-hidden="true">content_paste_go</span>
               Import curl
             </button>
             <PopMenu icon="content_copy" label="Copy as curl" :width="275">
@@ -465,7 +529,13 @@ const flagPreview = computed(() =>
 
         <div class="panel-body">
           <!-- Params -------------------------------------------------------- -->
-          <div v-show="tab === 'params'" class="pane">
+          <div
+            v-show="tab === 'params'"
+            :id="requestPanelId('params')"
+            class="pane"
+            role="tabpanel"
+            :aria-labelledby="requestTabId('params')"
+          >
             <div class="pane-head">
               <span class="muted">Query string</span>
             </div>
@@ -486,7 +556,13 @@ const flagPreview = computed(() =>
           </div>
 
           <!-- Headers ------------------------------------------------------- -->
-          <div v-show="tab === 'headers'" class="pane">
+          <div
+            v-show="tab === 'headers'"
+            :id="requestPanelId('headers')"
+            class="pane"
+            role="tabpanel"
+            :aria-labelledby="requestTabId('headers')"
+          >
             <div class="pane-head">
               <span class="muted">Request headers</span>
               <PopMenu icon="bolt" label="Quick add" :width="340">
@@ -526,7 +602,13 @@ const flagPreview = computed(() =>
           </div>
 
           <!-- Body ---------------------------------------------------------- -->
-          <div v-show="tab === 'body'" class="pane">
+          <div
+            v-show="tab === 'body'"
+            :id="requestPanelId('body')"
+            class="pane"
+            role="tabpanel"
+            :aria-labelledby="requestTabId('body')"
+          >
             <div class="pane-head">
               <div class="mode-switch">
                 <button
@@ -535,6 +617,7 @@ const flagPreview = computed(() =>
                   class="ghost mode"
                   :class="{ active: request.body.mode === mode.value }"
                   :disabled="isModeDisabled(mode.value, request.method)"
+                  :aria-pressed="request.body.mode === mode.value"
                   @click="setBodyMode(mode.value)"
                 >
                   {{ mode.label }}
@@ -544,9 +627,10 @@ const flagPreview = computed(() =>
                 <span
                   v-if="request.body.mode === 'json' && !bodyValidity.valid"
                   class="invalid"
+                  role="status"
                   :title="bodyValidity.message ?? 'Invalid'"
                 >
-                  <span class="material-icons sm">error_outline</span>
+                  <span class="material-icons sm" aria-hidden="true">error_outline</span>
                   {{ bodyValidity.message }}
                 </span>
                 <span
@@ -597,7 +681,7 @@ const flagPreview = computed(() =>
               </div>
               <div class="pane-head-right">
                 <button v-if="request.body.mode === 'json'" class="ghost" @click="formatBody">
-                  <span class="material-icons sm">format_indent_increase</span>
+                  <span class="material-icons sm" aria-hidden="true">format_indent_increase</span>
                   Format
                 </button>
                 <template v-if="request.body.mode === 'graphql'">
@@ -614,7 +698,7 @@ const flagPreview = computed(() =>
                     "
                     @click="fetchGraphqlSchema"
                   >
-                    <span class="material-icons sm">{{
+                    <span class="material-icons sm" aria-hidden="true">{{
                       fetchingSchema ? 'hourglass_top' : 'cloud_download'
                     }}</span>
                     {{
@@ -631,7 +715,7 @@ const flagPreview = computed(() =>
                     title="Open the GraphQL query builder"
                     @click="openGraphqlBuilder"
                   >
-                    <span class="material-icons sm">account_tree</span>
+                    <span class="material-icons sm" aria-hidden="true">account_tree</span>
                     Builder
                   </button>
                 </template>
@@ -696,6 +780,7 @@ const flagPreview = computed(() =>
                   id="request-graphql-query"
                   v-model="request.body.graphql.query"
                   language="graphql"
+                  aria-label="GraphQL query"
                   :schema="graphqlSchema"
                   placeholder="query Hero($id: ID!) {&#10;  hero(id: $id) {&#10;    name&#10;  }&#10;}"
                   @validity="graphqlQueryValidity = $event"
@@ -720,6 +805,7 @@ const flagPreview = computed(() =>
                 ref="bodyEditor"
                 v-model="request.body.text"
                 :language="request.body.mode === 'json' ? 'json' : 'text'"
+                :aria-label="request.body.mode === 'json' ? 'JSON body' : 'Request body'"
                 :placeholder="
                   request.body.mode === 'json'
                     ? '{\n  &quot;key&quot;: &quot;value&quot;\n}'
@@ -731,11 +817,17 @@ const flagPreview = computed(() =>
           </div>
 
           <!-- Vars ---------------------------------------------------------- -->
-          <div v-show="tab === 'vars'" class="pane">
+          <div
+            v-show="tab === 'vars'"
+            :id="requestPanelId('vars')"
+            class="pane"
+            role="tabpanel"
+            :aria-labelledby="requestTabId('vars')"
+          >
             <div class="pane-head">
               <span class="muted">Variables for this request only</span>
               <button class="ghost" @click="emit('manageVariables')">
-                <span class="material-icons sm">tune</span>
+                <span class="material-icons sm" aria-hidden="true">tune</span>
                 Wider scopes
               </button>
             </div>
@@ -757,7 +849,13 @@ const flagPreview = computed(() =>
           </div>
 
           <!-- Options ------------------------------------------------------- -->
-          <div v-show="tab === 'options'" class="pane option-list">
+          <div
+            v-show="tab === 'options'"
+            :id="requestPanelId('options')"
+            class="pane option-list"
+            role="tabpanel"
+            :aria-labelledby="requestTabId('options')"
+          >
             <label class="option">
               <input
                 id="option-follow-redirects"

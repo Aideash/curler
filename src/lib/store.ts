@@ -34,10 +34,14 @@ import {
 import { braceBareReferences, mergeScopes, type VariableSet } from './vars'
 import { normalizeRequestUrl } from './query'
 import {
+  getContrastPreference,
   getThemePreference,
+  readCachedContrastPreference,
   readCachedThemePreference,
+  setContrastPreference,
   setThemePreference,
 } from '../themes/manager'
+import { CONTRAST_DEFAULT } from '../themes/contrast'
 import { getThemeById, SYSTEM_PREFERENCE } from '../themes/definitions'
 
 interface State {
@@ -111,10 +115,14 @@ function persistSettingsOverrides(overrides: Partial<UserSetting>, refreshScratc
   if (refreshScratch) refreshScratchIfIdle()
 }
 
-/** The one setting that may be changed outside the site settings dialog. */
-export function setThemePreferenceSetting(preference: string) {
-  const merged = { ...readEffectiveSettings(), themePreference: preference }
+/** Appearance settings live in the gear menu, not the site settings form. */
+function persistAppearanceSetting(patch: Partial<UserSetting>) {
+  const merged = { ...readEffectiveSettings(), ...patch }
   persistSettingsOverrides(buildSettingsOverrides(merged), false)
+}
+
+export function setThemePreferenceSetting(preference: string) {
+  persistAppearanceSetting({ themePreference: preference })
 }
 
 /** Apply a theme immediately and persist it to the workspace. */
@@ -137,6 +145,30 @@ function migrateWorkspaceThemeFromCache() {
   if (cached === SYSTEM_PREFERENCE) return
   if (!getThemeById(cached)) return
   setThemePreferenceSetting(cached)
+}
+
+export function setContrastPreferenceSetting(preference: string) {
+  persistAppearanceSetting({ contrastPreference: preference })
+}
+
+/** Apply a contrast level immediately and persist it to the workspace. */
+export function pickContrast(preference: string) {
+  setContrastPreference(preference)
+  setContrastPreferenceSetting(preference)
+}
+
+function syncContrastFromWorkspace() {
+  const fromWorkspace = getSettingString('contrastPreference', workspaceFromState())
+  if (fromWorkspace !== getContrastPreference()) {
+    setContrastPreference(fromWorkspace)
+  }
+}
+
+function migrateWorkspaceContrastFromCache() {
+  if (state.settings?.contrastPreference !== undefined) return
+  const cached = readCachedContrastPreference()
+  if (cached === CONTRAST_DEFAULT) return
+  setContrastPreferenceSetting(cached)
 }
 
 export function applyWorkspaceSettings(values: Partial<UserSetting>) {
@@ -429,6 +461,8 @@ export async function initStore() {
   refreshScratchIfIdle()
   migrateWorkspaceThemeFromCache()
   syncThemeFromWorkspace()
+  migrateWorkspaceContrastFromCache()
+  syncContrastFromWorkspace()
 }
 
 /** Reload from disk after an out-of-band change such as restoring a backup. */

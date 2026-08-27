@@ -133,6 +133,7 @@ function setMethod(method: HttpMethod) {
         class="method mono"
         :class="lane.request.method.toLowerCase()"
         title="Method"
+        aria-label="HTTP method"
         @input="setMethod(($event.target as HTMLSelectElement).value as HttpMethod)"
       >
         <option v-for="method in HTTP_METHODS" :key="method" :value="method">{{ method }}</option>
@@ -144,6 +145,7 @@ function setMethod(method: HttpMethod) {
         class="url mono"
         placeholder="${BASE_URL}/things"
         spellcheck="false"
+        aria-label="Request URL"
         @focus="onUrlFocus"
         @input="onUrlInput(($event.target as HTMLInputElement).value)"
         @blur="onUrlBlur"
@@ -155,7 +157,7 @@ function setMethod(method: HttpMethod) {
         title="Edit this lane: environment, headers, body and options"
         @click="emit('edit')"
       >
-        <span class="material-icons sm">edit</span>
+        <span class="material-icons sm" aria-hidden="true">edit</span>
         Edit
       </button>
 
@@ -163,9 +165,15 @@ function setMethod(method: HttpMethod) {
         class="primary send"
         :disabled="lane.sending || !urlDisplay.trim()"
         :title="`Send lane ${lane.label} on its own`"
+        :aria-label="
+          lane.sending ? `Sending lane ${lane.label}` : `Send lane ${lane.label} on its own`
+        "
+        :aria-busy="lane.sending || undefined"
         @click="(commitUrl(), sendLane(lane.id))"
       >
-        <span class="material-icons sm">{{ lane.sending ? 'hourglass_top' : 'send' }}</span>
+        <span class="material-icons sm" aria-hidden="true">{{
+          lane.sending ? 'hourglass_top' : 'send'
+        }}</span>
       </button>
 
       <PopMenu icon="more_vert" :title="`Lane ${lane.label} actions`" :width="300">
@@ -195,6 +203,7 @@ function setMethod(method: HttpMethod) {
             class="menu-filter"
             type="search"
             placeholder="Filter requests…"
+            aria-label="Filter saved requests"
             @keydown.stop
           />
           <button
@@ -216,13 +225,13 @@ function setMethod(method: HttpMethod) {
 
     <div class="status-bar">
       <template v-if="response">
-        <span class="chip" :class="statusClass(response.status)">
+        <span class="chip" :class="statusClass(response.status)" role="status">
           {{ response.status }} {{ response.statusText }}
         </span>
         <span class="metric">{{ response.elapsedMs }} ms</span>
         <span class="metric">{{ formatBytes(response.bytes) }}</span>
       </template>
-      <span v-else-if="lane.sending" class="muted">Sending…</span>
+      <span v-else-if="lane.sending" class="muted" role="status">Sending…</span>
       <span v-else-if="error" class="chip red">{{ lane.outcome?.errorChip }}</span>
       <span v-else class="faint">Not sent</span>
 
@@ -231,7 +240,7 @@ function setMethod(method: HttpMethod) {
         class="stale"
         title="This lane has been edited since this response arrived"
       >
-        <span class="material-icons sm">history</span>
+        <span class="material-icons sm" aria-hidden="true">history</span>
         Stale
       </span>
 
@@ -244,7 +253,7 @@ function setMethod(method: HttpMethod) {
         :title="`Lane ${lane.label} resolves against &quot;${environmentName}&quot;. Click to change it.`"
         @click="emit('edit')"
       >
-        <span class="material-icons sm">swap_horiz</span>
+        <span class="material-icons sm" aria-hidden="true">swap_horiz</span>
         <span class="env-name">{{ environmentName }}</span>
       </button>
 
@@ -255,13 +264,15 @@ function setMethod(method: HttpMethod) {
         Pretty
       </label>
       <button v-if="response && copyEnabled" class="ghost copy" @click="copyBody">
-        <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
+        <span class="material-icons sm" aria-hidden="true">{{
+          copied ? 'check' : 'content_copy'
+        }}</span>
         {{ copied ? 'Copied' : 'Copy' }}
       </button>
     </div>
 
     <div class="content">
-      <div v-if="error" class="error">
+      <div v-if="error" class="error" role="alert">
         <strong>
           <span class="material-icons sm">error_outline</span>
           {{ lane.outcome?.errorTitle }}

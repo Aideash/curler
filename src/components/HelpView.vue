@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import SkipLinks from './SkipLinks.vue'
 import ThemePicker from './ThemePicker.vue'
 import TerminalHelp from './help_terminal/TerminalHelp.vue'
 import TitleBar from './TitleBar.vue'
@@ -22,8 +23,12 @@ const toc = [
 
 function scrollToSection(id: string | null) {
   if (!id) return
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    document.getElementById(id)?.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
   })
 }
 
@@ -44,6 +49,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 
 <template>
   <div class="help">
+    <SkipLinks :links="[{ targetId: 'help-article', label: 'Skip to help article' }]" />
     <TitleBar>
       <TitleBarButton
         back
@@ -62,8 +68,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 
     <div class="content">
       <nav class="toc" aria-label="On this page">
-        <img src="/public/android-chrome-512x512.png" alt="curler" class="logo" />
-        <h3 class="site-name mono">curler</h3>
+        <img src="/public/android-chrome-512x512.png" alt="" class="logo" />
+        <p class="site-name mono">curler</p>
         <p class="toc-label faint">On this page</p>
         <ul>
           <li v-for="item in toc" :key="item.id">
@@ -72,7 +78,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
         </ul>
       </nav>
 
-      <article class="prose">
+      <article id="help-article" class="prose" tabindex="-1">
         <section id="overview">
           <h2>Overview</h2>
           <p>
@@ -351,8 +357,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           </p>
           <p>
             The gear menu opens <strong>Site settings</strong> for defaults (timeouts, response
-            caps, compare behavior, GraphQL explorer options, and more). Values save with your
-            workspace.
+            caps, compare behavior, GraphQL explorer options, and more). Theme and contrast are
+            picked from the same menu. Values save with your workspace.
           </p>
           <p>
             If the workspace cannot be read (for example, the API server was restarted), a
@@ -386,7 +392,17 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
               </tr>
               <tr>
                 <td><kbd>Esc</kbd></td>
-                <td>Close the open dialog</td>
+                <td>
+                  Close the open dialog or menu, cancel a rename, or collapse the overlay sidebar
+                </td>
+              </tr>
+              <tr>
+                <td><kbd>←</kbd> <kbd>→</kbd></td>
+                <td>Move between tabs (request sections, response, compare, variable scopes)</td>
+              </tr>
+              <tr>
+                <td><kbd>↑</kbd> <kbd>↓</kbd></td>
+                <td>Move between items in an open menu</td>
               </tr>
               <tr>
                 <td><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></td>
@@ -424,8 +440,8 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
           <p>
             Backups are kept in <code class="mono">backups/</code> alongside the workspace, with the
             newest 40 retained by default (both counts are configurable in Site settings). Your
-            theme preference is cached in the browser for the first paint, then saved in workspace
-            <code class="mono">settings</code> alongside your collections.
+            theme and contrast preferences are cached in the browser for the first paint, then saved
+            in workspace <code class="mono">settings</code> alongside your collections.
           </p>
         </section>
       </article>
@@ -504,6 +520,11 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
 
 .prose {
   min-width: 0;
+}
+
+.prose:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 2px;
 }
 
 .prose section {

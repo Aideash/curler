@@ -247,6 +247,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           v-model="currentRequest.name"
           class="title-input"
           placeholder="Request name"
+          aria-label="Request name"
         />
         <span v-else class="title-input unsaved faint">Unsaved request</span>
 
@@ -264,8 +265,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         </span>
 
         <div class="spacer" />
-        <span v-if="toast" class="toast" :class="toastKind">
-          <span class="material-icons sm">
+        <span v-if="toast" class="toast" :class="toastKind" role="status" aria-live="polite">
+          <span class="material-icons sm" aria-hidden="true">
             {{ toastKind === 'error' ? 'error_outline' : 'check_circle_outline' }}
           </span>
           {{ toast }}
@@ -337,7 +338,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         :title="requestExpanded ? 'Collapse request' : 'Expand request'"
         @click="requestExpanded = !requestExpanded"
       >
-        <span class="material-icons sm">{{ requestExpanded ? 'expand_less' : 'expand_more' }}</span>
+        <span class="material-icons sm" aria-hidden="true">{{
+          requestExpanded ? 'expand_less' : 'expand_more'
+        }}</span>
       </button>
 
       <ResponsePanel

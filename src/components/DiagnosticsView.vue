@@ -119,6 +119,7 @@ function statusTone(status: number): string {
             :class="stage.tone"
             :style="{ width: share(hop, stage.value) }"
             :title="`${stage.label} ${ms(stage.value)}`"
+            aria-hidden="true"
           />
         </div>
         <div class="legend">

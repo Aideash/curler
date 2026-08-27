@@ -67,12 +67,33 @@ button {
   border-radius: var(--radius);
   padding: 6px 12px;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
 
 button:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--accent-dim);
+}
+
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button:disabled {
@@ -127,6 +148,13 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent-dim);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0px;
 }
 
 input::placeholder {
@@ -203,7 +231,8 @@ select {
 }
 
 .cm-editor.cm-focused {
-  outline: none;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .cm-scroller {
@@ -291,4 +320,35 @@ select {
   outline: 3px solid var(--text);
   outline-offset: 2px;
   box-shadow: 0 2px 8px var(--shadow-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Windows Contrast Themes (and similar) replace the page palette. --accent
+ * may be forced to an unusable value, so the ring uses the system Highlight
+ * colour instead. Outside this mode, --accent is the right choice: it tracks
+ * the theme instead of painting a browser-blue ring on Cute/BTerminal/etc.
+ */
+@media (forced-colors: active) {
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  .cm-editor.cm-focused {
+    outline: 1px solid Highlight;
+    outline-offset: 0px;
+  }
 }

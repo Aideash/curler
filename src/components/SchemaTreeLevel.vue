@@ -169,9 +169,11 @@ function onArgClick(
           type="button"
           class="ghost expand"
           :title="isFieldExpanded(field) ? 'Collapse' : 'Expand'"
+          :aria-label="isFieldExpanded(field) ? `Collapse ${field.name}` : `Expand ${field.name}`"
+          :aria-expanded="isFieldExpanded(field)"
           @click.stop="emit('toggle', operation, childPath(field.name))"
         >
-          <span class="material-icons sm">{{
+          <span class="material-icons sm" aria-hidden="true">{{
             isFieldExpanded(field) ? 'expand_more' : 'chevron_right'
           }}</span>
         </button>
@@ -207,9 +209,15 @@ function onArgClick(
               type="button"
               class="ghost expand"
               :title="isArgExpanded(field, arg) ? 'Collapse' : 'Expand'"
+              :aria-label="
+                isArgExpanded(field, arg)
+                  ? `Collapse argument ${arg.name}`
+                  : `Expand argument ${arg.name}`
+              "
+              :aria-expanded="isArgExpanded(field, arg)"
               @click.stop="emit('toggleArg', argExpandKey(field, arg))"
             >
-              <span class="material-icons sm">{{
+              <span class="material-icons sm" aria-hidden="true">{{
                 isArgExpanded(field, arg) ? 'expand_more' : 'chevron_right'
               }}</span>
             </button>

@@ -11,6 +11,7 @@ export const SETTINGS = {
   showRequestEditIcons: { type: 'boolean', default: false, userFacing: true },
   showCollectionEditIcons: { type: 'boolean', default: false, userFacing: true },
   themePreference: { type: 'string', default: 'system', userFacing: true },
+  contrastPreference: { type: 'string', default: 'medium', userFacing: true },
   sidebarCollapsed: { type: 'boolean', default: false, userFacing: true },
   graphqlArgInsertMode: { type: 'string', default: 'required-vars', userFacing: true },
   graphqlSchemaSort: { type: 'string', default: 'schema', userFacing: true },

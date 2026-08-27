@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import ModalShell from './ModalShell.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import {
@@ -16,6 +16,7 @@ import {
 import { DEFAULT_VARIABLE_NAME } from '../lib/presets'
 import { rowContributes } from '../lib/vars'
 import { SCOPE_LABELS, type EditableScope, type KeyValue } from '../types'
+import { onTablistKeydown } from '../composables/useTablist'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -24,6 +25,11 @@ const props = withDefaults(defineProps<{ initialScope?: EditableScope }>(), {
 })
 
 const scope = ref<EditableScope>(props.initialScope)
+const tabsId = useId()
+function scopeTabId(id: EditableScope) {
+  return `${tabsId}-${id}`
+}
+const scopePanelId = `${tabsId}-panel`
 
 const environment = computed(() =>
   state.environments.find((item) => item.id === state.activeEnvironmentId),
@@ -147,90 +153,108 @@ function confirmDeleteEnvironment() {
 
 <template>
   <ModalShell title="Variables" width="720px" @close="emit('close')">
-    <nav class="scope-tabs">
+    <nav class="scope-tabs" role="tablist" aria-label="Variable scopes" @keydown="onTablistKeydown">
       <button
         v-for="item in scopes"
+        :id="scopeTabId(item.id)"
         :key="item.id"
+        type="button"
         class="ghost scope-tab"
         :class="{ active: scope === item.id, unavailable: item.blocked }"
+        role="tab"
+        :aria-selected="scope === item.id"
+        :aria-controls="scopePanelId"
+        :tabindex="scope === item.id ? 0 : -1"
         @click="scope = item.id"
       >
-        <span class="material-icons sm">{{ item.icon }}</span>
+        <span class="material-icons sm" aria-hidden="true">{{ item.icon }}</span>
         {{ SCOPE_LABELS[item.id] }}
         <span v-if="usableCount(item.rows)" class="badge">{{ usableCount(item.rows) }}</span>
       </button>
     </nav>
 
-    <div v-if="scope === 'environment'" class="env-bar">
-      <select id="variables-environment" v-model="state.activeEnvironmentId">
-        <option v-for="item in state.environments" :key="item.id" :value="item.id">
-          {{ item.name }}
-        </option>
-      </select>
-      <input
-        v-if="environment"
-        id="variables-environment-name"
-        v-model="environment.name"
-        class="rename"
-        placeholder="Environment name"
-      />
-      <button @click="promptEnvironment">
-        <span class="material-icons sm">add</span>
-        New
-      </button>
-      <button
-        class="danger"
-        :disabled="state.environments.length <= 1"
-        :title="
-          state.environments.length <= 1
-            ? 'The last environment cannot be deleted'
-            : 'Delete this environment'
-        "
-        @click="confirmDeleteEnvironment"
-      >
-        <span class="material-icons sm">delete_outline</span>
-      </button>
-    </div>
-
-    <p class="blurb faint">{{ current.blurb }}</p>
-
-    <p v-if="current.blocked" class="empty faint">{{ current.blocked }}</p>
-
-    <KeyValueEditor
-      v-else-if="current.rows"
-      :key="editorKey"
-      v-model:rows="editorRows"
-      list-id="variable-names"
-      :id-prefix="`variable-${scope}`"
-      name-placeholder="Variable name"
-      value-placeholder="Value"
-      :default-name="defaultName"
-      :resolves="false"
-      allow-secrets
-      reorderable
-      :show-notes="notesAllowedFor(scope)"
-    />
-
-    <p v-if="shadowed.length" class="notice">
-      <span class="material-icons sm">layers</span>
-      Overridden by a narrower scope, so these rows have no effect right now:
-      <span class="mono">{{ shadowed.join(', ') }}</span>
-    </p>
-
-    <details class="builtins">
-      <summary>
-        Built-in variables
-        <span class="faint">({{ builtins.length }}, read-only)</span>
-      </summary>
-      <p class="faint">
-        Read from the environment of the server process, so <code>${USER}</code> works without you
-        defining it. Define a variable of the same name in any scope above to override one.
-      </p>
-      <div v-for="[name, value] in builtins" :key="name" class="builtin-row">
-        <span class="mono">{{ name }}</span>
-        <span class="mono faint">{{ value }}</span>
+    <div :id="scopePanelId" role="tabpanel" :aria-labelledby="scopeTabId(scope)">
+      <div v-if="scope === 'environment'" class="env-bar">
+        <select
+          id="variables-environment"
+          v-model="state.activeEnvironmentId"
+          aria-label="Active environment"
+        >
+          <option v-for="item in state.environments" :key="item.id" :value="item.id">
+            {{ item.name }}
+          </option>
+        </select>
+        <input
+          v-if="environment"
+          id="variables-environment-name"
+          v-model="environment.name"
+          class="rename"
+          placeholder="Environment name"
+          aria-label="Environment name"
+        />
+        <button @click="promptEnvironment">
+          <span class="material-icons sm" aria-hidden="true">add</span>
+          New
+        </button>
+        <button
+          class="danger"
+          :disabled="state.environments.length <= 1"
+          :title="
+            state.environments.length <= 1
+              ? 'The last environment cannot be deleted'
+              : 'Delete this environment'
+          "
+          :aria-label="
+            state.environments.length <= 1
+              ? 'The last environment cannot be deleted'
+              : 'Delete this environment'
+          "
+          @click="confirmDeleteEnvironment"
+        >
+          <span class="material-icons sm" aria-hidden="true">delete_outline</span>
+        </button>
       </div>
-    </details>
+
+      <p class="blurb faint">{{ current.blurb }}</p>
+
+      <p v-if="current.blocked" class="empty faint">{{ current.blocked }}</p>
+
+      <KeyValueEditor
+        v-else-if="current.rows"
+        :key="editorKey"
+        v-model:rows="editorRows"
+        list-id="variable-names"
+        :id-prefix="`variable-${scope}`"
+        name-placeholder="Variable name"
+        value-placeholder="Value"
+        :default-name="defaultName"
+        :resolves="false"
+        allow-secrets
+        reorderable
+        :show-notes="notesAllowedFor(scope)"
+      />
+
+      <p v-if="shadowed.length" class="notice">
+        <span class="material-icons sm">layers</span>
+        Overridden by a narrower scope, so these rows have no effect right now:
+        <span class="mono">{{ shadowed.join(', ') }}</span>
+      </p>
+
+      <details class="builtins">
+        <summary>
+          Built-in variables
+          <span class="faint">({{ builtins.length }}, read-only)</span>
+        </summary>
+        <p class="faint">
+          Read from the environment of the server process, so <code>${USER}</code> works without you
+          defining it. Define a variable of the same name in any scope above to override one.
+        </p>
+        <div v-for="[name, value] in builtins" :key="name" class="builtin-row">
+          <span class="mono">{{ name }}</span>
+          <span class="mono faint">{{ value }}</span>
+        </div>
+      </details>
+    </div>
 
     <template #footer>
       <button class="primary" @click="emit('close')">Done</button>

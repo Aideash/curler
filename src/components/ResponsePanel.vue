@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import DiagnosticsView from './DiagnosticsView.vue'
 import ResponseBodyView from './ResponseBodyView.vue'
 import { copyText } from '../lib/clipboard'
@@ -11,6 +11,7 @@ import {
   statusClass as statusClassFor,
 } from '../lib/response'
 import { settingNumber } from '../lib/store'
+import { onTablistKeydown } from '../composables/useTablist'
 import type { BuildTrace } from '../lib/vars'
 import type { HttpResponse } from '../types'
 
@@ -34,6 +35,11 @@ const emit = defineEmits<{
 
 type Tab = 'body' | 'headers' | 'diagnostics'
 const tab = ref<Tab>('body')
+const tabsId = useId()
+function responseTabId(name: Tab) {
+  return `${tabsId}-${name}`
+}
+const responsePanelId = `${tabsId}-panel`
 const pretty = ref(true)
 
 const canPretty = computed(() => canPrettyPrintResponse(props.response))
@@ -82,7 +88,7 @@ watch(
   <section id="response-panel" class="response" tabindex="-1" @focusin="emit('focusin')">
     <div class="status-bar">
       <template v-if="response">
-        <span class="chip" :class="statusClass">
+        <span class="chip" :class="statusClass" role="status">
           {{ response.status }} {{ response.statusText }}
         </span>
         <span class="metric">
@@ -109,58 +115,90 @@ watch(
 
       <template v-if="response">
         <label v-if="canPretty && tab === 'body'" class="pretty" title="Pretty print">
-          <input id="response-pretty" v-model="pretty" type="checkbox" />
+          <input id="response-pretty" v-model="pretty" type="checkbox" aria-label="Pretty print" />
           <span class="pretty-label">Pretty</span>
-          <span class="alt-icon material-icons sm">format_indent_increase</span>
+          <span class="alt-icon material-icons sm" aria-hidden="true">format_indent_increase</span>
         </label>
-        <button v-if="tab === 'body' && copyEnabled" class="ghost copy" @click="copyBody">
-          <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
+        <button
+          v-if="tab === 'body' && copyEnabled"
+          class="ghost copy"
+          :aria-label="copied ? 'Copied' : 'Copy'"
+          @click="copyBody"
+        >
+          <span class="material-icons sm" aria-hidden="true">{{
+            copied ? 'check' : 'content_copy'
+          }}</span>
           <span class="action-button-text">{{ copied ? 'Copied' : 'Copy' }}</span>
         </button>
         <span v-if="tab === 'body' && (copyEnabled || canPretty)" class="separator" />
-        <div class="tabs">
+        <div class="tabs" role="tablist" aria-label="Response sections" @keydown="onTablistKeydown">
           <button
+            :id="responseTabId('body')"
+            type="button"
             class="ghost tab"
             :class="{ active: tab === 'body' }"
+            role="tab"
+            :aria-selected="tab === 'body'"
+            :aria-controls="responsePanelId"
+            :tabindex="tab === 'body' ? 0 : -1"
             aria-label="Body"
             title="Body"
             @click="tab = 'body'"
           >
             <span class="tab-text"> Body </span>
-            <span class="alt-icon material-icons sm">man</span>
+            <span class="alt-icon material-icons sm" aria-hidden="true">man</span>
           </button>
           <button
+            :id="responseTabId('headers')"
+            type="button"
             class="ghost tab"
             :class="{ active: tab === 'headers' }"
+            role="tab"
+            :aria-selected="tab === 'headers'"
+            :aria-controls="responsePanelId"
+            :tabindex="tab === 'headers' ? 0 : -1"
             aria-label="Headers"
             title="Headers"
             @click="tab = 'headers'"
           >
             <span class="tab-text"> Headers </span>
-            <span class="alt-icon material-icons sm">face</span>
+            <span class="alt-icon material-icons sm" aria-hidden="true">face</span>
             <span class="badge">{{ response.headers.length }}</span>
           </button>
           <button
+            :id="responseTabId('diagnostics')"
+            type="button"
             class="ghost tab"
             :class="{ active: tab === 'diagnostics' }"
+            role="tab"
+            :aria-selected="tab === 'diagnostics'"
+            :aria-controls="responsePanelId"
+            :tabindex="tab === 'diagnostics' ? 0 : -1"
             aria-label="Diagnostics"
             title="Diagnostics"
             @click="tab = 'diagnostics'"
           >
             <span class="tab-text"> Diagnostics </span>
-            <span class="alt-icon material-icons sm">troubleshoot</span>
-            <span v-if="response.truncated" class="material-icons sm warn-dot">content_cut</span>
+            <span class="alt-icon material-icons sm" aria-hidden="true">troubleshoot</span>
+            <span v-if="response.truncated" class="material-icons sm warn-dot" aria-hidden="true"
+              >content_cut</span
+            >
           </button>
         </div>
       </template>
-      <button v-if="response || error" class="ghost reset" @click="resetPane">
-        <span class="material-icons sm">refresh</span>
+      <button v-if="response || error" class="ghost reset" aria-label="Reset" @click="resetPane">
+        <span class="material-icons sm" aria-hidden="true">refresh</span>
         <span class="action-button-text">Reset</span>
       </button>
     </div>
 
-    <div class="content">
-      <div v-if="error" class="error">
+    <div
+      :id="responsePanelId"
+      class="content"
+      :role="response ? 'tabpanel' : undefined"
+      :aria-labelledby="response ? responseTabId(tab) : undefined"
+    >
+      <div v-if="error" class="error" role="alert">
         <strong>
           <span class="material-icons sm">error_outline</span>
           {{ errorTitle }}

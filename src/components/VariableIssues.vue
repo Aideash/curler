@@ -28,9 +28,10 @@ const suggestion = (issue: VariableIssue) =>
         v-if="issue.kind === 'bare'"
         class="fix"
         :title="suggestion(issue)"
+        :aria-label="suggestion(issue)"
         @click="emit('fix', issue.name)"
       >
-        <span class="material-icons sm">auto_fix_high</span>
+        <span class="material-icons sm" aria-hidden="true">auto_fix_high</span>
         {{ label(issue) }}
       </button>
       <span v-else>{{ label(issue) }}</span>

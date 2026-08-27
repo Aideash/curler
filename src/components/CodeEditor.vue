@@ -37,6 +37,8 @@ const props = withDefaults(
     graphqlOperation?: RootOperation | null
     /** Optional JSON property names mapped to enum choices for Alt+Enter cycling. */
     valueCycleEnumOptions?: Record<string, string[]>
+    /** Accessible name for the editable surface. Placeholders are not announced as names. */
+    ariaLabel?: string
   }>(),
   {
     language: 'text',
@@ -46,6 +48,7 @@ const props = withDefaults(
     schema: null,
     graphqlOperation: null,
     valueCycleEnumOptions: () => ({}),
+    ariaLabel: '',
   },
 )
 
@@ -62,6 +65,7 @@ const themeCompartment = new Compartment()
 const tabIndentCompartment = new Compartment()
 const placeholderTypenameCompartment = new Compartment()
 const valueCycleCompartment = new Compartment()
+const ariaCompartment = new Compartment()
 
 const { isDark } = useTheme()
 
@@ -74,6 +78,10 @@ function buildTheme(dark: boolean): Extension {
   return EditorView.theme(
     {
       '&': { color: 'var(--text)', backgroundColor: 'var(--bg-input)', height: '100%' },
+      '&.cm-focused': {
+        outline: '2px solid var(--accent)',
+        outlineOffset: '2px',
+      },
       '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
       '&.cm-focused .cm-cursor': { borderLeftColor: 'var(--accent)' },
       '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
@@ -229,6 +237,21 @@ function editorKeyShortcuts(): string | undefined {
   return shortcuts.length ? shortcuts.join(' ') : undefined
 }
 
+function editorAriaLabel(): string {
+  if (props.ariaLabel) return props.ariaLabel
+  if (props.language === 'graphql')
+    return props.readonly ? 'GraphQL query, read only' : 'GraphQL query'
+  if (props.language === 'json') return props.readonly ? 'JSON, read only' : 'JSON'
+  return props.readonly ? 'Code editor, read only' : 'Code editor'
+}
+
+function ariaExtensions(): Extension {
+  return EditorView.contentAttributes.of({
+    'aria-label': editorAriaLabel(),
+    'aria-multiline': 'true',
+  })
+}
+
 /**
  * The gutter linter shows where the problem is; this reports whether the
  * document parses at all so the surrounding UI can react.
@@ -283,6 +306,7 @@ onMounted(() => {
         valueCycleCompartment.of(valueCycleExtensions()),
         placeholderTypenameCompartment.of(placeholderTypenameExtensionConfig()),
         EditorView.lineWrapping,
+        ariaCompartment.of(ariaExtensions()),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return
           const text = update.state.doc.toString()
@@ -363,6 +387,13 @@ watch(
 watch(isDark, (dark) => {
   view?.dispatch({ effects: themeCompartment.reconfigure(buildTheme(dark)) })
 })
+
+watch(
+  () => [props.ariaLabel, props.language, props.readonly] as const,
+  () => {
+    view?.dispatch({ effects: ariaCompartment.reconfigure(ariaExtensions()) })
+  },
+)
 
 defineExpose({
   format() {

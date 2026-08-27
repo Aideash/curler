@@ -97,7 +97,9 @@ const marker: Record<string, string> = {
         Changes only
       </label>
       <button v-if="!result.skipped" class="ghost copy" @click="copyDiff">
-        <span class="material-icons sm">{{ copied ? 'check' : 'content_copy' }}</span>
+        <span class="material-icons sm" aria-hidden="true">{{
+          copied ? 'check' : 'content_copy'
+        }}</span>
         {{ copied ? 'Copied' : 'Copy diff' }}
       </button>
     </div>

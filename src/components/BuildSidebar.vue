@@ -99,8 +99,11 @@ function onFocusIn(event: FocusEvent) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  // Escape belongs to the rename field for as long as one is open.
+  // Rename handles Escape itself (and stops it). Without that stop, Vue
+  // would clear renamingId during the same event and this handler would
+  // also collapse the overlay.
   if (event.key !== 'Escape' || renamingId.value) return
+  if (event.defaultPrevented) return
   if (overlaid() && !fromOverlay(event.target)) setRailed(true)
 }
 
@@ -206,14 +209,29 @@ const {
         width="22"
         height="22"
       />
-      <button class="ghost" title="New request" @click="newScratchRequest()">
-        <span class="material-icons">add</span>
+      <button
+        class="ghost"
+        title="New request"
+        aria-label="New request"
+        @click="newScratchRequest()"
+      >
+        <span class="material-icons" aria-hidden="true">add</span>
       </button>
-      <button class="ghost" title="Variables" @click="emit('manageVariables')">
-        <span class="material-icons">data_object</span>
+      <button
+        class="ghost"
+        title="Variables"
+        aria-label="Variables"
+        @click="emit('manageVariables')"
+      >
+        <span class="material-icons" aria-hidden="true">data_object</span>
       </button>
-      <button class="ghost" title="Expand the sidebar" @click="toggleRail">
-        <span class="material-icons">keyboard_double_arrow_right</span>
+      <button
+        class="ghost"
+        title="Expand the sidebar"
+        aria-label="Expand the sidebar"
+        @click="toggleRail"
+      >
+        <span class="material-icons" aria-hidden="true">keyboard_double_arrow_right</span>
       </button>
     </div>
 
@@ -223,11 +241,16 @@ const {
         <span class="logo mono">curler</span>
         <span class="brand-actions">
           <button class="ghost" title="New request" @click="newScratchRequest()">
-            <span class="material-icons sm">add</span>
+            <span class="material-icons sm" aria-hidden="true">add</span>
             New
           </button>
-          <button class="ghost rail-toggle" title="Collapse the sidebar" @click="toggleRail">
-            <span class="material-icons sm">keyboard_double_arrow_left</span>
+          <button
+            class="ghost rail-toggle"
+            title="Collapse the sidebar"
+            aria-label="Collapse the sidebar"
+            @click="toggleRail"
+          >
+            <span class="material-icons sm" aria-hidden="true">keyboard_double_arrow_left</span>
           </button>
         </span>
       </header>
@@ -237,6 +260,7 @@ const {
           id="active-environment"
           v-model="state.activeEnvironmentId"
           title="Active environment"
+          aria-label="Active environment"
         >
           <option
             v-for="environment in state.environments"
@@ -247,7 +271,7 @@ const {
           </option>
         </select>
         <button class="ghost" title="Manage variables" @click="emit('manageVariables')">
-          <span class="material-icons sm">data_object</span>
+          <span class="material-icons sm" aria-hidden="true">data_object</span>
           Vars
         </button>
       </div>
@@ -258,10 +282,13 @@ const {
             <button
               class="ghost chevron"
               :title="collapsed.has(collection.id) ? 'Expand collection' : 'Collapse collection'"
+              :aria-label="
+                collapsed.has(collection.id) ? 'Expand collection' : 'Collapse collection'
+              "
               :aria-expanded="!collapsed.has(collection.id)"
               @click="toggle(collection.id)"
             >
-              <span class="material-icons sm">
+              <span class="material-icons sm" aria-hidden="true">
                 {{ collapsed.has(collection.id) ? 'chevron_right' : 'expand_more' }}
               </span>
             </button>
@@ -274,7 +301,7 @@ const {
               aria-label="Collection name"
               @blur="commitRename('collection')"
               @keydown.enter="submitRename('collection')"
-              @keydown.esc="cancelRename"
+              @keydown.esc.stop="cancelRename"
             />
             <span
               v-else
@@ -292,16 +319,18 @@ const {
               v-if="settingBoolean('showCollectionEditIcons')"
               class="ghost tiny"
               title="Rename collection"
+              aria-label="Rename collection"
               @click="startRename(collection.id, collection.name)"
             >
-              <span class="material-icons sm">edit</span>
+              <span class="material-icons sm" aria-hidden="true">edit</span>
             </button>
             <button
               class="ghost danger tiny"
               title="Delete collection"
+              aria-label="Delete collection"
               @click="confirmDeleteCollection(collection.id, collection.name)"
             >
-              <span class="material-icons sm">delete_outline</span>
+              <span class="material-icons sm" aria-hidden="true">delete_outline</span>
             </button>
             <span class="count faint">{{ collection.requests.length }}</span>
           </div>
@@ -354,7 +383,7 @@ const {
                   )
                 "
               >
-                <span class="material-icons sm">drag_indicator</span>
+                <span class="material-icons sm" aria-hidden="true">drag_indicator</span>
               </button>
               <span class="method mono" :class="request.method.toLowerCase()">
                 {{ request.method.slice(0, 4) }}
@@ -369,7 +398,7 @@ const {
                 @click.stop
                 @blur="commitRename('request')"
                 @keydown.enter="submitRename('request')"
-                @keydown.esc="cancelRename"
+                @keydown.esc.stop="cancelRename"
               />
               <!--
               The whole row is a click target for the mouse, but selecting one
@@ -380,7 +409,7 @@ const {
                 v-else
                 class="request-name"
                 :title="request.name"
-                :aria-label="`Request name: ${request.name}. Double click or press Shift+Enter to edit`"
+                :aria-label="`Request name: ${request.name}${unconfigured.has(request.id) ? `. ${unconfigured.get(request.id)}` : ''}. Double click or press Shift+Enter to edit`"
                 :aria-current="state.activeRequestId === request.id ? 'true' : undefined"
                 @dblclick.stop="startRename(request.id, request.name)"
                 @keydown.shift.enter="startRename(request.id, request.name)"
@@ -392,23 +421,26 @@ const {
                   v-if="settingBoolean('showRequestEditIcons')"
                   class="ghost tiny"
                   title="Rename"
+                  aria-label="Rename request"
                   @click.stop="startRename(request.id, request.name)"
                 >
-                  <span class="material-icons sm">edit</span>
+                  <span class="material-icons sm" aria-hidden="true">edit</span>
                 </button>
                 <button
                   class="ghost tiny"
                   title="Duplicate"
+                  aria-label="Duplicate request"
                   @click.stop="duplicateRequest(request.id)"
                 >
-                  <span class="material-icons sm">content_copy</span>
+                  <span class="material-icons sm" aria-hidden="true">content_copy</span>
                 </button>
                 <button
                   class="ghost tiny danger"
                   title="Delete"
+                  aria-label="Delete request"
                   @click.stop="deleteRequest(request.id)"
                 >
-                  <span class="material-icons sm">delete_outline</span>
+                  <span class="material-icons sm" aria-hidden="true">delete_outline</span>
                 </button>
               </span>
             </li>
@@ -419,7 +451,7 @@ const {
         </div>
 
         <button class="ghost add-collection" @click="promptCollection">
-          <span class="material-icons sm">create_new_folder</span>
+          <span class="material-icons sm" aria-hidden="true">create_new_folder</span>
           Collection
         </button>
       </div>
@@ -435,9 +467,10 @@ const {
           v-if="!state.error"
           class="ghost tiny restore"
           title="Restore from backup"
+          aria-label="Restore from backup"
           @click="showRestore = true"
         >
-          <span class="material-icons sm">restore</span>
+          <span class="material-icons sm" aria-hidden="true">restore</span>
         </button>
       </footer>
     </div>
