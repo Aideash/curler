@@ -423,6 +423,7 @@ ensureTrailingRow()
     </datalist>
 
     <input
+      :id="`${idPrefix}-file`"
       ref="fileInput"
       type="file"
       class="kv-file-input"

@@ -199,6 +199,7 @@ function setMethod(method: HttpMethod) {
           <div class="menu-section">Load a saved request</div>
           <input
             v-if="hasSavedRequests"
+            :id="`${idStem}-request-filter`"
             v-model="requestFilter"
             class="menu-filter"
             type="search"

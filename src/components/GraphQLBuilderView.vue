@@ -209,6 +209,7 @@ function cancel() {
       <aside id="graphql-explorer" class="explorer-pane" tabindex="-1">
         <div class="pane-toolbar">
           <input
+            id="graphql-schema-filter"
             v-model="schemaFilter"
             class="filter"
             type="search"

@@ -48,7 +48,7 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', onHashChange))
   <div class="faux-terminal mono">
     <p class="cmd-line">
       <span style="color: var(--syntax-comment)">$</span> curl --help
-      <select v-model="activePageKey" aria-label="Curl help category">
+      <select id="curl-help-category" v-model="activePageKey" aria-label="Curl help category">
         <option v-for="option in pageOptions" :key="option.key || 'main'" :value="option.key">
           {{ option.label }}
         </option>
